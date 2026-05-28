@@ -1,0 +1,30 @@
+[configuration]
+entry_symbol = "gameplay_tags_library_init"
+compatibility_minimum = "4.6"
+reloadable = true
+
+[libraries]
+; Relative paths let the addon move anywhere inside a Godot project.
+; The platform/precision feature keys follow the official godot-cpp-template layout.
+windows.x86_64.single.debug = "./bin/windows/gameplay_tags.windows.template_debug.x86_64.dll"
+windows.x86_64.double.debug = "./bin/windows/gameplay_tags.windows.template_debug.x86_64.double.dll"
+windows.x86_64.single.release = "./bin/windows/gameplay_tags.windows.template_release.x86_64.dll"
+windows.x86_64.double.release = "./bin/windows/gameplay_tags.windows.template_release.x86_64.double.dll"
+
+linux.x86_64.single.debug = "./bin/linux/libgameplay_tags.linux.template_debug.x86_64.so"
+linux.x86_64.double.debug = "./bin/linux/libgameplay_tags.linux.template_debug.x86_64.double.so"
+linux.x86_64.single.release = "./bin/linux/libgameplay_tags.linux.template_release.x86_64.so"
+linux.x86_64.double.release = "./bin/linux/libgameplay_tags.linux.template_release.x86_64.double.so"
+linux.arm64.single.debug = "./bin/linux/libgameplay_tags.linux.template_debug.arm64.so"
+linux.arm64.double.debug = "./bin/linux/libgameplay_tags.linux.template_debug.arm64.double.so"
+linux.arm64.single.release = "./bin/linux/libgameplay_tags.linux.template_release.arm64.so"
+linux.arm64.double.release = "./bin/linux/libgameplay_tags.linux.template_release.arm64.double.so"
+linux.rv64.single.debug = "./bin/linux/libgameplay_tags.linux.template_debug.rv64.so"
+linux.rv64.double.debug = "./bin/linux/libgameplay_tags.linux.template_debug.rv64.double.so"
+linux.rv64.single.release = "./bin/linux/libgameplay_tags.linux.template_release.rv64.so"
+linux.rv64.double.release = "./bin/linux/libgameplay_tags.linux.template_release.rv64.double.so"
+
+macos.single.debug = "./bin/macos/libgameplay_tags.macos.template_debug.dylib"
+macos.double.debug = "./bin/macos/libgameplay_tags.macos.template_debug.double.dylib"
+macos.single.release = "./bin/macos/libgameplay_tags.macos.template_release.dylib"
+macos.double.release = "./bin/macos/libgameplay_tags.macos.template_release.double.dylib"

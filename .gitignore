@@ -1,0 +1,14 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# Local GDExtension build outputs/cache
+bin/
+addons/gameplay_tags/bin/
+.sconsign.dblite
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+vc*.pdb
