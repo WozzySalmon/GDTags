@@ -1,6 +1,8 @@
 extends Resource
 class_name GameplayTagQuery
 
+const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
+
 enum Mode {
 	ALL,
 	ANY,
@@ -84,12 +86,7 @@ func _container_has(container: Variant, tag: StringName) -> bool:
 	return container.has(tag)
 
 func _normalize(raw_tag: Variant) -> StringName:
-	if raw_tag is GameplayTag:
-		return raw_tag.tag_name
-	var text := String(raw_tag).strip_edges().trim_prefix(".").trim_suffix(".")
-	if text.is_empty():
-		return &""
-	return StringName(text)
+	return GameplayTagUtilsScript.normalize_tag_name(raw_tag)
 
 func _sort_string_names(a: StringName, b: StringName) -> bool:
 	return String(a) < String(b)

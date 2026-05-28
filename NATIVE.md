@@ -62,6 +62,12 @@ At runtime, `GameplayTags` keeps the GDScript database as the editable source of
 
 ## Tests and benchmarks
 
+Pure GDScript runtime smoke test:
+
+```powershell
+& "C:\Users\Big-Boi\Desktop\Game develpoment Programs\Godot_v4.6.3-stable_win64.exe" --headless --path "C:\Users\Big-Boi\PI projects\gameplay-tags" --script res://tests/test_gameplay_tags.gd
+```
+
 Native smoke test:
 
 ```powershell

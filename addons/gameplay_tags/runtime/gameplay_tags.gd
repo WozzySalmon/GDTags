@@ -92,6 +92,13 @@ func remove_tag(name: Variant, remove_children: bool = false) -> bool:
 		_sync_native_runtime()
 	return removed
 
+func ensure_parent_tags() -> bool:
+	var changed := get_database().ensure_parent_tags()
+	if changed:
+		save_database()
+		_sync_native_runtime()
+	return changed
+
 func get_child_tags(parent: Variant, recursive: bool = false) -> Array:
 	if is_native_runtime_enabled():
 		return _native_registry.get_child_tags(parent, recursive)

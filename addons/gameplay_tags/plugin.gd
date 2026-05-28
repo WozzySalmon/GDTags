@@ -42,5 +42,17 @@ func _remove_own_autoload() -> void:
 		return
 
 	var value := String(ProjectSettings.get_setting(setting_name))
-	if value.contains(AUTOLOAD_PATH):
+	if _autoload_points_to_own_script(value):
 		remove_autoload_singleton(AUTOLOAD_NAME)
+
+func _autoload_points_to_own_script(value: String) -> bool:
+	var autoload_path := value.trim_prefix("*")
+	if autoload_path == AUTOLOAD_PATH or autoload_path.contains(AUTOLOAD_PATH):
+		return true
+
+	if autoload_path.begins_with("uid://"):
+		var uid := ResourceUID.text_to_id(autoload_path)
+		if ResourceUID.has_id(uid):
+			return ResourceUID.get_id_path(uid) == AUTOLOAD_PATH
+
+	return false

@@ -1,19 +1,8 @@
 #include "native_gameplay_tag.h"
 
-#include <godot_cpp/core/class_db.hpp>
+#include "native_gameplay_tag_utils.h"
 
-namespace {
-String tag_text_from_variant(const Variant &p_value) {
-	Object *object = Object::cast_to<Object>(p_value);
-	if (object != nullptr) {
-		NativeGameplayTag *tag = Object::cast_to<NativeGameplayTag>(object);
-		if (tag != nullptr) {
-			return String(tag->get_tag_name());
-		}
-	}
-	return String(p_value);
-}
-} // namespace
+#include <godot_cpp/core/class_db.hpp>
 
 void NativeGameplayTag::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_tag_name", "tag_name"), &NativeGameplayTag::set_tag_name);
@@ -48,7 +37,7 @@ StringName NativeGameplayTag::parent_name() const {
 }
 
 bool NativeGameplayTag::is_child_of(const Variant &p_parent_tag) const {
-	String parent = tag_text_from_variant(p_parent_tag);
+	String parent = gameplay_tags::normalized_tag_text(p_parent_tag);
 	if (parent.is_empty()) {
 		return false;
 	}
@@ -57,7 +46,7 @@ bool NativeGameplayTag::is_child_of(const Variant &p_parent_tag) const {
 }
 
 bool NativeGameplayTag::matches(const Variant &p_requested_tag, bool p_exact) const {
-	String requested = tag_text_from_variant(p_requested_tag);
+	String requested = gameplay_tags::normalized_tag_text(p_requested_tag);
 	String text = String(tag_name);
 	if (p_exact) {
 		return text == requested;

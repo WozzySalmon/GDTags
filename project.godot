@@ -18,11 +18,10 @@ config/icon="res://icon.svg"
 [autoload]
 
 GameplayTags="*uid://ch4ud0ue70mou"
-_mcp_game_helper="*res://addons/godot_ai/runtime/game_helper.gd"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/gameplay_tags/plugin.cfg", "res://addons/godot_ai/plugin.cfg")
+enabled=PackedStringArray("res://addons/gameplay_tags/plugin.cfg")
 
 [physics]
 

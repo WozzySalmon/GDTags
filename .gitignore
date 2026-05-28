@@ -2,6 +2,10 @@
 .godot/
 /android/
 
+# Local/editor automation tooling and external native dependency
+addons/godot_ai/
+godot-cpp/
+
 # Local GDExtension build outputs/cache
 bin/
 addons/gameplay_tags/bin/

@@ -1,5 +1,7 @@
 #include "native_gameplay_tag_query.h"
 
+#include "native_gameplay_tag_utils.h"
+
 #include <godot_cpp/core/class_db.hpp>
 
 namespace {
@@ -43,25 +45,23 @@ void NativeGameplayTagQuery::_bind_methods() {
 }
 
 StringName NativeGameplayTagQuery::_variant_to_tag_name(const Variant &p_value) const {
-	if (p_value.get_type() == Variant::OBJECT) {
-		Object *object = p_value;
-		NativeGameplayTag *tag = Object::cast_to<NativeGameplayTag>(object);
-		if (tag != nullptr) {
-			return tag->get_tag_name();
-		}
-	}
-	String text = String(p_value).strip_edges().trim_prefix(".").trim_suffix(".");
-	if (text.is_empty()) {
-		return StringName();
-	}
-	return StringName(text);
+	return gameplay_tags::normalize_tag_name(p_value);
 }
 
-bool NativeGameplayTagQuery::_container_has(const NativeGameplayTagContainer *p_container, const StringName &p_tag) const {
-	if (exact) {
-		return p_container->has_exact(p_tag);
+bool NativeGameplayTagQuery::_container_has(Object *p_container, const StringName &p_tag) const {
+	NativeGameplayTagContainer *native_container = Object::cast_to<NativeGameplayTagContainer>(p_container);
+	if (native_container != nullptr) {
+		return exact ? native_container->has_exact(p_tag) : native_container->has(p_tag);
 	}
-	return p_container->has(p_tag);
+
+	StringName method = exact ? StringName("has_exact") : StringName("has");
+	if (p_container == nullptr || !p_container->has_method(method)) {
+		return false;
+	}
+
+	Array args;
+	args.append(p_tag);
+	return (bool)p_container->callv(method, args);
 }
 
 void NativeGameplayTagQuery::set_mode(Mode p_mode) {
@@ -115,29 +115,28 @@ bool NativeGameplayTagQuery::matches(const Variant &p_container) const {
 		return false;
 	}
 	Object *object = p_container;
-	NativeGameplayTagContainer *container = Object::cast_to<NativeGameplayTagContainer>(object);
-	if (container == nullptr) {
+	if (!object->has_method("has") || !object->has_method("has_exact")) {
 		return false;
 	}
 
 	switch (mode) {
 		case MODE_ALL:
 			for (int64_t i = 0; i < tags.size(); i++) {
-				if (!_container_has(container, tags[i])) {
+				if (!_container_has(object, tags[i])) {
 					return false;
 				}
 			}
 			return true;
 		case MODE_ANY:
 			for (int64_t i = 0; i < tags.size(); i++) {
-				if (_container_has(container, tags[i])) {
+				if (_container_has(object, tags[i])) {
 					return true;
 				}
 			}
 			return false;
 		case MODE_NONE:
 			for (int64_t i = 0; i < tags.size(); i++) {
-				if (_container_has(container, tags[i])) {
+				if (_container_has(object, tags[i])) {
 					return false;
 				}
 			}

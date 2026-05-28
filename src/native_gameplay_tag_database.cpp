@@ -1,5 +1,7 @@
 #include "native_gameplay_tag_database.h"
 
+#include "native_gameplay_tag_utils.h"
+
 #include <godot_cpp/core/class_db.hpp>
 
 namespace {
@@ -34,14 +36,7 @@ void NativeGameplayTagDatabase::_bind_methods() {
 }
 
 StringName NativeGameplayTagDatabase::_variant_to_tag_name(const Variant &p_value) const {
-	if (p_value.get_type() == Variant::OBJECT) {
-		Object *object = p_value;
-		NativeGameplayTag *tag = Object::cast_to<NativeGameplayTag>(object);
-		if (tag != nullptr) {
-			return tag->get_tag_name();
-		}
-	}
-	return normalize_tag_name(p_value);
+	return gameplay_tags::normalize_tag_name(p_value);
 }
 
 void NativeGameplayTagDatabase::_swap_remove_at(int64_t p_index) {
@@ -80,27 +75,7 @@ Dictionary NativeGameplayTagDatabase::get_tag_descriptions() const {
 }
 
 StringName NativeGameplayTagDatabase::normalize_tag_name(const Variant &p_raw_tag) const {
-	String text = String(p_raw_tag).strip_edges();
-	text = text.replace(" ", "");
-	text = text.trim_prefix(".").trim_suffix(".");
-
-	PackedStringArray segments = text.split(".", false);
-	String clean_text;
-	for (int64_t i = 0; i < segments.size(); i++) {
-		String clean = String(segments[i]).strip_edges();
-		if (clean.is_empty()) {
-			continue;
-		}
-		if (!clean_text.is_empty()) {
-			clean_text += ".";
-		}
-		clean_text += clean;
-	}
-
-	if (clean_text.is_empty()) {
-		return StringName();
-	}
-	return StringName(clean_text);
+	return gameplay_tags::normalize_tag_name(p_raw_tag);
 }
 
 bool NativeGameplayTagDatabase::add_tag(const Variant &p_raw_tag, const String &p_description) {

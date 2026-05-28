@@ -1,6 +1,8 @@
 extends Resource
 class_name GameplayTag
 
+const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
+
 @export var tag_name: StringName = &""
 
 func _init(initial_name: StringName = &"") -> void:
@@ -17,14 +19,14 @@ func parent_name() -> StringName:
 	return StringName(text.substr(0, dot))
 
 func is_child_of(parent_tag: Variant) -> bool:
-	var parent := String(parent_tag)
+	var parent := String(GameplayTagUtilsScript.normalize_tag_name(parent_tag))
 	if parent.is_empty():
 		return false
 	var text := String(tag_name)
 	return text.begins_with(parent + ".")
 
 func matches(requested_tag: Variant, exact: bool = false) -> bool:
-	var requested := String(requested_tag)
+	var requested := String(GameplayTagUtilsScript.normalize_tag_name(requested_tag))
 	var text := String(tag_name)
 	if exact:
 		return text == requested

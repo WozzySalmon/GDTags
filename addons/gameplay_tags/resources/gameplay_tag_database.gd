@@ -1,24 +1,13 @@
 extends Resource
 class_name GameplayTagDatabase
 
+const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
+
 @export var tags: Array[StringName] = []
 @export var tag_descriptions: Dictionary = {}
 
 func normalize_tag_name(raw_tag: Variant) -> StringName:
-	var text := String(raw_tag).strip_edges()
-	text = text.replace(" ", "")
-	text = text.trim_prefix(".").trim_suffix(".")
-
-	var clean_segments: Array[String] = []
-	for segment in text.split(".", false):
-		var clean := String(segment).strip_edges()
-		if clean.is_empty():
-			continue
-		clean_segments.append(clean)
-
-	if clean_segments.is_empty():
-		return &""
-	return StringName(".".join(clean_segments))
+	return GameplayTagUtilsScript.normalize_tag_name(raw_tag)
 
 func add_tag(raw_tag: Variant, description: String = "") -> bool:
 	var tag := normalize_tag_name(raw_tag)

@@ -67,7 +67,7 @@ func _build_ui() -> void:
 	add_child(_status_label)
 
 func _load_database() -> void:
-	var registry := get_node_or_null("/root/GameplayTags")
+	var registry := _get_registry()
 	if registry != null and registry.has_method("get_database"):
 		_database = registry.get_database()
 		return
@@ -79,6 +79,9 @@ func _load_database() -> void:
 	if _database == null:
 		_database = GameplayTagDatabaseScript.new()
 		_save_database()
+
+func _get_registry() -> Node:
+	return get_node_or_null("/root/GameplayTags")
 
 func _refresh() -> void:
 	if _tag_list == null:
@@ -109,9 +112,23 @@ func _on_add_pressed() -> void:
 		_set_status("Enter a tag name first.")
 		return
 
-	if _database.add_tag(tag_text, _description_input.text.strip_edges()):
-		_database.ensure_parent_tags()
-		_save_database()
+	var description := _description_input.text.strip_edges()
+	var registry := _get_registry()
+	var added := false
+
+	if registry != null and registry.has_method("add_tag"):
+		added = bool(registry.add_tag(tag_text, description))
+		if added and registry.has_method("ensure_parent_tags"):
+			registry.ensure_parent_tags()
+		if registry.has_method("get_database"):
+			_database = registry.get_database()
+	else:
+		added = _database.add_tag(tag_text, description)
+		if added:
+			_database.ensure_parent_tags()
+			_save_database()
+
+	if added:
 		_tag_input.clear()
 		_description_input.clear()
 		_refresh()
@@ -123,9 +140,18 @@ func _on_remove_pressed() -> void:
 	if _database == null or _selected_tag == &"":
 		return
 
-	var removed := _database.remove_tag(_selected_tag, true)
+	var registry := _get_registry()
+	var removed := false
+	if registry != null and registry.has_method("remove_tag"):
+		removed = bool(registry.remove_tag(_selected_tag, true))
+		if registry.has_method("get_database"):
+			_database = registry.get_database()
+	else:
+		removed = _database.remove_tag(_selected_tag, true)
+		if removed:
+			_save_database()
+
 	if removed:
-		_save_database()
 		_refresh()
 		_set_status("Removed %s and its children." % String(_selected_tag))
 

@@ -1,5 +1,7 @@
 #include "native_gameplay_tag_container.h"
 
+#include "native_gameplay_tag_utils.h"
+
 #include <godot_cpp/core/class_db.hpp>
 
 void NativeGameplayTagContainer::_bind_methods() {
@@ -24,18 +26,7 @@ void NativeGameplayTagContainer::_bind_methods() {
 }
 
 StringName NativeGameplayTagContainer::_variant_to_tag_name(const Variant &p_value) const {
-	if (p_value.get_type() == Variant::OBJECT) {
-		Object *object = p_value;
-		NativeGameplayTag *tag = Object::cast_to<NativeGameplayTag>(object);
-		if (tag != nullptr) {
-			return tag->get_tag_name();
-		}
-	}
-	String text = String(p_value).strip_edges().trim_prefix(".").trim_suffix(".");
-	if (text.is_empty()) {
-		return StringName();
-	}
-	return StringName(text);
+	return gameplay_tags::normalize_tag_name(p_value);
 }
 
 Array NativeGameplayTagContainer::_extract_tag_names(const Variant &p_value) const {

@@ -14,23 +14,28 @@ func _init() -> void:
 	_assert(ClassDB.class_exists("NativeGameplayTagQuery"), "NativeGameplayTagQuery should be registered")
 
 	var database = ClassDB.instantiate("NativeGameplayTagDatabase")
-	_assert(database.add_tag(" State.Stunned.Heavy "), "database should add normalized child tag")
+	_assert(database.add_tag(" .State . Stunned..Heavy. "), "database should add normalized child tag")
 	_assert(database.ensure_parent_tags(), "database should create parent tags")
 	_assert(database.has_tag("State"), "database should contain root parent")
 	_assert(database.has_tag("State.Stunned"), "database should contain intermediate parent")
+	_assert(database.has_tag(" State . Stunned . Heavy "), "database lookups should normalize incoming names")
 	_assert(database.get_child_tags("State", true).size() == 2, "database should find recursive children")
 
 	var container = ClassDB.instantiate("NativeGameplayTagContainer")
-	_assert(container.add("State.Stunned"), "container should add tag")
+	_assert(container.add(" .State . Stunned. "), "container should add normalized tag")
 	_assert(container.add("Team.Enemy"), "container should add second tag")
-	_assert(container.has("State"), "container should match parent hierarchically")
+	_assert(container.has(" State "), "container should match parent hierarchically")
 	_assert(container.has_exact("State.Stunned"), "container should match exact owned tag")
 	_assert(not container.has_exact("State"), "container should not exact-match parent")
 
-	var any_query = NativeGameplayTagQuery.any(["Damage.Fire", "State"])
+	var any_query = NativeGameplayTagQuery.any(["Damage.Fire", " State "])
 	var exact_query = NativeGameplayTagQuery.exact_all(["State"])
 	_assert(any_query.matches(container), "ANY query should match hierarchy")
 	_assert(not exact_query.matches(container), "exact query should not match parent hierarchy")
+
+	var gdscript_container := GameplayTagContainer.new()
+	gdscript_container.add("State.Stunned")
+	_assert(any_query.matches(gdscript_container), "native query should also match duck-typed GDScript containers")
 
 	print("NATIVE_SMOKE_TEST passed")
 	quit(0)

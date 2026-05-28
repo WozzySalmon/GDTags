@@ -3,6 +3,7 @@
 #include "native_gameplay_tag.h"
 #include "native_gameplay_tag_container.h"
 
+#include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -27,7 +28,7 @@ private:
 	bool exact = false;
 
 	StringName _variant_to_tag_name(const Variant &p_value) const;
-	bool _container_has(const NativeGameplayTagContainer *p_container, const StringName &p_tag) const;
+	bool _container_has(Object *p_container, const StringName &p_tag) const;
 
 protected:
 	static void _bind_methods();
