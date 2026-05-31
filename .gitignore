@@ -9,8 +9,10 @@ godot-cpp/
 # Local GDExtension build outputs/cache
 bin/
 addons/gameplay_tags/bin/
+dist/
 .sconsign.dblite
 *.obj
+*.obj.import
 *.pdb
 *.ilk
 *.exp

@@ -3,11 +3,21 @@ extends SceneTree
 var _assertion_count := 0
 var _failed := false
 
+
 func _init() -> void:
-	_run_test("database_normalizes_adds_and_validates_tags", _test_database_normalizes_adds_and_validates_tags)
-	_run_test("database_can_ensure_parents_and_find_children", _test_database_can_ensure_parents_and_find_children)
+	_run_test(
+		"database_normalizes_adds_and_validates_tags",
+		_test_database_normalizes_adds_and_validates_tags
+	)
+	_run_test(
+		"database_can_ensure_parents_and_find_children",
+		_test_database_can_ensure_parents_and_find_children
+	)
 	_run_test("container_hierarchical_matching", _test_container_hierarchical_matching)
-	_run_test("normalization_is_shared_across_runtime_types", _test_normalization_is_shared_across_runtime_types)
+	_run_test(
+		"normalization_is_shared_across_runtime_types",
+		_test_normalization_is_shared_across_runtime_types
+	)
 	_run_test("container_any_all_and_removal", _test_container_any_all_and_removal)
 	_run_test("query_modes", _test_query_modes)
 
@@ -15,12 +25,14 @@ func _init() -> void:
 		print("GDSCRIPT_GAMEPLAY_TAGS_TEST passed (%d assertions)" % _assertion_count)
 		quit(0)
 
+
 func _run_test(test_name: String, test_callable: Callable) -> void:
 	if _failed:
 		return
 	test_callable.call()
 	if not _failed:
 		print("PASS %s" % test_name)
+
 
 func _test_database_normalizes_adds_and_validates_tags() -> void:
 	var database := GameplayTagDatabase.new()
@@ -33,6 +45,7 @@ func _test_database_normalizes_adds_and_validates_tags() -> void:
 	var tag := database.get_tag("State.Stunned")
 	assert_true(tag != null, "get_tag should return a GameplayTag resource")
 	assert_eq(String(tag.tag_name), "State.Stunned")
+
 
 func _test_database_can_ensure_parents_and_find_children() -> void:
 	var database := GameplayTagDatabase.new()
@@ -49,6 +62,7 @@ func _test_database_can_ensure_parents_and_find_children() -> void:
 	var recursive_children := database.get_children("State", true)
 	assert_eq(recursive_children.size(), 2, "State should have two recursive children")
 
+
 func _test_container_hierarchical_matching() -> void:
 	var container := GameplayTagContainer.new()
 	assert_true(container.add("State.Stunned"))
@@ -60,22 +74,35 @@ func _test_container_hierarchical_matching() -> void:
 	assert_false(container.has_exact("State"), "Parent should not be an exact match")
 	assert_true(container.has_exact("Team.Enemy"), "Owned tag should exact match")
 
+
 func _test_normalization_is_shared_across_runtime_types() -> void:
 	var database := GameplayTagDatabase.new()
-	assert_true(database.add_tag(" .State . Stunned..Heavy. "), "Database should add normalized tag")
+	assert_true(
+		database.add_tag(" .State . Stunned..Heavy. "), "Database should add normalized tag"
+	)
 	assert_true(database.has_tag("State.Stunned.Heavy"), "Database should use canonical tag names")
 
 	var tag := database.get_tag(" State . Stunned . Heavy ")
 	assert_true(tag != null, "Database lookup should normalize incoming names")
-	assert_true(tag.matches(" .State . Stunned..Heavy. ", true), "GameplayTag matching should normalize requested names")
+	assert_true(
+		tag.matches(" .State . Stunned..Heavy. ", true),
+		"GameplayTag matching should normalize requested names"
+	)
 
 	var container := GameplayTagContainer.new()
 	assert_true(container.add(" .State . Stunned..Heavy. "), "Container should add normalized tag")
-	assert_true(container.has(" State . Stunned "), "Container hierarchy checks should normalize requested names")
-	assert_true(container.has_exact("State.Stunned.Heavy"), "Container exact checks should use canonical tag names")
+	assert_true(
+		container.has(" State . Stunned "),
+		"Container hierarchy checks should normalize requested names"
+	)
+	assert_true(
+		container.has_exact("State.Stunned.Heavy"),
+		"Container exact checks should use canonical tag names"
+	)
 
 	var query := GameplayTagQuery.all([" State . Stunned "])
 	assert_true(query.matches(container), "Query tags should normalize before matching containers")
+
 
 func _test_container_any_all_and_removal() -> void:
 	var container := GameplayTagContainer.new()
@@ -95,31 +122,46 @@ func _test_container_any_all_and_removal() -> void:
 	assert_true(container.remove("Damage.Fire"))
 	assert_false(container.has("Damage"), "Removed child should stop parent match")
 
+
 func _test_query_modes() -> void:
 	var container := GameplayTagContainer.new()
 	container.add("State.Stunned")
 	container.add("Team.Enemy")
 
-	assert_true(GameplayTagQuery.all(["State", "Team.Enemy"]).matches(container), "ALL query should match")
-	assert_true(GameplayTagQuery.any(["Damage.Fire", "State"]).matches(container), "ANY query should match")
-	assert_true(GameplayTagQuery.none(["State.Invulnerable", "Team.Player"]).matches(container), "NONE query should match absent tags")
-	assert_false(GameplayTagQuery.exact_all(["State"]).matches(container), "Exact query should not match parent unless exact tag is owned")
+	assert_true(
+		GameplayTagQuery.all(["State", "Team.Enemy"]).matches(container), "ALL query should match"
+	)
+	assert_true(
+		GameplayTagQuery.any(["Damage.Fire", "State"]).matches(container), "ANY query should match"
+	)
+	assert_true(
+		GameplayTagQuery.none(["State.Invulnerable", "Team.Player"]).matches(container),
+		"NONE query should match absent tags"
+	)
+	assert_false(
+		GameplayTagQuery.exact_all(["State"]).matches(container),
+		"Exact query should not match parent unless exact tag is owned"
+	)
+
 
 func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:
 	_assertion_count += 1
 	if not condition:
 		_fail(message)
 
+
 func assert_false(condition: bool, message: String = "Expected condition to be false") -> void:
 	_assertion_count += 1
 	if condition:
 		_fail(message)
+
 
 func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void:
 	_assertion_count += 1
 	if actual != expected:
 		var prefix := "%s: " % message if not message.is_empty() else ""
 		_fail("%sexpected %s, got %s" % [prefix, str(expected), str(actual)])
+
 
 func _fail(message: String) -> void:
 	if _failed:

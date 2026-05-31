@@ -3,6 +3,7 @@ extends SceneTree
 const TAG_COUNT := 10000
 const RNG_SEED := 0xC0FFEE
 
+
 func _init() -> void:
 	var database := GameplayTagDatabase.new()
 	var tag_names: Array[String] = []

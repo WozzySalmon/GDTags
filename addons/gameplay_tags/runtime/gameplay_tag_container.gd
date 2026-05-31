@@ -1,9 +1,11 @@
-extends Resource
+@tool
 class_name GameplayTagContainer
+extends Resource
 
 const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
 
 @export var tags: Array[StringName] = []
+
 
 func add(raw_tag: Variant) -> bool:
 	var tag := _normalize(raw_tag)
@@ -14,8 +16,10 @@ func add(raw_tag: Variant) -> bool:
 	emit_changed()
 	return true
 
+
 func add_tag(raw_tag: Variant) -> bool:
 	return add(raw_tag)
+
 
 func remove(raw_tag: Variant) -> bool:
 	var tag := _normalize(raw_tag)
@@ -26,14 +30,18 @@ func remove(raw_tag: Variant) -> bool:
 	emit_changed()
 	return true
 
+
 func remove_tag(raw_tag: Variant) -> bool:
 	return remove(raw_tag)
+
 
 func has_exact(raw_tag: Variant) -> bool:
 	return tags.has(_normalize(raw_tag))
 
+
 func has_tag_exact(raw_tag: Variant) -> bool:
 	return has_exact(raw_tag)
+
 
 func has(raw_tag: Variant) -> bool:
 	var requested := String(_normalize(raw_tag))
@@ -46,14 +54,17 @@ func has(raw_tag: Variant) -> bool:
 			return true
 	return false
 
+
 func has_tag(raw_tag: Variant) -> bool:
 	return has(raw_tag)
+
 
 func has_any(other: Variant) -> bool:
 	for tag in _extract_tags(other):
 		if has(tag):
 			return true
 	return false
+
 
 func has_all(other: Variant) -> bool:
 	var other_tags := _extract_tags(other)
@@ -62,8 +73,10 @@ func has_all(other: Variant) -> bool:
 			return false
 	return true
 
+
 func matches_query(query: Variant) -> bool:
 	return query != null and query.has_method("matches") and query.matches(self)
+
 
 func clear() -> void:
 	if tags.is_empty():
@@ -71,13 +84,16 @@ func clear() -> void:
 	tags.clear()
 	emit_changed()
 
+
 func to_array() -> Array[StringName]:
 	return tags.duplicate()
+
 
 func duplicate_container() -> GameplayTagContainer:
 	var copy := GameplayTagContainer.new()
 	copy.tags = tags.duplicate()
 	return copy
+
 
 func _extract_tags(value: Variant) -> Array[StringName]:
 	if value is GameplayTagContainer:
@@ -96,8 +112,10 @@ func _extract_tags(value: Variant) -> Array[StringName]:
 		return []
 	return [single]
 
+
 func _normalize(raw_tag: Variant) -> StringName:
 	return GameplayTagUtilsScript.normalize_tag_name(raw_tag)
+
 
 func _sort_string_names(a: StringName, b: StringName) -> bool:
 	return String(a) < String(b)

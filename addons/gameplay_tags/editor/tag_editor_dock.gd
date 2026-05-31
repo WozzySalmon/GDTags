@@ -3,7 +3,9 @@ extends VBoxContainer
 
 const DATABASE_SETTING := "gameplay_tags/database_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
-const GameplayTagDatabaseScript := preload("res://addons/gameplay_tags/resources/gameplay_tag_database.gd")
+const GameplayTagDatabaseScript := preload(
+	"res://addons/gameplay_tags/resources/gameplay_tag_database.gd"
+)
 
 var _database: GameplayTagDatabase
 var _tag_list: ItemList
@@ -13,10 +15,12 @@ var _status_label: Label
 var _remove_button: Button
 var _selected_tag: StringName = &""
 
+
 func _ready() -> void:
 	_build_ui()
 	_load_database()
 	_refresh()
+
 
 func _build_ui() -> void:
 	var title := Label.new()
@@ -66,6 +70,7 @@ func _build_ui() -> void:
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_status_label)
 
+
 func _load_database() -> void:
 	var registry := _get_registry()
 	if registry != null and registry.has_method("get_database"):
@@ -80,8 +85,10 @@ func _load_database() -> void:
 		_database = GameplayTagDatabaseScript.new()
 		_save_database()
 
+
 func _get_registry() -> Node:
 	return get_node_or_null("/root/GameplayTags")
+
 
 func _refresh() -> void:
 	if _tag_list == null:
@@ -102,6 +109,7 @@ func _refresh() -> void:
 			_tag_list.set_item_tooltip(index, description)
 
 	_set_status("%d tags loaded." % _database.tags.size())
+
 
 func _on_add_pressed() -> void:
 	if _database == null:
@@ -136,6 +144,7 @@ func _on_add_pressed() -> void:
 	else:
 		_set_status("Tag already exists or is invalid: %s" % tag_text)
 
+
 func _on_remove_pressed() -> void:
 	if _database == null or _selected_tag == &"":
 		return
@@ -155,12 +164,15 @@ func _on_remove_pressed() -> void:
 		_refresh()
 		_set_status("Removed %s and its children." % String(_selected_tag))
 
+
 func _on_refresh_pressed() -> void:
 	_load_database()
 	_refresh()
 
+
 func _on_tag_submitted(_text: String) -> void:
 	_on_add_pressed()
+
 
 func _on_item_selected(index: int) -> void:
 	if _database == null or index < 0 or index >= _database.tags.size():
@@ -171,16 +183,16 @@ func _on_item_selected(index: int) -> void:
 	_selected_tag = _database.tags[index]
 	_remove_button.disabled = false
 
+
 func _save_database() -> void:
 	var err := ResourceSaver.save(_database, _get_database_path())
 	if err != OK:
 		_set_status("Could not save database: %s" % error_string(err))
 
+
 func _get_database_path() -> String:
-	if not ProjectSettings.has_setting(DATABASE_SETTING):
-		ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
-		ProjectSettings.save()
 	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+
 
 func _set_status(message: String) -> void:
 	if _status_label != null:

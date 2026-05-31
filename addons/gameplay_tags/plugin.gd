@@ -9,6 +9,7 @@ const TagEditorDock := preload("res://addons/gameplay_tags/editor/tag_editor_doc
 
 var _dock: Control
 
+
 func _enter_tree() -> void:
 	_ensure_project_settings()
 	_ensure_autoload()
@@ -17,24 +18,38 @@ func _enter_tree() -> void:
 	_dock.name = "Gameplay Tags"
 	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
 
+
 func _exit_tree() -> void:
 	if _dock != null:
 		remove_control_from_docks(_dock)
 		_dock.queue_free()
 		_dock = null
 
+
+func _enable_plugin() -> void:
+	_ensure_project_settings()
+	_ensure_autoload()
+
+
+func _disable_plugin() -> void:
 	_remove_own_autoload()
 
+
 func _ensure_project_settings() -> void:
-	if not ProjectSettings.has_setting(DATABASE_SETTING):
-		ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
-		ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
-		ProjectSettings.save()
+	if ProjectSettings.has_setting(DATABASE_SETTING):
+		return
+
+	# Register the default for this editor session without writing project.godot.
+	# Saving the default every startup rewrites project.godot even when nothing changed.
+	ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+
 
 func _ensure_autoload() -> void:
 	if ProjectSettings.has_setting("autoload/%s" % AUTOLOAD_NAME):
 		return
 	add_autoload_singleton(AUTOLOAD_NAME, AUTOLOAD_PATH)
+
 
 func _remove_own_autoload() -> void:
 	var setting_name := "autoload/%s" % AUTOLOAD_NAME
@@ -44,6 +59,7 @@ func _remove_own_autoload() -> void:
 	var value := String(ProjectSettings.get_setting(setting_name))
 	if _autoload_points_to_own_script(value):
 		remove_autoload_singleton(AUTOLOAD_NAME)
+
 
 func _autoload_points_to_own_script(value: String) -> bool:
 	var autoload_path := value.trim_prefix("*")

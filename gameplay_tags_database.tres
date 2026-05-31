@@ -1,6 +1,7 @@
 [gd_resource type="Resource" script_class="GameplayTagDatabase" format=3 uid="uid://bggai8iyuotbh"]
 
-[ext_resource type="Script" path="res://addons/gameplay_tags/resources/gameplay_tag_database.gd" id="1_jxl5m"]
+[ext_resource type="Script" uid="uid://1s3tcf57bnrg" path="res://addons/gameplay_tags/resources/gameplay_tag_database.gd" id="1_jxl5m"]
 
 [resource]
 script = ExtResource("1_jxl5m")
+tags = Array[StringName]([&"State", &"State.Bruh"])

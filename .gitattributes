@@ -6,8 +6,10 @@ addons/godot_ai/** export-ignore
 godot-cpp/** export-ignore
 .godot/** export-ignore
 bin/** export-ignore
+dist/** export-ignore
 addons/gameplay_tags/bin/** export-ignore
 *.obj export-ignore
+*.obj.import export-ignore
 *.pdb export-ignore
 *.lib export-ignore
 *.exp export-ignore

@@ -36,10 +36,25 @@ git -C godot-cpp submodule update --init --recursive
 .\build_native_windows.cmd
 ```
 
+The Windows build script now defaults to the normal editor/debug build and uses all CPU cores:
+
+```text
+platform=windows target=template_debug -j%NUMBER_OF_PROCESSORS%
+```
+
+Useful shortcuts:
+
+```powershell
+.\build_native_windows.cmd                 # debug/editor DLL
+.\build_native_release_windows.cmd         # release DLL
+.\build_native_windows.cmd -c              # clean native build output
+.\build_native_windows.cmd -j1 verbose=yes # single-threaded verbose build
+```
+
 Manual equivalent from a Visual Studio x64 Developer Command Prompt:
 
 ```powershell
-python -m SCons platform=windows target=template_debug
+python -m SCons platform=windows target=template_debug -j%NUMBER_OF_PROCESSORS%
 ```
 
 Expected debug DLL:
@@ -60,7 +75,28 @@ Godot editor projects normally discover this through `.godot/extension_list.cfg`
 
 At runtime, `GameplayTags` keeps the GDScript database as the editable source of truth and mirrors it into a `NativeGameplayTagDatabase` when the GDExtension is available. Calls such as `GameplayTags.make_container()` and `GameplayTags.make_query_all()` then return native objects automatically. If the native DLL is absent, the same API falls back to GDScript objects.
 
+## Fast local workflow
+
+After changing C++ under `src/`, close the Godot editor if it has the DLL loaded, then run:
+
+```powershell
+.\dev_native_windows.cmd
+```
+
+That performs a parallel debug build and then runs the GDScript, native, and autoload smoke tests. If Godot moves, set `GODOT_BIN` before running tests:
+
+```powershell
+$env:GODOT_BIN = "C:\Path\To\Godot_v4.6.x-stable_win64.exe"
+.\test_native_windows.cmd
+```
+
 ## Tests and benchmarks
+
+All smoke tests:
+
+```powershell
+.\test_native_windows.cmd
+```
 
 Pure GDScript runtime smoke test:
 

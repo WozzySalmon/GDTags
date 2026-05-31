@@ -1,5 +1,7 @@
-extends RefCounted
+@tool
 class_name GameplayTagUtils
+extends RefCounted
+
 
 static func normalize_tag_name(raw_tag: Variant) -> StringName:
 	var has_object_tag_name := false

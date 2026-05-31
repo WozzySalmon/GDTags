@@ -1,13 +1,16 @@
-extends Resource
+@tool
 class_name GameplayTagDatabase
+extends Resource
 
 const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
 
 @export var tags: Array[StringName] = []
 @export var tag_descriptions: Dictionary = {}
 
+
 func normalize_tag_name(raw_tag: Variant) -> StringName:
 	return GameplayTagUtilsScript.normalize_tag_name(raw_tag)
+
 
 func add_tag(raw_tag: Variant, description: String = "") -> bool:
 	var tag := normalize_tag_name(raw_tag)
@@ -21,6 +24,7 @@ func add_tag(raw_tag: Variant, description: String = "") -> bool:
 
 	emit_changed()
 	return true
+
 
 func remove_tag(raw_tag: Variant, remove_children: bool = false) -> bool:
 	var tag := normalize_tag_name(raw_tag)
@@ -54,14 +58,17 @@ func remove_tag(raw_tag: Variant, remove_children: bool = false) -> bool:
 		emit_changed()
 	return removed
 
+
 func has_tag(raw_tag: Variant) -> bool:
 	return tags.has(normalize_tag_name(raw_tag))
+
 
 func get_tag(raw_tag: Variant) -> GameplayTag:
 	var tag := normalize_tag_name(raw_tag)
 	if tag == &"" or not tags.has(tag):
 		return null
 	return GameplayTag.new(tag)
+
 
 func get_parent(raw_tag: Variant) -> GameplayTag:
 	var tag := normalize_tag_name(raw_tag)
@@ -74,6 +81,7 @@ func get_parent(raw_tag: Variant) -> GameplayTag:
 	if not tags.has(parent):
 		return null
 	return GameplayTag.new(parent)
+
 
 func get_children(raw_parent: Variant, recursive: bool = false) -> Array[GameplayTag]:
 	var parent := normalize_tag_name(raw_parent)
@@ -92,11 +100,13 @@ func get_children(raw_parent: Variant, recursive: bool = false) -> Array[Gamepla
 			children.append(GameplayTag.new(tag))
 	return children
 
+
 func get_all_tags() -> Array[GameplayTag]:
 	var result: Array[GameplayTag] = []
 	for tag in tags:
 		result.append(GameplayTag.new(tag))
 	return result
+
 
 func ensure_parent_tags() -> bool:
 	var changed := false
@@ -119,6 +129,7 @@ func ensure_parent_tags() -> bool:
 		emit_changed()
 	return changed
 
+
 func validate() -> PackedStringArray:
 	var errors := PackedStringArray()
 	var seen := {}
@@ -134,6 +145,7 @@ func validate() -> PackedStringArray:
 			errors.append("Invalid hierarchy path: %s" % text)
 
 	return errors
+
 
 func _sort_string_names(a: StringName, b: StringName) -> bool:
 	return String(a) < String(b)

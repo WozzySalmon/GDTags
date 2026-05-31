@@ -4,6 +4,7 @@ const TAG_COUNT := 10000
 const RNG_SEED := 0xC0FFEE
 const EXTENSION_PATH := "res://addons/gameplay_tags/gameplay_tags.gdextension"
 
+
 func _init() -> void:
 	if not ClassDB.class_exists("NativeGameplayTagDatabase"):
 		var load_result := GDExtensionManager.load_extension(EXTENSION_PATH)
