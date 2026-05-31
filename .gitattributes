@@ -13,3 +13,6 @@ addons/gameplay_tags/bin/** export-ignore
 *.pdb export-ignore
 *.lib export-ignore
 *.exp export-ignore
+*.tmp export-ignore
+*.TMP export-ignore
+~* export-ignore

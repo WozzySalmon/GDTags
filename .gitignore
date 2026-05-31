@@ -18,3 +18,7 @@ dist/
 *.exp
 *.lib
 vc*.pdb
+~*/
+~*
+*.tmp
+*.TMP

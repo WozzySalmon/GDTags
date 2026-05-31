@@ -4,4 +4,4 @@
 
 [resource]
 script = ExtResource("1_jxl5m")
-tags = Array[StringName]([&"State", &"State.Bruh"])
+tags = Array[StringName]([&"Ability", &"Ability.Cooldown", &"Damage", &"Damage.Fire", &"Damage.Ice", &"State", &"State.Invulnerable", &"State.Stunned", &"Team", &"Team.Enemy", &"Team.Player"])

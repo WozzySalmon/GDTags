@@ -46,8 +46,16 @@ func _init() -> void:
 	_assert(container.has_exact("State.Stunned"), "container should match exact owned tag")
 	_assert(not container.has_exact("State"), "container should not exact-match parent")
 
-	var any_query = NativeGameplayTagQuery.any(["Damage.Fire", " State "])
-	var exact_query = NativeGameplayTagQuery.exact_all(["State"])
+	var any_query = ClassDB.instantiate("NativeGameplayTagQuery")
+	any_query.set_mode(1)  # MODE_ANY
+	any_query.add("Damage.Fire")
+	any_query.add(" State ")
+
+	var exact_query = ClassDB.instantiate("NativeGameplayTagQuery")
+	exact_query.set_mode(0)  # MODE_ALL
+	exact_query.set_exact(true)
+	exact_query.add("State")
+
 	_assert(any_query.matches(container), "ANY query should match hierarchy")
 	_assert(not exact_query.matches(container), "exact query should not match parent hierarchy")
 

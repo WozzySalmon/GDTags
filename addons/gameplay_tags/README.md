@@ -76,7 +76,7 @@ From the project root, run the pure GDScript runtime smoke test headlessly:
 
 ## Native C++ runtime
 
-Build instructions and native benchmark commands live in the project-root `NATIVE.md`.
+Build instructions and native benchmark commands live in `docs/NATIVE.md`.
 
 The build follows the Godot 4.6 GDExtension guide and the official `godot-cpp-template` layout: `SConstruct` builds into `bin/<platform>/`, installs into `addons/gameplay_tags/bin/<platform>/`, and `gameplay_tags.gdextension` uses relative library paths.
 

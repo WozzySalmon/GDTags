@@ -1,8 +1,0 @@
-[gd_scene format=3 uid="uid://b7snp2k5w5l0b"]
-
-[ext_resource type="PackedScene" uid="uid://dl1il5rp7u3sm" path="res://test_node.tscn" id="1_37kl0"]
-
-[node name="Za Worldo" type="Node3D" unique_id=232353088]
-
-[node name="TestNode" parent="." unique_id=1812000486 instance=ExtResource("1_37kl0")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.4356556, 0, 2.4488492)
