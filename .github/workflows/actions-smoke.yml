@@ -1,0 +1,14 @@
+name: Actions Smoke Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Say hello
+        run: echo "GitHub Actions hosted runner is available"
