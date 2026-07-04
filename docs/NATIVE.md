@@ -58,6 +58,38 @@ Expected debug shared library:
 addons/gameplay_tags/bin/linux/libgameplay_tags.linux.template_debug.x86_64.so
 ```
 
+### Cross-build Windows DLLs from Linux
+
+Linux can build the Windows x86_64 DLLs with MinGW. This is useful for local packaging when a real Windows runner is not available; final confidence still comes from loading the package in Godot on Windows.
+
+Prerequisites:
+
+```bash
+apt-get install mingw-w64 zip
+```
+
+Build debug + release DLLs and package the addon folder:
+
+```bash
+tools/linux/build_windows_cross.sh
+```
+
+On low-memory machines, reduce parallel compile jobs:
+
+```bash
+JOBS=1 tools/linux/build_windows_cross.sh
+```
+
+Outputs:
+
+```text
+addons/gameplay_tags/bin/windows/gameplay_tags.windows.template_debug.x86_64.dll
+addons/gameplay_tags/bin/windows/gameplay_tags.windows.template_release.x86_64.dll
+dist/gameplay_tags-<version>-windows-crossbuild.zip
+```
+
+The MinGW build is statically linked against the C++ runtime by default. The expected imported DLLs are only Windows system libraries such as `KERNEL32.dll` and `msvcrt.dll`.
+
 Use `GODOT_BIN` to choose a specific Godot executable for tests:
 
 ```bash

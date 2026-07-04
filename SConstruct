@@ -36,6 +36,10 @@ sources = Glob("src/*.cpp")
 # - .dev does not require a separate .gdextension feature key.
 # - .universal is compatible with all relevant architectures.
 suffix = env["suffix"].replace(".dev", "").replace(".universal", "")
+if env["platform"] == "windows":
+    # MinGW cross-compilation on Linux keeps SCons' default "lib" prefix,
+    # but Godot/GDExtension Windows feature paths use the MSVC-style name.
+    env["SHLIBPREFIX"] = ""
 lib_filename = "{}{}{}{}".format(env.subst("$SHLIBPREFIX"), libname, suffix, env.subst("$SHLIBSUFFIX"))
 
 library = env.SharedLibrary(
