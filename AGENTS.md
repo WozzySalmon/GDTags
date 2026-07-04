@@ -22,26 +22,42 @@ When editing this project, follow these rules.
 - `src/` - C++ GDExtension source.
 - `tests/` and `benchmarks/` - validation and performance scripts.
 - `docs/` - style, packaging, and native build docs.
+- `tools/linux/` - Linux build/test/lint commands.
 - `tools/windows/` - Windows build/test/lint/package commands.
 
 ## Validation
 
 - After GDScript edits, run:
 
-```bat
-tools\windows\check_gdscript.cmd
-tools\windows\test_native.cmd
+```bash
+tools/linux/check_gdscript.sh
+tools/linux/test_native.sh
 ```
 
-- After C++ edits, close Godot if the DLL is loaded, then run:
+- After C++ edits, run:
 
-```bat
-tools\windows\dev_native.cmd
+```bash
+tools/linux/dev_native.sh
+```
+
+- To smoke-test the configured Godot versions, run:
+
+```bash
+tools/linux/test_all_godot_versions.sh
 ```
 
 - Optional style tools if `gdtoolkit` is installed:
 
+```bash
+tools/linux/format_gdscript.sh
+tools/linux/lint_gdscript.sh
+```
+
+- Windows validation/packaging uses the Windows scripts:
+
 ```bat
-tools\windows\format_gdscript.cmd
-tools\windows\lint_gdscript.cmd
+tools\windows\check_gdscript.cmd
+tools\windows\test_native.cmd
+tools\windows\dev_native.cmd
+tools\windows\package_addon.cmd
 ```

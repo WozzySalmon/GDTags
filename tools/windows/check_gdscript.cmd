@@ -3,18 +3,26 @@ setlocal EnableExtensions
 
 for %%I in ("%~dp0..\..") do set "PROJECT_DIR=%%~fI"
 
-if not defined GODOT_BIN (
-    set "GODOT_BIN=C:\Users\Big-Boi\Desktop\Game develpoment Programs\Godot_v4.6.3-stable_win64.exe"
+if not defined GODOT_BIN set "GODOT_BIN=godot"
+
+if exist "%GODOT_BIN%" goto :godot_ready
+
+for /f "delims=" %%I in ('where "%GODOT_BIN%" 2^>nul') do (
+    set "GODOT_BIN=%%~fI"
+    goto :godot_ready
 )
 
-if not exist "%GODOT_BIN%" (
-    echo Could not find Godot executable:
-    echo   %GODOT_BIN%
-    echo.
-    echo Set GODOT_BIN before running this script, for example:
-    echo   set "GODOT_BIN=C:\Path\To\Godot_v4.6.x-stable_win64.exe"
-    exit /b 1
-)
+echo Could not find Godot executable:
+echo   %GODOT_BIN%
+echo.
+echo Put Godot on PATH or set GODOT_BIN before running this script, for example:
+echo   set "GODOT_BIN=C:\Path\To\Godot.exe"
+exit /b 1
+
+:godot_ready
+
+call "%~dp0prepare_project.cmd"
+if errorlevel 1 exit /b %ERRORLEVEL%
 
 set "CHECK_OUTPUT=%TEMP%\gameplay_tags_gdscript_check_%RANDOM%%RANDOM%.log"
 

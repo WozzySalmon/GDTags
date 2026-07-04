@@ -18,7 +18,9 @@ addons/gameplay_tags/bin/windows/*.dll               # native package only
 
 ### Windows native package
 
-Use this when sending to Windows users who should get the fast C++ GDExtension runtime.
+Use this when sending to Windows users who should get the fast C++ GDExtension runtime. The preferred release path is the GitHub Actions Windows workflow in `docs/CI.md`; it builds and tests the DLLs on a real Windows runner before uploading package artifacts.
+
+Manual Windows packaging is also available:
 
 ```bat
 tools\windows\package_addon.cmd

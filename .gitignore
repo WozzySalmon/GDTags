@@ -5,6 +5,8 @@
 # Local/editor automation tooling and external native dependency
 addons/godot_ai/
 godot-cpp/
+godot-cpp
+.devbox.env
 
 # Local GDExtension build outputs/cache
 bin/
@@ -13,6 +15,8 @@ dist/
 .sconsign.dblite
 *.obj
 *.obj.import
+*.os
+*.os.import
 *.pdb
 *.ilk
 *.exp

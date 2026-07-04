@@ -1,6 +1,6 @@
 # Gameplay Tags for Godot
 
-A Godot 4.6 addon for hierarchical gameplay tags, inspired by Unreal Gameplay Tags.
+A Godot 4.6+ addon for hierarchical gameplay tags, inspired by Unreal Gameplay Tags.
 
 ## Runtime shape
 
@@ -68,16 +68,20 @@ res://gameplay_tags_database.tres
 
 ## Tests
 
-From the project root, run the pure GDScript runtime smoke test headlessly:
+From the project root, run the smoke tests headlessly:
+
+```bash
+tools/linux/test_native.sh
+```
 
 ```powershell
-& "C:\Users\Big-Boi\Desktop\Game develpoment Programs\Godot_v4.6.3-stable_win64.exe" --headless --path "C:\Users\Big-Boi\PI projects\gameplay-tags" --script res://tests/test_gameplay_tags.gd
+tools\windows\test_native.cmd
 ```
 
 ## Native C++ runtime
 
 Build instructions and native benchmark commands live in `docs/NATIVE.md`.
 
-The build follows the Godot 4.6 GDExtension guide and the official `godot-cpp-template` layout: `SConstruct` builds into `bin/<platform>/`, installs into `addons/gameplay_tags/bin/<platform>/`, and `gameplay_tags.gdextension` uses relative library paths.
+The build follows Godot's GDExtension guide and the official `godot-cpp-template` layout: `SConstruct` builds into `bin/<platform>/`, installs into `addons/gameplay_tags/bin/<platform>/`, and `gameplay_tags.gdextension` uses relative library paths.
 
 The editor database stays as a GDScript resource for easy editing/saving; the autoload mirrors it into a native database at runtime when native classes are available.
