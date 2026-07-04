@@ -33,8 +33,10 @@ public:
 
 	bool add(const Variant &p_raw_tag);
 	bool add_tag(const Variant &p_raw_tag);
+	int64_t add_tags(const Array &p_raw_tags);
 	bool remove(const Variant &p_raw_tag);
 	bool remove_tag(const Variant &p_raw_tag);
+	int64_t remove_tags(const Array &p_raw_tags);
 	bool has_exact(const Variant &p_raw_tag) const;
 	bool has_tag_exact(const Variant &p_raw_tag) const;
 	bool has(const Variant &p_raw_tag) const;

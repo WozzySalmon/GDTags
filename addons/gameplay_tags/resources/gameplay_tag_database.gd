@@ -26,6 +26,19 @@ func add_tag(raw_tag: Variant, description: String = "") -> bool:
 	return true
 
 
+func add_tags(raw_tags: Array) -> int:
+	var added := 0
+	for raw_tag in raw_tags:
+		var tag := normalize_tag_name(raw_tag)
+		if tag == &"" or tags.has(tag):
+			continue
+		tags.append(tag)
+		added += 1
+	if added > 0:
+		emit_changed()
+	return added
+
+
 func remove_tag(raw_tag: Variant, remove_children: bool = false) -> bool:
 	var tag := normalize_tag_name(raw_tag)
 	if tag == &"":
@@ -55,6 +68,42 @@ func remove_tag(raw_tag: Variant, remove_children: bool = false) -> bool:
 
 	if removed:
 		tags = kept
+		emit_changed()
+	return removed
+
+
+func remove_tags(raw_tags: Array, remove_children: bool = false) -> int:
+	var removed := 0
+	for raw_tag in raw_tags:
+		var tag := normalize_tag_name(raw_tag)
+		if tag == &"":
+			continue
+
+		if not remove_children:
+			var index := tags.find(tag)
+			if index < 0:
+				continue
+			tags.remove_at(index)
+			tag_descriptions.erase(String(tag))
+			removed += 1
+			continue
+
+		var kept: Array[StringName] = []
+		var tag_text := String(tag)
+		var removed_this_tag := false
+		for existing in tags:
+			var existing_text := String(existing)
+			var should_remove := existing == tag or existing_text.begins_with(tag_text + ".")
+			if should_remove:
+				removed_this_tag = true
+				tag_descriptions.erase(existing_text)
+			else:
+				kept.append(existing)
+		if removed_this_tag:
+			tags = kept
+			removed += 1
+
+	if removed > 0:
 		emit_changed()
 	return removed
 

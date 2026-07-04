@@ -21,7 +21,9 @@ void NativeGameplayTagDatabase::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("normalize_tag_name", "raw_tag"), &NativeGameplayTagDatabase::normalize_tag_name);
 	ClassDB::bind_method(D_METHOD("add_tag", "raw_tag", "description"), &NativeGameplayTagDatabase::add_tag, DEFVAL(String()));
+	ClassDB::bind_method(D_METHOD("add_tags", "raw_tags"), &NativeGameplayTagDatabase::add_tags);
 	ClassDB::bind_method(D_METHOD("remove_tag", "raw_tag", "remove_children"), &NativeGameplayTagDatabase::remove_tag, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("remove_tags", "raw_tags", "remove_children"), &NativeGameplayTagDatabase::remove_tags, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("has_tag", "raw_tag"), &NativeGameplayTagDatabase::has_tag);
 	ClassDB::bind_method(D_METHOD("get_tag", "raw_tag"), &NativeGameplayTagDatabase::get_tag);
 	ClassDB::bind_method(D_METHOD("get_parent_tag", "raw_tag"), &NativeGameplayTagDatabase::get_parent_tag);
@@ -56,7 +58,7 @@ void NativeGameplayTagDatabase::set_tags(const Array &p_tags) {
 	tags.clear();
 	tag_indices.clear();
 	for (int64_t i = 0; i < p_tags.size(); i++) {
-		add_tag(p_tags[i]);
+		_add_normalized_tag(_variant_to_tag_name(p_tags[i]));
 	}
 	emit_changed();
 }
@@ -78,47 +80,82 @@ StringName NativeGameplayTagDatabase::normalize_tag_name(const Variant &p_raw_ta
 	return gameplay_tags::normalize_tag_name(p_raw_tag);
 }
 
-bool NativeGameplayTagDatabase::add_tag(const Variant &p_raw_tag, const String &p_description) {
-	StringName tag = _variant_to_tag_name(p_raw_tag);
-	if (String(tag).is_empty() || tag_indices.has(tag)) {
+bool NativeGameplayTagDatabase::_add_normalized_tag(const StringName &p_tag, const String &p_description) {
+	if (String(p_tag).is_empty() || tag_indices.has(p_tag)) {
 		return false;
 	}
 
-	tag_indices[tag] = tags.size();
-	tags.append(tag);
+	tag_indices[p_tag] = tags.size();
+	tags.append(p_tag);
 	if (!p_description.is_empty()) {
-		tag_descriptions[String(tag)] = p_description;
+		tag_descriptions[String(p_tag)] = p_description;
 	}
-	emit_changed();
 	return true;
 }
 
-bool NativeGameplayTagDatabase::remove_tag(const Variant &p_raw_tag, bool p_remove_children) {
-	StringName tag = _variant_to_tag_name(p_raw_tag);
-	if (String(tag).is_empty()) {
+bool NativeGameplayTagDatabase::add_tag(const Variant &p_raw_tag, const String &p_description) {
+	bool added = _add_normalized_tag(_variant_to_tag_name(p_raw_tag), p_description);
+	if (added) {
+		emit_changed();
+	}
+	return added;
+}
+
+int64_t NativeGameplayTagDatabase::add_tags(const Array &p_raw_tags) {
+	int64_t added = 0;
+	for (int64_t i = 0; i < p_raw_tags.size(); i++) {
+		if (_add_normalized_tag(_variant_to_tag_name(p_raw_tags[i]))) {
+			added++;
+		}
+	}
+	if (added > 0) {
+		emit_changed();
+	}
+	return added;
+}
+
+bool NativeGameplayTagDatabase::_remove_normalized_tag(const StringName &p_tag, bool p_remove_children) {
+	if (String(p_tag).is_empty()) {
 		return false;
 	}
 
 	if (!p_remove_children) {
-		if (!tag_indices.has(tag)) {
+		if (!tag_indices.has(p_tag)) {
 			return false;
 		}
-		_swap_remove_at((int64_t)tag_indices[tag]);
-		emit_changed();
+		_swap_remove_at((int64_t)tag_indices[p_tag]);
 		return true;
 	}
 
-	String tag_text = String(tag);
+	String tag_text = String(p_tag);
 	bool removed = false;
 	for (int64_t i = tags.size() - 1; i >= 0; i--) {
 		StringName existing = tags[i];
 		String existing_text = String(existing);
-		if (existing == tag || existing_text.begins_with(tag_text + ".")) {
+		if (existing == p_tag || existing_text.begins_with(tag_text + ".")) {
 			_swap_remove_at(i);
 			removed = true;
 		}
 	}
+	return removed;
+}
+
+bool NativeGameplayTagDatabase::remove_tag(const Variant &p_raw_tag, bool p_remove_children) {
+	bool removed = _remove_normalized_tag(_variant_to_tag_name(p_raw_tag), p_remove_children);
 	if (removed) {
+		emit_changed();
+	}
+	return removed;
+}
+
+int64_t NativeGameplayTagDatabase::remove_tags(const Array &p_raw_tags, bool p_remove_children) {
+	int64_t removed = 0;
+	for (int64_t i = 0; i < p_raw_tags.size(); i++) {
+		if (_remove_normalized_tag(_variant_to_tag_name(p_raw_tags[i]), p_remove_children)) {
+			removed++;
+		}
+	}
+	if (removed > 0) {
 		emit_changed();
 	}
 	return removed;

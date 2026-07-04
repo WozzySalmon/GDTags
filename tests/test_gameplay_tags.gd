@@ -19,6 +19,7 @@ func _init() -> void:
 		_test_normalization_is_shared_across_runtime_types
 	)
 	_run_test("container_any_all_and_removal", _test_container_any_all_and_removal)
+	_run_test("batch_apis", _test_batch_apis)
 	_run_test("query_modes", _test_query_modes)
 
 	if not _failed:
@@ -121,6 +122,39 @@ func _test_container_any_all_and_removal() -> void:
 	assert_true(container.has_all(all_tags), "has_all should use hierarchical matching")
 	assert_true(container.remove("Damage.Fire"))
 	assert_false(container.has("Damage"), "Removed child should stop parent match")
+
+
+func _test_batch_apis() -> void:
+	var database := GameplayTagDatabase.new()
+	assert_eq(
+		database.add_tags(["State.Stunned", "State.Stunned", " Team.Enemy ", ""]),
+		2,
+		"Database should add unique normalized tags in one call"
+	)
+	assert_true(database.has_tag("State.Stunned"))
+	assert_true(database.has_tag("Team.Enemy"))
+	assert_eq(
+		database.remove_tags(["State.Stunned", "Missing.Tag"]),
+		1,
+		"Database should remove existing tags in one call"
+	)
+	assert_false(database.has_tag("State.Stunned"))
+
+	var container := GameplayTagContainer.new()
+	assert_eq(
+		container.add_tags(["Damage.Fire", "Damage.Fire", "State.Stunned"]),
+		2,
+		"Container should add unique tags in one call"
+	)
+	assert_true(container.has_any(["Damage", "Team.Player"]))
+	assert_eq(container.remove_tags(["Damage.Fire", "Missing.Tag"]), 1)
+	assert_false(container.has("Damage"))
+
+	var query := GameplayTagQuery.any([])
+	assert_eq(query.add_tags(["State", "State", "Damage.Fire"]), 2)
+	assert_true(query.matches(container), "Batch-built query should match container")
+	assert_eq(query.remove_tags(["State", "Missing.Tag"]), 1)
+	assert_false(query.matches(container), "Removed query tag should stop matching")
 
 
 func _test_query_modes() -> void:

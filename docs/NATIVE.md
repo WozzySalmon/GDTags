@@ -153,6 +153,17 @@ Godot editor projects normally discover this through `.godot/extension_list.cfg`
 
 At runtime, `GameplayTags` keeps the GDScript database as the editable source of truth and mirrors it into a `NativeGameplayTagDatabase` when the GDExtension is available. Calls such as `GameplayTags.make_container()` and `GameplayTags.make_query_all()` then return native objects automatically. If the native DLL is absent, the same API falls back to GDScript objects.
 
+## GDExtension boundary performance
+
+GDExtension calls still cross the Godot/native API boundary, so hot paths should avoid many tiny calls from GDScript into native code. Prefer the batch/query APIs that move the loop to one side of the boundary:
+
+- `add_tags(...)` / `remove_tags(...)` for databases, containers, registries, and queries.
+- `set_tags(...)` when replacing an entire native database or container.
+- `has_any(...)`, `has_all(...)`, and `matches_query(...)` instead of looping over `has(...)` in GDScript.
+- `GameplayTags.make_container(...)` and `GameplayTags.make_query_*()` to construct native objects in one call.
+
+Use `benchmarks/bench_10000_tags_native.gd` to compare per-call native operations with the batched equivalents.
+
 ## Fast local workflow
 
 After changing C++ under `src/`, close the Godot editor if it has the native library loaded, then run the platform workflow:

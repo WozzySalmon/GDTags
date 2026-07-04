@@ -56,6 +56,20 @@ func add(raw_tag: Variant) -> bool:
 	return true
 
 
+func add_tags(raw_tags: Array) -> int:
+	var added := 0
+	for raw_tag in raw_tags:
+		var tag := _normalize(raw_tag)
+		if tag == &"" or tags.has(tag):
+			continue
+		tags.append(tag)
+		added += 1
+	if added > 0:
+		tags.sort_custom(Callable(self, "_sort_string_names"))
+		emit_changed()
+	return added
+
+
 func remove(raw_tag: Variant) -> bool:
 	var tag := _normalize(raw_tag)
 	var index := tags.find(tag)
@@ -64,6 +78,20 @@ func remove(raw_tag: Variant) -> bool:
 	tags.remove_at(index)
 	emit_changed()
 	return true
+
+
+func remove_tags(raw_tags: Array) -> int:
+	var removed := 0
+	for raw_tag in raw_tags:
+		var tag := _normalize(raw_tag)
+		var index := tags.find(tag)
+		if index < 0:
+			continue
+		tags.remove_at(index)
+		removed += 1
+	if removed > 0:
+		emit_changed()
+	return removed
 
 
 func clear() -> void:
@@ -77,8 +105,7 @@ static func _make(query_mode: Mode, tag_list: Array, require_exact: bool) -> Gam
 	var query := GameplayTagQuery.new()
 	query.mode = query_mode
 	query.exact = require_exact
-	for item in tag_list:
-		query.add(item)
+	query.add_tags(tag_list)
 	return query
 
 

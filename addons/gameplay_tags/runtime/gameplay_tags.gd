@@ -103,9 +103,25 @@ func add_tag(name: Variant, description: String = "") -> bool:
 	return added
 
 
+func add_tags(names: Array) -> int:
+	var added := get_database().add_tags(names)
+	if added > 0:
+		save_database()
+		_sync_native_runtime()
+	return added
+
+
 func remove_tag(name: Variant, remove_children: bool = false) -> bool:
 	var removed := get_database().remove_tag(name, remove_children)
 	if removed:
+		save_database()
+		_sync_native_runtime()
+	return removed
+
+
+func remove_tags(names: Array, remove_children: bool = false) -> int:
+	var removed := get_database().remove_tags(names, remove_children)
+	if removed > 0:
 		save_database()
 		_sync_native_runtime()
 	return removed

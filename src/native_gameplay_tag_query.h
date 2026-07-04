@@ -51,7 +51,9 @@ public:
 
 	bool matches(const Variant &p_container) const;
 	bool add(const Variant &p_raw_tag);
+	int64_t add_tags(const Array &p_raw_tags);
 	bool remove(const Variant &p_raw_tag);
+	int64_t remove_tags(const Array &p_raw_tags);
 	void clear();
 };
 

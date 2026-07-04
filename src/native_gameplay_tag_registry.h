@@ -32,7 +32,9 @@ public:
 	Ref<NativeGameplayTag> get_tag(const Variant &p_name) const;
 	bool has_tag(const Variant &p_name) const;
 	bool add_tag(const Variant &p_name, const String &p_description = String());
+	int64_t add_tags(const Array &p_names);
 	bool remove_tag(const Variant &p_name, bool p_remove_children = false);
+	int64_t remove_tags(const Array &p_names, bool p_remove_children = false);
 	TypedArray<NativeGameplayTag> get_child_tags(const Variant &p_parent, bool p_recursive = false) const;
 	Ref<NativeGameplayTag> get_parent_tag(const Variant &p_tag) const;
 

@@ -21,6 +21,8 @@ private:
 	Dictionary tag_descriptions;
 
 	StringName _variant_to_tag_name(const Variant &p_value) const;
+	bool _add_normalized_tag(const StringName &p_tag, const String &p_description = String());
+	bool _remove_normalized_tag(const StringName &p_tag, bool p_remove_children = false);
 	void _swap_remove_at(int64_t p_index);
 
 protected:
@@ -38,7 +40,9 @@ public:
 
 	StringName normalize_tag_name(const Variant &p_raw_tag) const;
 	bool add_tag(const Variant &p_raw_tag, const String &p_description = String());
+	int64_t add_tags(const Array &p_raw_tags);
 	bool remove_tag(const Variant &p_raw_tag, bool p_remove_children = false);
+	int64_t remove_tags(const Array &p_raw_tags, bool p_remove_children = false);
 	bool has_tag(const Variant &p_raw_tag) const;
 	Ref<NativeGameplayTag> get_tag(const Variant &p_raw_tag) const;
 	Ref<NativeGameplayTag> get_parent_tag(const Variant &p_raw_tag) const;

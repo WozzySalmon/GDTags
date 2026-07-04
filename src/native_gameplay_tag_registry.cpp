@@ -12,7 +12,9 @@ void NativeGameplayTagRegistry::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_tag", "name"), &NativeGameplayTagRegistry::get_tag);
 	ClassDB::bind_method(D_METHOD("has_tag", "name"), &NativeGameplayTagRegistry::has_tag);
 	ClassDB::bind_method(D_METHOD("add_tag", "name", "description"), &NativeGameplayTagRegistry::add_tag, DEFVAL(String()));
+	ClassDB::bind_method(D_METHOD("add_tags", "names"), &NativeGameplayTagRegistry::add_tags);
 	ClassDB::bind_method(D_METHOD("remove_tag", "name", "remove_children"), &NativeGameplayTagRegistry::remove_tag, DEFVAL(false));
+	ClassDB::bind_method(D_METHOD("remove_tags", "names", "remove_children"), &NativeGameplayTagRegistry::remove_tags, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("get_child_tags", "parent", "recursive"), &NativeGameplayTagRegistry::get_child_tags, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("get_parent_tag", "tag"), &NativeGameplayTagRegistry::get_parent_tag);
 	ClassDB::bind_method(D_METHOD("make_container", "initial_tags"), &NativeGameplayTagRegistry::make_container, DEFVAL(Array()));
@@ -65,8 +67,16 @@ bool NativeGameplayTagRegistry::add_tag(const Variant &p_name, const String &p_d
 	return database->add_tag(p_name, p_description);
 }
 
+int64_t NativeGameplayTagRegistry::add_tags(const Array &p_names) {
+	return database->add_tags(p_names);
+}
+
 bool NativeGameplayTagRegistry::remove_tag(const Variant &p_name, bool p_remove_children) {
 	return database->remove_tag(p_name, p_remove_children);
+}
+
+int64_t NativeGameplayTagRegistry::remove_tags(const Array &p_names, bool p_remove_children) {
+	return database->remove_tags(p_names, p_remove_children);
 }
 
 TypedArray<NativeGameplayTag> NativeGameplayTagRegistry::get_child_tags(const Variant &p_parent, bool p_recursive) const {
@@ -80,9 +90,7 @@ Ref<NativeGameplayTag> NativeGameplayTagRegistry::get_parent_tag(const Variant &
 Ref<NativeGameplayTagContainer> NativeGameplayTagRegistry::make_container(const Array &p_initial_tags) const {
 	Ref<NativeGameplayTagContainer> container;
 	container.instantiate();
-	for (int64_t i = 0; i < p_initial_tags.size(); i++) {
-		container->add(p_initial_tags[i]);
-	}
+	container->add_tags(p_initial_tags);
 	return container;
 }
 

@@ -10,9 +10,7 @@ Ref<NativeGameplayTagQuery> make_query(NativeGameplayTagQuery::Mode p_mode, cons
 	query.instantiate();
 	query->set_mode(p_mode);
 	query->set_exact(p_exact);
-	for (int64_t i = 0; i < p_tags.size(); i++) {
-		query->add(p_tags[i]);
-	}
+	query->add_tags(p_tags);
 	return query;
 }
 } // namespace
@@ -32,7 +30,9 @@ void NativeGameplayTagQuery::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("matches", "container"), &NativeGameplayTagQuery::matches);
 	ClassDB::bind_method(D_METHOD("add", "raw_tag"), &NativeGameplayTagQuery::add);
+	ClassDB::bind_method(D_METHOD("add_tags", "raw_tags"), &NativeGameplayTagQuery::add_tags);
 	ClassDB::bind_method(D_METHOD("remove", "raw_tag"), &NativeGameplayTagQuery::remove);
+	ClassDB::bind_method(D_METHOD("remove_tags", "raw_tags"), &NativeGameplayTagQuery::remove_tags);
 	ClassDB::bind_method(D_METHOD("clear"), &NativeGameplayTagQuery::clear);
 
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "mode", PROPERTY_HINT_ENUM, "ALL,ANY,NONE"), "set_mode", "get_mode");
@@ -76,7 +76,11 @@ NativeGameplayTagQuery::Mode NativeGameplayTagQuery::get_mode() const {
 void NativeGameplayTagQuery::set_tags(const Array &p_tags) {
 	tags.clear();
 	for (int64_t i = 0; i < p_tags.size(); i++) {
-		add(p_tags[i]);
+		StringName tag = _variant_to_tag_name(p_tags[i]);
+		if (String(tag).is_empty() || tags.has(tag)) {
+			continue;
+		}
+		tags.append(tag);
 	}
 	emit_changed();
 }
@@ -155,6 +159,22 @@ bool NativeGameplayTagQuery::add(const Variant &p_raw_tag) {
 	return true;
 }
 
+int64_t NativeGameplayTagQuery::add_tags(const Array &p_raw_tags) {
+	int64_t added = 0;
+	for (int64_t i = 0; i < p_raw_tags.size(); i++) {
+		StringName tag = _variant_to_tag_name(p_raw_tags[i]);
+		if (String(tag).is_empty() || tags.has(tag)) {
+			continue;
+		}
+		tags.append(tag);
+		added++;
+	}
+	if (added > 0) {
+		emit_changed();
+	}
+	return added;
+}
+
 bool NativeGameplayTagQuery::remove(const Variant &p_raw_tag) {
 	StringName tag = _variant_to_tag_name(p_raw_tag);
 	int64_t index = tags.find(tag);
@@ -164,6 +184,23 @@ bool NativeGameplayTagQuery::remove(const Variant &p_raw_tag) {
 	tags.remove_at(index);
 	emit_changed();
 	return true;
+}
+
+int64_t NativeGameplayTagQuery::remove_tags(const Array &p_raw_tags) {
+	int64_t removed = 0;
+	for (int64_t i = 0; i < p_raw_tags.size(); i++) {
+		StringName tag = _variant_to_tag_name(p_raw_tags[i]);
+		int64_t index = tags.find(tag);
+		if (index < 0) {
+			continue;
+		}
+		tags.remove_at(index);
+		removed++;
+	}
+	if (removed > 0) {
+		emit_changed();
+	}
+	return removed;
 }
 
 void NativeGameplayTagQuery::clear() {

@@ -21,6 +21,20 @@ func add_tag(raw_tag: Variant) -> bool:
 	return add(raw_tag)
 
 
+func add_tags(raw_tags: Array) -> int:
+	var added := 0
+	for raw_tag in raw_tags:
+		var tag := _normalize(raw_tag)
+		if tag == &"" or tags.has(tag):
+			continue
+		tags.append(tag)
+		added += 1
+	if added > 0:
+		tags.sort_custom(Callable(self, "_sort_string_names"))
+		emit_changed()
+	return added
+
+
 func remove(raw_tag: Variant) -> bool:
 	var tag := _normalize(raw_tag)
 	var index := tags.find(tag)
@@ -33,6 +47,20 @@ func remove(raw_tag: Variant) -> bool:
 
 func remove_tag(raw_tag: Variant) -> bool:
 	return remove(raw_tag)
+
+
+func remove_tags(raw_tags: Array) -> int:
+	var removed := 0
+	for raw_tag in raw_tags:
+		var tag := _normalize(raw_tag)
+		var index := tags.find(tag)
+		if index < 0:
+			continue
+		tags.remove_at(index)
+		removed += 1
+	if removed > 0:
+		emit_changed()
+	return removed
 
 
 func has_exact(raw_tag: Variant) -> bool:

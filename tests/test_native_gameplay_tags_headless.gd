@@ -25,7 +25,8 @@ func _init() -> void:
 
 	var database = ClassDB.instantiate("NativeGameplayTagDatabase")
 	_assert(
-		database.add_tag(" .State . Stunned..Heavy. "), "database should add normalized child tag"
+		database.add_tags([" .State . Stunned..Heavy. ", "Team.Enemy", "Team.Enemy"]) == 2,
+		"database should batch-add unique normalized tags"
 	)
 	_assert(database.ensure_parent_tags(), "database should create parent tags")
 	_assert(database.has_tag("State"), "database should contain root parent")
@@ -40,16 +41,20 @@ func _init() -> void:
 	)
 
 	var container = ClassDB.instantiate("NativeGameplayTagContainer")
-	_assert(container.add(" .State . Stunned. "), "container should add normalized tag")
-	_assert(container.add("Team.Enemy"), "container should add second tag")
+	_assert(
+		container.add_tags([" .State . Stunned. ", "Team.Enemy", "Team.Enemy"]) == 2,
+		"container should batch-add unique normalized tags"
+	)
 	_assert(container.has(" State "), "container should match parent hierarchically")
 	_assert(container.has_exact("State.Stunned"), "container should match exact owned tag")
 	_assert(not container.has_exact("State"), "container should not exact-match parent")
 
 	var any_query = ClassDB.instantiate("NativeGameplayTagQuery")
 	any_query.set_mode(1)  # MODE_ANY
-	any_query.add("Damage.Fire")
-	any_query.add(" State ")
+	_assert(
+		any_query.add_tags(["Damage.Fire", " State ", " State "]) == 2,
+		"query should batch-add unique normalized tags"
+	)
 
 	var exact_query = ClassDB.instantiate("NativeGameplayTagQuery")
 	exact_query.set_mode(0)  # MODE_ALL
