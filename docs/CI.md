@@ -1,6 +1,6 @@
 # CI: Windows Native Builds
 
-The repo uses GitHub Actions to build and package Windows GDExtension binaries from the Linux-managed source tree.
+The repo has a manual GitHub Actions workflow to build and package Windows GDExtension binaries from the Linux-managed source tree when hosted Windows runner minutes are available.
 
 Workflow file:
 
@@ -10,7 +10,7 @@ Workflow file:
 
 ## What the workflow does
 
-On `push`, `pull_request`, or manual `workflow_dispatch`, the `windows-native` job runs on `windows-latest` and:
+On manual `workflow_dispatch`, the `windows-native` job runs on `windows-latest` and:
 
 1. Checks out the repo.
 2. Installs Python + SCons.
@@ -33,6 +33,10 @@ On `push`, `pull_request`, or manual `workflow_dispatch`, the `windows-native` j
    - `gameplay_tags-<version>-windows-native.zip`
    - `gameplay_tags-<version>-gdscript.zip`
 10. Uploads the zips as the `gameplay-tags-windows-packages` workflow artifact.
+
+## Hosted runner note
+
+This workflow uses GitHub-hosted Windows runners. For private repositories, the account must have available GitHub Actions minutes/billing. If GitHub reports `startup_failure` with no job logs, hosted runners may be unavailable for the account. In that case, use a local Windows machine/VM or a self-hosted Windows runner instead.
 
 ## Run it manually
 
@@ -75,7 +79,7 @@ tools/linux/dev_native.sh
 tools/linux/test_all_godot_versions.sh
 ```
 
-Windows CI:
+Windows CI or local Windows runner:
 
 ```text
 builds Windows .dll files
@@ -83,4 +87,4 @@ runs Windows Godot smoke tests
 creates release zips
 ```
 
-Use Windows CI artifacts for Windows native releases rather than trying to cross-compile Windows DLLs from Linux.
+Use Windows-built artifacts for Windows native releases rather than relying on Linux cross-compilation as the primary release path.
