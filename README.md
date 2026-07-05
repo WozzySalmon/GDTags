@@ -91,6 +91,7 @@ tools\windows\package_addon.cmd
 
 ## Docs
 
+- `docs/PLUGIN_GUIDE.md` - full plugin behavior and usage guide.
 - `addons/gameplay_tags/README.md` - addon usage notes.
 - `docs/PACKAGING.md` - release/package notes.
 - `docs/CI.md` - CI status notes.
