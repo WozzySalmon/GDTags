@@ -3,6 +3,7 @@
 /android/
 
 # Local/editor automation tooling and external native dependency
+.pi-subagents/
 addons/godot_ai/
 godot-cpp/
 godot-cpp

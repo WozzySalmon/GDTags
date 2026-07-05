@@ -3,12 +3,10 @@ extends VBoxContainer
 
 const DATABASE_SETTING := "gameplay_tags/database_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
-const GameplayTagDatabaseScript := preload(
-	"res://addons/gameplay_tags/resources/gameplay_tag_database.gd"
-)
 
 var _database: GameplayTagDatabase
 var _tag_list: ItemList
+var _search_input: LineEdit
 var _tag_input: LineEdit
 var _description_input: LineEdit
 var _status_label: Label
@@ -33,6 +31,11 @@ func _build_ui() -> void:
 	path_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(path_label)
 
+	_search_input = LineEdit.new()
+	_search_input.placeholder_text = "Search tags"
+	_search_input.text_changed.connect(_on_search_changed)
+	add_child(_search_input)
+
 	_tag_list = ItemList.new()
 	_tag_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_tag_list.item_selected.connect(_on_item_selected)
@@ -45,6 +48,7 @@ func _build_ui() -> void:
 
 	_description_input = LineEdit.new()
 	_description_input.placeholder_text = "Optional description"
+	_description_input.text_submitted.connect(_on_tag_submitted)
 	add_child(_description_input)
 
 	var buttons := HBoxContainer.new()
@@ -80,14 +84,10 @@ func _load_database() -> void:
 	var path := _get_database_path()
 	if ResourceLoader.exists(path):
 		_database = load(path) as GameplayTagDatabase
-
 	if _database == null:
-		_database = GameplayTagDatabaseScript.new()
+		_database = GameplayTagDatabase.new()
+		_database.resource_path = path
 		_save_database()
-
-
-func _get_registry() -> Node:
-	return get_node_or_null("/root/GameplayTags")
 
 
 func _refresh() -> void:
@@ -102,13 +102,13 @@ func _refresh() -> void:
 		_set_status("No gameplay tag database loaded.")
 		return
 
-	for tag in _database.tags:
+	var visible_tags := _database.find_tags(_search_input.text if _search_input != null else "")
+	for tag in visible_tags:
 		var index := _tag_list.add_item(String(tag))
-		var description := String(_database.tag_descriptions.get(String(tag), ""))
-		if not description.is_empty():
-			_tag_list.set_item_tooltip(index, description)
+		_tag_list.set_item_metadata(index, tag)
+		_tag_list.set_item_tooltip(index, String(_database.tag_descriptions.get(String(tag), "")))
 
-	_set_status("%d tags loaded." % _database.tags.size())
+	_set_status("%d visible / %d total tags." % [visible_tags.size(), _database.tags.size()])
 
 
 func _on_add_pressed() -> void:
@@ -120,45 +120,39 @@ func _on_add_pressed() -> void:
 		_set_status("Enter a tag name first.")
 		return
 
-	var description := _description_input.text.strip_edges()
-	var registry := _get_registry()
 	var added := false
-
+	var registry := _get_registry()
 	if registry != null and registry.has_method("add_tag"):
-		added = bool(registry.add_tag(tag_text, description))
-		if added and registry.has_method("ensure_parent_tags"):
-			registry.ensure_parent_tags()
-		if registry.has_method("get_database"):
-			_database = registry.get_database()
+		added = bool(registry.add_tag(tag_text, _description_input.text.strip_edges()))
+		_database = registry.get_database()
 	else:
-		added = _database.add_tag(tag_text, description)
-		if added:
-			_database.ensure_parent_tags()
-			_save_database()
+		added = _database.add_tag(tag_text, _description_input.text.strip_edges())
+		if added and not _save_database():
+			return
 
-	if added:
-		_tag_input.clear()
-		_description_input.clear()
-		_refresh()
-		_set_status("Added %s" % tag_text)
-	else:
+	if not added:
 		_set_status("Tag already exists or is invalid: %s" % tag_text)
+		return
+
+	_tag_input.clear()
+	_description_input.clear()
+	_refresh()
+	_set_status("Added %s" % String(GameplayTagDatabase.normalize_tag(tag_text)))
 
 
 func _on_remove_pressed() -> void:
 	if _database == null or _selected_tag == &"":
 		return
 
-	var registry := _get_registry()
 	var removed := false
+	var registry := _get_registry()
 	if registry != null and registry.has_method("remove_tag"):
 		removed = bool(registry.remove_tag(_selected_tag, true))
-		if registry.has_method("get_database"):
-			_database = registry.get_database()
+		_database = registry.get_database()
 	else:
 		removed = _database.remove_tag(_selected_tag, true)
-		if removed:
-			_save_database()
+		if removed and not _save_database():
+			return
 
 	if removed:
 		_refresh()
@@ -170,28 +164,53 @@ func _on_refresh_pressed() -> void:
 	_refresh()
 
 
+func _on_search_changed(_text: String) -> void:
+	_refresh()
+
+
 func _on_tag_submitted(_text: String) -> void:
 	_on_add_pressed()
 
 
 func _on_item_selected(index: int) -> void:
-	if _database == null or index < 0 or index >= _database.tags.size():
+	if index < 0 or index >= _tag_list.get_item_count():
 		_selected_tag = &""
 		_remove_button.disabled = true
 		return
 
-	_selected_tag = _database.tags[index]
+	_selected_tag = _tag_list.get_item_metadata(index)
 	_remove_button.disabled = false
 
 
-func _save_database() -> void:
-	var err := ResourceSaver.save(_database, _get_database_path())
+func _save_database() -> bool:
+	var path := _get_database_path()
+	var directory_error := _ensure_database_directory(path)
+	if directory_error != OK:
+		_set_status("Could not create database directory: %s" % error_string(directory_error))
+		return false
+	var err := ResourceSaver.save(_database, path)
 	if err != OK:
 		_set_status("Could not save database: %s" % error_string(err))
+		return false
+	return true
+
+
+func _ensure_database_directory(path: String) -> Error:
+	var directory := path.get_base_dir()
+	if directory.is_empty() or directory == "res://" or directory == "user://":
+		return OK
+	return DirAccess.make_dir_recursive_absolute(directory)
 
 
 func _get_database_path() -> String:
 	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+
+
+func _get_registry() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	return tree.root.get_node_or_null("GameplayTags")
 
 
 func _set_status(message: String) -> void:

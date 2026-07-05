@@ -18,10 +18,10 @@ fi
 check_output="$(mktemp -t gameplay_tags_gdscript_check_XXXXXX.log)"
 trap 'rm -f "$check_output"' EXIT
 
-"$PROJECT_DIR/tools/linux/prepare_project.sh"
+"$PROJECT_DIR/tools/linux/prepare_project.sh" --force
 rm -f "$PROJECT_DIR/.godot/extension_list.cfg" 2>/dev/null || true
 
-echo "Running Godot GDScript smoke check with $GODOT_BIN..."
+echo "Running Godot GDScript workflow smoke check with $GODOT_BIN..."
 set +e
 "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script "res://tests/test_gameplay_tags.gd" >"$check_output" 2>&1
 godot_exit=$?
@@ -45,4 +45,4 @@ if [[ $godot_exit -ne 0 ]]; then
   exit "$godot_exit"
 fi
 
-echo "GDScript smoke check passed."
+echo "GDScript workflow smoke check passed."

@@ -1,66 +1,62 @@
 # Gameplay Tags for Godot
 
-A Godot 4.6+ addon for hierarchical gameplay tags, inspired by Unreal Gameplay Tags.
+Godot 4.6+ addon for Unreal-style hierarchical gameplay tags.
 
-## Runtime shape
+## What it adds
 
-The addon currently ships both:
+- `GameplayTags` autoload: central database and gameplay helper API.
+- `GameplayTagDatabase`: global registry saved at `res://gameplay_tags_database.tres` by default.
+- Gameplay Tags dock: add/remove/search global tags.
+- Inspector picker: tag arrays are selected from the central database, not typed freeform.
+- `GameplayTagComponent`: attach to nodes that own tags.
+- `GameplayTagTrigger3D`: Area3D helper for tag-gated overlap events.
 
-- GDScript editor/prototype runtime:
-  - `GameplayTag`
-  - `GameplayTagDatabase`
-  - `GameplayTagContainer`
-  - `GameplayTagQuery`
-  - `GameplayTags` autoload singleton
-  - Editor dock for adding/removing tags
-- C++ GDExtension runtime:
-  - `NativeGameplayTag`
-  - `NativeGameplayTagDatabase`
-  - `NativeGameplayTagContainer`
-  - `NativeGameplayTagQuery`
-  - `NativeGameplayTagRegistry`
+## Basic usage
 
-The native classes use a `Native` prefix while the editor UI remains GDScript, matching the planned hybrid architecture.
-
-## Quick usage
+Add a `GameplayTagComponent` child to your player/enemy/item node and pick `owned_tags` in
+the Inspector.
 
 ```gdscript
-var tags := GameplayTags.make_container([
-    "State.Stunned",
-    "Team.Enemy",
-])
+if GameplayTags.target_has_tag(enemy, "Team.Enemy"):
+	attack(enemy)
 
-print(tags.has("State")) # true, hierarchical match
-print(tags.has_exact("State")) # false
-
-var query := GameplayTags.make_query_all(["State", "Team.Enemy"])
-print(tags.matches_query(query)) # true
+if GameplayTags.target_has_tag(player, "State.Stunned"):
+	return
 ```
 
-`GameplayTags` automatically uses the native C++ runtime when the GDExtension is available, and falls back to the GDScript runtime when it is not:
+Hierarchical matching is enabled by default:
 
 ```gdscript
-print(GameplayTags.get_runtime_backend()) # "native" or "gdscript"
-
-var container := GameplayTags.make_container(["State.Stunned"])
-print(container.has("State")) # true
+# Enemy owns Team.Enemy.
+GameplayTags.target_has_tag(enemy, "Team") # true
+GameplayTags.target_has_tag(enemy, "Team", true) # false, exact check
 ```
 
-Native classes can also be used directly after the GDExtension is built/loaded:
+## Trigger example
 
 ```gdscript
-var container := NativeGameplayTagContainer.new()
-container.add("State.Stunned")
-print(container.has("State")) # true
+func _on_body_entered(body: Node) -> void:
+	if not GameplayTags.target_has_tag(body, "Team.Enemy"):
+		return
+	print("Enemy entered")
 ```
 
-The plugin stores its database path in `ProjectSettings` at:
+Or add `GameplayTagTrigger3D`, set `required_tags`, and listen for:
+
+```gdscript
+func _on_tagged_body_entered(body: Node) -> void:
+	print("Matching body entered: ", body.name)
+```
+
+## Database path
+
+Project setting:
 
 ```text
 gameplay_tags/database_path
 ```
 
-Default database path:
+Default:
 
 ```text
 res://gameplay_tags_database.tres
@@ -68,20 +64,10 @@ res://gameplay_tags_database.tres
 
 ## Tests
 
-From the project root, run the smoke tests headlessly:
-
 ```bash
+tools/linux/check_gdscript.sh
 tools/linux/test_native.sh
 ```
 
-```powershell
-tools\windows\test_native.cmd
-```
-
-## Native C++ runtime
-
-Build instructions and native benchmark commands live in `docs/NATIVE.md`.
-
-The build follows Godot's GDExtension guide and the official `godot-cpp-template` layout: `SConstruct` builds into `bin/<platform>/`, installs into `addons/gameplay_tags/bin/<platform>/`, and `gameplay_tags.gdextension` uses relative library paths.
-
-The editor database stays as a GDScript resource for easy editing/saving; the autoload mirrors it into a native database at runtime when native classes are available.
+`test_native.sh` is kept as a compatibility script name; native C++ is deferred in this clean
+restart and the script runs GDScript/editor workflow smoke tests.

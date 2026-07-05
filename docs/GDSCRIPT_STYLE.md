@@ -82,25 +82,17 @@ var health: int = 100
 
 ## Gameplay Tags project rules
 
-- Use the `GameplayTags` autoload for runtime containers and queries.
+- Use the `GameplayTags` autoload for runtime checks and database operations.
 - Do not mutate `GameplayTagDatabase.tags` directly from editor/runtime code; use `add_tag()`, `remove_tag()`, and `ensure_parent_tags()`.
 - Scripts used by editor plugin/tool code must be `@tool`. This includes resources whose methods are called by the editor dock.
 - Prefer tag checks that read like simple yes/no gates:
 
 ```gdscript
-if actor.tags.has("State.Stunned"):
+if GameplayTags.target_has_tag(actor, "State.Stunned"):
 	return
 ```
 
-- Use query helpers for reusable rules:
-
-```gdscript
-var cannot_act := GameplayTags.make_query_any([
-	"State.Stunned",
-	"State.Dead",
-	"Ability.Blocked",
-])
-```
+- Use `GameplayTagComponent` on gameplay nodes instead of freeform node groups.
 
 ## Checks
 
@@ -108,7 +100,7 @@ Run these before considering GDScript changes done:
 
 ```bash
 tools/linux/check_gdscript.sh
-tools/linux/test_native.sh
+tools/linux/test_native.sh # compatibility name; runs GDScript/editor smoke tests
 ```
 
 On Windows, use the equivalent scripts:

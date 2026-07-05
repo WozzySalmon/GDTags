@@ -11,19 +11,18 @@ When editing this project, follow these rules.
 
 ## Gameplay Tags conventions
 
-- Use the `GameplayTags` autoload for containers, queries, and database operations.
+- Use the `GameplayTags` autoload for target checks, containers, queries, and database operations.
 - Do not directly mutate `GameplayTagDatabase.tags` from editor/runtime code. Use `add_tag()`, `remove_tag()`, and `ensure_parent_tags()`.
 - Editor plugin scripts are `@tool`; any Resource/RefCounted script whose methods are called by editor tool code must also be `@tool`.
-- Keep native C++ runtime and GDScript runtime behavior in parity. If normalization or query behavior changes, update both sides and add/adjust tests.
+- Native C++ is deferred in the clean restart. Do not restore the old backend-first implementation unless explicitly asked; build future native code from the current public API.
 
 ## Project layout
 
 - `addons/gameplay_tags/` - addon files that users install.
-- `src/` - C++ GDExtension source.
 - `tests/` and `benchmarks/` - validation and performance scripts.
-- `docs/` - style, packaging, and native build docs.
+- `docs/` - style, packaging, and restart notes.
 - `tools/linux/` - Linux build/test/lint commands.
-- `tools/windows/` - Windows build/test/lint/package commands.
+- `tools/windows/` - Windows test/lint/package commands.
 
 ## Validation
 
@@ -34,11 +33,7 @@ tools/linux/check_gdscript.sh
 tools/linux/test_native.sh
 ```
 
-- After C++ edits, run:
-
-```bash
-tools/linux/dev_native.sh
-```
+- `tools/linux/test_native.sh` is a compatibility name; it now runs GDScript/editor smoke tests.
 
 - To smoke-test the configured Godot versions, run:
 

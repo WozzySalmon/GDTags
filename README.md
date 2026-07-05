@@ -1,8 +1,9 @@
 # GDTags
 
-Gameplay Tags addon for Godot 4.6+, inspired by Unreal's Gameplay Tags.
+Gameplay Tags addon for Godot 4.6+, rebuilt around the Unreal Gameplay Tags workflow:
+central registry, inspector picker, tag components on nodes, and simple yes/no gameplay checks.
 
-GDTags gives you hierarchical tags such as:
+Tags are hierarchical:
 
 ```text
 State.Stunned
@@ -10,81 +11,84 @@ Damage.Fire
 Team.Enemy
 ```
 
-Then gameplay logic can stay simple:
+Owning `State.Stunned` also satisfies checks for `State` unless exact matching is requested.
+
+## Workflow
+
+1. Enable **Project > Project Settings > Plugins > Gameplay Tags**.
+2. Add global tags in the **Gameplay Tags** dock.
+3. Add a `GameplayTagComponent` child to any gameplay node.
+4. Pick the component's `owned_tags` from the central database in the Inspector.
+5. Check tags in gameplay code:
 
 ```gdscript
-if target.tags.has("State.Stunned"):
+if GameplayTags.target_has_tag(enemy, "Team.Enemy"):
+	attack(enemy)
+
+if GameplayTags.target_has_tag(player, "State.Stunned"):
 	return
 ```
+
+Area trigger helper:
+
+```gdscript
+func _on_body_entered(body: Node) -> void:
+	if not GameplayTags.target_has_tag(body, "Team.Enemy"):
+		return
+	print("Enemy entered trigger")
+```
+
+Or use `GameplayTagTrigger3D` directly and set `required_tags` in the Inspector.
+
+## Public API
+
+- `GameplayTags.get_database()` - central `GameplayTagDatabase` resource.
+- `GameplayTags.target_has_tag(target, tag, exact := false)`.
+- `GameplayTags.get_owned_gameplay_tags(target)`.
+- `GameplayTags.target_has_any(target, tags, exact := false)`.
+- `GameplayTags.target_has_all(target, tags, exact := false)`.
+- `GameplayTags.get_overlapping_bodies_with_tag(area, tag, exact := false)`.
+- `GameplayTagComponent` - attach to nodes to own tags.
+- `GameplayTagTrigger3D` - Area3D helper that emits only for matching tagged targets.
 
 ## Project layout
 
 ```text
 addons/gameplay_tags/   Addon files users install into Godot projects
-docs/                   Native build, packaging, and GDScript style notes
-src/                    C++ GDExtension source
+docs/                   Packaging and style notes
 tests/                  Headless Godot smoke tests
 benchmarks/             Runtime benchmark scripts
-tools/linux/            Linux build, lint, and test scripts
-tools/windows/          Windows build, lint, test, and packaging scripts
+tools/linux/            Linux lint/test helpers
+tools/windows/          Windows test/package helpers
 ```
 
-Ignored local/build folders such as `.godot/`, `godot-cpp/`, `bin/`, `dist/`, and `addons/gameplay_tags/bin/` are not part of the source package.
-
-## Quick usage
-
-Enable the plugin in Godot:
-
-```text
-Project > Project Settings > Plugins > Gameplay Tags
-```
-
-Then use the `GameplayTags` autoload:
-
-```gdscript
-var tags := GameplayTags.make_container([
-	"State.Stunned",
-	"Team.Enemy",
-])
-
-print(tags.has("State")) # true, because State.Stunned is a child of State
-```
+Native GDExtension code is intentionally deferred in this clean restart. The workflow is
+GDScript-first until the editor/runtime UX is solid.
 
 ## Development commands
 
-On Linux, check and test GDScript:
-
 ```bash
-tools/linux/format_gdscript.sh
-tools/linux/lint_gdscript.sh
 tools/linux/check_gdscript.sh
-tools/linux/test_native.sh
+tools/linux/test_native.sh      # compatibility name; runs GDScript/editor smoke tests
 ```
 
-Build/test the native Linux GDExtension:
-
-```bash
-tools/linux/dev_native.sh
-```
-
-Smoke-test the configured Godot versions:
+Smoke-test configured Godot versions:
 
 ```bash
 tools/linux/test_all_godot_versions.sh
 ```
 
-Windows validation and shareable addon zips still use the Windows scripts:
+Windows:
 
 ```bat
-tools\windows\dev_native.cmd
+tools\windows\check_gdscript.cmd
+tools\windows\test_native.cmd
 tools\windows\package_addon.cmd
-tools\windows\package_addon.cmd -Variant gdscript -SkipBuild
 ```
 
 ## Docs
 
-- `addons/gameplay_tags/README.md` - addon/user notes
-- `docs/NATIVE.md` - C++ GDExtension build notes
-- `docs/PACKAGING.md` - how to make release zips
-- `docs/CI.md` - GitHub Actions Windows build/package workflow
-- `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo
+- `addons/gameplay_tags/README.md` - addon usage notes.
+- `docs/PACKAGING.md` - release/package notes.
+- `docs/CI.md` - CI status notes.
+- `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo.

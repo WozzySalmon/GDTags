@@ -1,6 +1,6 @@
 param(
-    [ValidateSet("windows-native", "gdscript")]
-    [string] $Variant = "windows-native",
+    [ValidateSet("gdscript")]
+    [string] $Variant = "gdscript",
 
     [switch] $SkipBuild
 )
@@ -26,14 +26,8 @@ $PackageName = "gameplay_tags-$Version-$Variant"
 $StageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
-if ($Variant -eq "windows-native" -and -not $SkipBuild) {
-    Write-Host "Building Windows debug native DLL..."
-    & (Join-Path $ToolDir "build_native.cmd")
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-    Write-Host "Building Windows release native DLL..."
-    & (Join-Path $ToolDir "build_native_release.cmd")
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not $SkipBuild) {
+    Write-Host "GDScript-only addon package: no native build step."
 }
 
 if (Test-Path $StageDir) {
@@ -62,22 +56,10 @@ Get-ChildItem $StageAddon -Recurse -File | Where-Object {
     -or $_.Extension -in @(".exp", ".lib", ".pdb", ".ilk", ".obj", ".tmp", ".TMP")
 } | Remove-Item -Force
 
-if ($Variant -eq "gdscript") {
-    # GDScript-only package works on any desktop platform and avoids missing native binary errors.
-    Remove-Item (Join-Path $StageAddon "bin") -Recurse -Force -ErrorAction SilentlyContinue
-    Remove-Item (Join-Path $StageAddon "gameplay_tags.gdextension") -Force -ErrorAction SilentlyContinue
-    Remove-Item (Join-Path $StageAddon "gameplay_tags.gdextension.uid") -Force -ErrorAction SilentlyContinue
-} else {
-    $DebugDll = Join-Path $StageAddon "bin\windows\gameplay_tags.windows.template_debug.x86_64.dll"
-    $ReleaseDll = Join-Path $StageAddon "bin\windows\gameplay_tags.windows.template_release.x86_64.dll"
-
-    if (-not (Test-Path $DebugDll)) {
-        throw "Missing debug DLL: $DebugDll"
-    }
-    if (-not (Test-Path $ReleaseDll)) {
-        throw "Missing release DLL: $ReleaseDll"
-    }
-}
+# GDScript-only package works on every Godot desktop platform and avoids native binary errors.
+Remove-Item (Join-Path $StageAddon "bin") -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $StageAddon "gameplay_tags.gdextension") -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $StageAddon "gameplay_tags.gdextension.uid") -Force -ErrorAction SilentlyContinue
 
 $LicensePath = Join-Path $Root "LICENSE"
 if (Test-Path $LicensePath) {

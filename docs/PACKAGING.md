@@ -1,8 +1,8 @@
 # Packaging the Gameplay Tags Addon
 
-Do not send the whole development folder. The development folder contains local build caches, `godot-cpp`, tests, benchmarks, and temporary editor files.
+The clean restart is GDScript-only. Do not package native build caches or development files.
 
-For normal users, send a zip that contains the addon folder:
+A user package should contain:
 
 ```text
 addons/gameplay_tags/plugin.cfg
@@ -10,17 +10,12 @@ addons/gameplay_tags/plugin.gd
 addons/gameplay_tags/editor/
 addons/gameplay_tags/resources/
 addons/gameplay_tags/runtime/
-addons/gameplay_tags/gameplay_tags.gdextension       # native package only
-addons/gameplay_tags/bin/windows/*.dll               # native package only
+addons/gameplay_tags/examples/
+addons/gameplay_tags/README.md
+LICENSE
 ```
 
-## Package options
-
-### Windows native package
-
-Use this when sending to Windows users who should get the fast C++ GDExtension runtime. The preferred release path is the GitHub Actions Windows workflow in `docs/CI.md`; it builds and tests the DLLs on a real Windows runner before uploading package artifacts.
-
-Manual Windows packaging is also available:
+## Windows package script
 
 ```bat
 tools\windows\package_addon.cmd
@@ -29,63 +24,35 @@ tools\windows\package_addon.cmd
 Output:
 
 ```text
-dist/gameplay_tags-<version>-windows-native.zip
-```
-
-This package includes the Windows debug and release DLLs. It does not include linker files such as `.lib` or `.exp`.
-
-### GDScript-only package
-
-Use this for a simple package that works without native binaries. It is slower than the native runtime, but avoids platform-specific DLL issues.
-
-```bat
-tools\windows\package_addon.cmd -Variant gdscript -SkipBuild
-```
-
-Output:
-
-```text
 dist/gameplay_tags-<version>-gdscript.zip
 ```
 
-This package excludes `gameplay_tags.gdextension` and `bin/`, so Godot will use the GDScript runtime fallback.
+## Install test
 
-## Installing the package
-
-1. Unzip the package into another Godot project.
-2. Confirm this file exists:
+1. Unzip into a clean Godot project.
+2. Confirm this exists:
 
 ```text
 addons/gameplay_tags/plugin.cfg
 ```
 
-3. In Godot, open:
+3. Enable **Project > Project Settings > Plugins > Gameplay Tags**.
+4. Confirm the `GameplayTags` autoload exists.
+5. Open the **Gameplay Tags** dock, add a tag, and pick it on a `GameplayTagComponent`.
 
-```text
-Project > Project Settings > Plugins
-```
-
-4. Enable `Gameplay Tags`.
-5. A `GameplayTags` autoload should be created automatically.
-6. Use the `Gameplay Tags` dock to add tags.
-
-## What not to include in user packages
-
-Do not include:
+## Do not include
 
 ```text
 .godot/
-godot-cpp/
-bin/
-src/
+.pi-subagents/
+dist/
 tests/
 benchmarks/
 *.obj
-*.obj.import
 *.lib
 *.exp
 *.pdb
-~*.TMP
+*.tmp
 ```
 
-Those are for development/building, not for normal addon users.
+Native GDExtension files are intentionally absent until native parity is explicitly rebuilt later.

@@ -2,36 +2,23 @@ extends Node
 
 
 func _ready() -> void:
-	var container := (
-		GameplayTags
-		. make_container(
-			[
-				"State.Stunned",
-				"Damage.Fire",
-				"Team.Enemy",
-			]
-		)
-	)
+	var enemy := Node.new()
+	var tags := GameplayTagComponent.new()
+	enemy.add_child(tags)
+	add_child(enemy)
 
-	var can_damage := (
-		GameplayTags
-		. make_query_all(
-			[
-				"Damage",
-				"Team.Enemy",
-			]
-		)
-	)
+	# In normal scenes, pick owned_tags from the Inspector. This script path is for examples/tests.
+	tags.add_tag("Team.Enemy")
+	tags.add_tag("State.Stunned")
 
-	var cannot_act := (
-		GameplayTags
-		. make_query_any(
-			[
-				"State.Stunned",
-				"State.Rooted",
-			]
-		)
-	)
+	if GameplayTags.target_has_tag(enemy, "Team.Enemy"):
+		print("Enemy target")
 
-	print("Can damage: ", container.matches_query(can_damage))
-	print("Cannot act: ", container.matches_query(cannot_act))
+	if GameplayTags.target_has_tag(enemy, "State"):
+		print("Hierarchical match: State.Stunned satisfies State")
+
+	var can_damage := GameplayTags.target_has_all(enemy, ["Team.Enemy"])
+	var cannot_act := GameplayTags.target_has_any(enemy, ["State.Stunned", "State.Rooted"])
+
+	print("Can damage: ", can_damage)
+	print("Cannot act: ", cannot_act)

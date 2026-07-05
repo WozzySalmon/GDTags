@@ -3,265 +3,294 @@ extends Node
 
 const DATABASE_SETTING := "gameplay_tags/database_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
-const EXTENSION_PATH := "res://addons/gameplay_tags/gameplay_tags.gdextension"
-const GameplayTagDatabaseScript := preload(
-	"res://addons/gameplay_tags/resources/gameplay_tag_database.gd"
-)
+const COMPONENT_GROUP := "gameplay_tag_components"
 
-# Source-of-truth/editor database. This remains GDScript so the editor dock can
-# keep saving a normal Godot resource that works even without a native build.
-var database: GameplayTagDatabase
-
-# Optional fast runtime mirror. These stay untyped so the script can still parse
-# and run on machines where the GDExtension has not been built/loaded yet.
-var _native_registry: Variant = null
-var _native_database: Variant = null
-var _native_runtime_enabled := false
-var _native_load_error: int = OK
+var _database: GameplayTagDatabase
 
 
 func _ready() -> void:
-	reload()
-
-
-func reload() -> GameplayTagDatabase:
-	_ensure_project_settings()
-	database = null
-	var path := get_database_path()
-
-	if ResourceLoader.exists(path):
-		database = load(path) as GameplayTagDatabase
-
-	if database == null:
-		database = GameplayTagDatabaseScript.new()
-		_seed_default_tags(database)
-		save_database()
-
-	_setup_native_runtime()
-	return database
+	get_database()
 
 
 func get_database() -> GameplayTagDatabase:
-	if database == null:
-		reload()
-	return database
+	if _database == null:
+		_database = _load_or_create_database()
+	return _database
 
 
-func is_native_runtime_enabled() -> bool:
-	return _native_runtime_enabled and _native_registry != null
-
-
-func get_runtime_backend() -> String:
-	return "native" if is_native_runtime_enabled() else "gdscript"
-
-
-func get_native_registry() -> Variant:
-	return _native_registry
-
-
-func get_native_database() -> Variant:
-	return _native_database
-
-
-func get_native_load_error() -> int:
-	return _native_load_error
+func set_database(database: GameplayTagDatabase, save_now: bool = false) -> void:
+	_database = database
+	if _database == null:
+		_database = GameplayTagDatabase.new()
+	if save_now:
+		save_database()
 
 
 func get_database_path() -> String:
 	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
 
 
-func set_database_path(path: String) -> void:
-	ProjectSettings.set_setting(DATABASE_SETTING, path)
-	ProjectSettings.save()
-	reload()
+func set_database_path(path: String, save_project_settings: bool = false) -> void:
+	var clean_path := path.strip_edges()
+	if clean_path.is_empty():
+		clean_path = DEFAULT_DATABASE_PATH
+	ProjectSettings.set_setting(DATABASE_SETTING, clean_path)
+	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+	if save_project_settings:
+		ProjectSettings.save()
+	_database = null
+
+
+func reload_database() -> GameplayTagDatabase:
+	_database = _load_or_create_database()
+	return _database
 
 
 func save_database() -> Error:
-	if database == null:
-		return ERR_UNCONFIGURED
-	return ResourceSaver.save(database, get_database_path())
+	var database := get_database()
+	var path := get_database_path()
+	var directory_error := _ensure_database_directory(path)
+	if directory_error != OK:
+		push_error(
+			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
+		)
+		return directory_error
+	if database.resource_path.is_empty() or database.resource_path != path:
+		database.resource_path = path
+	var save_error := ResourceSaver.save(database, path)
+	if save_error != OK:
+		push_error("Could not save gameplay tag database: %s" % error_string(save_error))
+	return save_error
 
 
-func get_tag(name: Variant) -> Variant:
-	if is_native_runtime_enabled():
-		return _native_registry.get_tag(name)
-	return get_database().get_tag(name)
+func normalize_tag(raw_tag: Variant) -> StringName:
+	return GameplayTagDatabase.normalize_tag(raw_tag)
 
 
-func has_tag(name: Variant) -> bool:
-	if is_native_runtime_enabled():
-		return _native_registry.has_tag(name)
-	return get_database().has_tag(name)
+func is_valid_tag(raw_tag: Variant) -> bool:
+	return get_database().has_tag(raw_tag)
 
 
-func add_tag(name: Variant, description: String = "") -> bool:
-	var added := get_database().add_tag(name, description)
-	if added:
-		save_database()
-		_sync_native_runtime()
+func has_tag(raw_tag: Variant) -> bool:
+	return is_valid_tag(raw_tag)
+
+
+func request_tag(raw_tag: Variant) -> GameplayTag:
+	return get_database().get_tag(raw_tag)
+
+
+func add_tag(raw_tag: Variant, description: String = "", save_now: bool = true) -> bool:
+	var added := get_database().add_tag(raw_tag, description)
+	if added and save_now and save_database() != OK:
+		return false
 	return added
 
 
-func add_tags(names: Array) -> int:
-	var added := get_database().add_tags(names)
-	if added > 0:
-		save_database()
-		_sync_native_runtime()
-	return added
-
-
-func remove_tag(name: Variant, remove_children: bool = false) -> bool:
-	var removed := get_database().remove_tag(name, remove_children)
-	if removed:
-		save_database()
-		_sync_native_runtime()
+func remove_tag(raw_tag: Variant, remove_children: bool = false, save_now: bool = true) -> bool:
+	var removed := get_database().remove_tag(raw_tag, remove_children)
+	if removed and save_now and save_database() != OK:
+		return false
 	return removed
 
 
-func remove_tags(names: Array, remove_children: bool = false) -> int:
-	var removed := get_database().remove_tags(names, remove_children)
-	if removed > 0:
-		save_database()
-		_sync_native_runtime()
-	return removed
-
-
-func ensure_parent_tags() -> bool:
-	var changed := get_database().ensure_parent_tags()
-	if changed:
-		save_database()
-		_sync_native_runtime()
+func ensure_parent_tags(raw_tag: Variant = &"", save_now: bool = true) -> bool:
+	var changed := get_database().ensure_parent_tags(raw_tag)
+	if changed and save_now and save_database() != OK:
+		return false
 	return changed
 
 
-func get_child_tags(parent: Variant, recursive: bool = false) -> Array:
-	if is_native_runtime_enabled():
-		return _native_registry.get_child_tags(parent, recursive)
-	return get_database().get_children(parent, recursive)
-
-
-func get_parent_tag(tag: Variant) -> Variant:
-	if is_native_runtime_enabled():
-		return _native_registry.get_parent_tag(tag)
-	return get_database().get_parent(tag)
-
-
-func get_all_tags() -> Array:
-	if is_native_runtime_enabled() and _native_database != null:
-		return _native_database.get_all_tags()
+func get_all_tags() -> Array[StringName]:
 	return get_database().get_all_tags()
 
 
-func make_container(initial_tags: Array = []) -> Variant:
-	if is_native_runtime_enabled():
-		return _native_registry.make_container(initial_tags)
-
-	var container := GameplayTagContainer.new()
-	for tag in initial_tags:
-		container.add(tag)
-	return container
+func find_tags(search_text: String = "") -> Array[StringName]:
+	return get_database().find_tags(search_text)
 
 
-func make_query_all(tag_list: Array, exact: bool = false) -> Variant:
-	if is_native_runtime_enabled():
-		return _native_registry.make_query_all(tag_list, exact)
-	return GameplayTagQuery.all(tag_list, exact)
+func make_container(initial_tags: Array = []) -> GameplayTagContainer:
+	return GameplayTagContainer.new(initial_tags)
 
 
-func make_query_any(tag_list: Array, exact: bool = false) -> Variant:
-	if is_native_runtime_enabled():
-		return _native_registry.make_query_any(tag_list, exact)
-	return GameplayTagQuery.any(tag_list, exact)
+func make_query_all(tags: Array, exact: bool = false) -> GameplayTagQuery:
+	return GameplayTagQuery.all(tags, exact)
 
 
-func make_query_none(tag_list: Array, exact: bool = false) -> Variant:
-	if is_native_runtime_enabled():
-		return _native_registry.make_query_none(tag_list, exact)
-	return GameplayTagQuery.none(tag_list, exact)
+func make_query_any(tags: Array, exact: bool = false) -> GameplayTagQuery:
+	return GameplayTagQuery.any(tags, exact)
 
 
-func make_query_exact_all(tag_list: Array) -> Variant:
-	return make_query_all(tag_list, true)
+func make_query_none(tags: Array, exact: bool = false) -> GameplayTagQuery:
+	return GameplayTagQuery.none(tags, exact)
 
 
-func _setup_native_runtime() -> void:
-	_native_registry = null
-	_native_database = null
-	_native_runtime_enabled = false
-
-	if not _load_native_extension():
-		return
-
-	_native_registry = ClassDB.instantiate("NativeGameplayTagRegistry")
-	if _native_registry == null:
-		return
-
-	_sync_native_runtime()
+func get_owned_gameplay_tags(target: Variant) -> GameplayTagContainer:
+	var result := GameplayTagContainer.new()
+	if target is GameplayTagContainer:
+		result = target.duplicate_container()
+	elif target is Array:
+		result = GameplayTagContainer.new(target)
+	elif target is GameplayTag:
+		result = GameplayTagContainer.new([target.tag_name])
+	elif target is Object:
+		result = _get_owned_gameplay_tags_from_object(target)
+	return _filter_container_to_database(result)
 
 
-func _load_native_extension() -> bool:
-	if (
-		ClassDB.class_exists("NativeGameplayTagRegistry")
-		and ClassDB.class_exists("NativeGameplayTagDatabase")
-	):
-		_native_load_error = OK
-		return true
-
-	if not ResourceLoader.exists(EXTENSION_PATH):
-		_native_load_error = ERR_FILE_NOT_FOUND
-		return false
-
-	_native_load_error = int(GDExtensionManager.load_extension(EXTENSION_PATH))
-	return (
-		_native_load_error == OK
-		and ClassDB.class_exists("NativeGameplayTagRegistry")
-		and ClassDB.class_exists("NativeGameplayTagDatabase")
-	)
+func target_has_tag(target: Variant, tag: Variant, exact: bool = false) -> bool:
+	return get_owned_gameplay_tags(target).has_tag(tag, exact)
 
 
-func _sync_native_runtime() -> void:
-	_native_runtime_enabled = false
-	_native_database = null
-
-	if _native_registry == null or database == null:
-		return
-
-	_native_database = ClassDB.instantiate("NativeGameplayTagDatabase")
-	if _native_database == null:
-		return
-
-	_native_database.set_tags(database.tags)
-	_native_database.set_tag_descriptions(database.tag_descriptions)
-	_native_registry.set_database(_native_database)
-	_native_runtime_enabled = true
+func target_has_any(target: Variant, tags: Variant, exact: bool = false) -> bool:
+	return get_owned_gameplay_tags(target).has_any(tags, exact)
 
 
-func _ensure_project_settings() -> void:
-	if ProjectSettings.has_setting(DATABASE_SETTING):
-		return
-
-	# Register the default for this run without rewriting project.godot.
-	# set_database_path() is the explicit path-changing API that saves this setting.
-	ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
-	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+func target_has_all(target: Variant, tags: Variant, exact: bool = false) -> bool:
+	return get_owned_gameplay_tags(target).has_all(tags, exact)
 
 
-func _seed_default_tags(target: GameplayTagDatabase) -> void:
-	if not target.tags.is_empty():
-		return
+func get_overlapping_bodies_with_tag(
+	area: Area3D, tag: Variant, exact: bool = false
+) -> Array[Node]:
+	var matches: Array[Node] = []
+	if area == null:
+		return matches
+	for body in area.get_overlapping_bodies():
+		if body is Node and target_has_tag(body, tag, exact):
+			matches.append(body)
+	return matches
 
-	for tag in [
-		"Ability",
-		"Ability.Cooldown",
-		"Damage",
-		"Damage.Fire",
-		"Damage.Ice",
-		"State",
-		"State.Invulnerable",
-		"State.Stunned",
-		"Team",
-		"Team.Enemy",
-		"Team.Player",
-	]:
-		target.add_tag(tag)
+
+func get_overlapping_areas_with_tag(
+	area: Area3D, tag: Variant, exact: bool = false
+) -> Array[Area3D]:
+	var matches: Array[Area3D] = []
+	if area == null:
+		return matches
+	for overlap in area.get_overlapping_areas():
+		if overlap is Area3D and target_has_tag(overlap, tag, exact):
+			matches.append(overlap)
+	return matches
+
+
+func get_first_overlapping_target_with_tag(area: Area3D, tag: Variant, exact: bool = false) -> Node:
+	if area == null:
+		return null
+	for body in area.get_overlapping_bodies():
+		if body is Node and target_has_tag(body, tag, exact):
+			return body
+	for overlap in area.get_overlapping_areas():
+		if overlap is Area3D and target_has_tag(overlap, tag, exact):
+			return overlap
+	return null
+
+
+func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContainer:
+	var result := GameplayTagContainer.new()
+	if object is GameplayTagComponent:
+		result = object.get_owned_gameplay_tags()
+	elif object.has_method("get_owned_gameplay_tags") and object != self:
+		var method_value: Variant = object.call("get_owned_gameplay_tags")
+		result = _container_from_variant(method_value)
+	elif object.has_method("get_gameplay_tags"):
+		var tags_value: Variant = object.call("get_gameplay_tags")
+		result = _container_from_variant(tags_value)
+
+	if result != null and not result.is_empty():
+		return result
+
+	var property_container := _container_from_known_properties(object)
+	if property_container != null:
+		result = property_container
+	elif object is Node:
+		var component := _find_tag_component(object)
+		if component != null:
+			result = component.get_owned_gameplay_tags()
+
+	if result == null:
+		result = GameplayTagContainer.new()
+	return result
+
+
+func _filter_container_to_database(container: GameplayTagContainer) -> GameplayTagContainer:
+	var registered_tags: Array[StringName] = []
+	var database := get_database()
+	for tag in container.get_tags():
+		if database.has_tag(tag):
+			registered_tags.append(tag)
+	return GameplayTagContainer.new(registered_tags)
+
+
+func _ensure_database_directory(path: String) -> Error:
+	var directory := path.get_base_dir()
+	if directory.is_empty() or directory == "res://" or directory == "user://":
+		return OK
+	return DirAccess.make_dir_recursive_absolute(directory)
+
+
+func _load_or_create_database() -> GameplayTagDatabase:
+	var path := get_database_path()
+	var database: GameplayTagDatabase
+	if ResourceLoader.exists(path):
+		database = load(path) as GameplayTagDatabase
+	if database == null:
+		database = GameplayTagDatabase.new()
+		database.resource_path = path
+		var directory_error := _ensure_database_directory(path)
+		if directory_error == OK:
+			var save_error := ResourceSaver.save(database, path)
+			if save_error != OK:
+				push_error("Could not save gameplay tag database: %s" % error_string(save_error))
+		else:
+			push_error(
+				(
+					"Could not create gameplay tag database directory: %s"
+					% error_string(directory_error)
+				)
+			)
+	return database
+
+
+func _container_from_variant(value: Variant) -> GameplayTagContainer:
+	if value == null:
+		return null
+	if value is GameplayTagContainer:
+		return value.duplicate_container()
+	if value is Array:
+		return GameplayTagContainer.new(value)
+	if value is GameplayTag:
+		return GameplayTagContainer.new([value.tag_name])
+	if value is StringName or value is String:
+		return GameplayTagContainer.new([value])
+	return null
+
+
+func _container_from_known_properties(object: Object) -> GameplayTagContainer:
+	for property_name in ["owned_tags", "gameplay_tags", "tags"]:
+		if not _object_has_property(object, property_name):
+			continue
+		var value: Variant = object.get(property_name)
+		var container := _container_from_variant(value)
+		if container != null:
+			return container
+	if object.has_meta("gameplay_tags"):
+		return _container_from_variant(object.get_meta("gameplay_tags"))
+	return null
+
+
+func _object_has_property(object: Object, property_name: String) -> bool:
+	for property in object.get_property_list():
+		if String(property.get("name", "")) == property_name:
+			return true
+	return false
+
+
+func _find_tag_component(node: Node) -> GameplayTagComponent:
+	for child in node.get_children():
+		if child is GameplayTagComponent:
+			return child
+	for child in node.get_children():
+		var found := _find_tag_component(child)
+		if found != null:
+			return found
+	return null

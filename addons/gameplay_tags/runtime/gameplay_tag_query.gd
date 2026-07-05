@@ -8,10 +8,12 @@ enum Mode {
 	NONE,
 }
 
-const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
-
 @export var mode: Mode = Mode.ALL
-@export var tags: Array[StringName] = []
+@export var tags: Array[StringName] = []:
+	set(value):
+		tags = GameplayTagDatabase.canonicalize_tag_array(value)
+		emit_changed()
+
 @export var exact: bool = false
 
 
@@ -31,47 +33,45 @@ static func exact_all(tag_list: Array) -> GameplayTagQuery:
 	return _make(Mode.ALL, tag_list, true)
 
 
-func matches(container: Variant) -> bool:
-	if not _is_valid_container(container):
+func matches(target_or_container: Variant) -> bool:
+	var container := _container_from_variant(target_or_container)
+	if container == null:
 		return false
 
 	match mode:
 		Mode.ALL:
-			return _matches_all(container)
+			return container.has_all(tags, exact)
 		Mode.ANY:
-			return _matches_any(container)
+			return container.has_any(tags, exact)
 		Mode.NONE:
-			return _matches_none(container)
-
+			return not container.has_any(tags, exact)
 	return false
 
 
-func add(raw_tag: Variant) -> bool:
-	var tag := _normalize(raw_tag)
+func add_tag(raw_tag: Variant) -> bool:
+	var tag := GameplayTagDatabase.normalize_tag(raw_tag)
 	if tag == &"" or tags.has(tag):
 		return false
 	tags.append(tag)
-	tags.sort_custom(Callable(self, "_sort_string_names"))
+	tags = GameplayTagDatabase.canonicalize_tag_array(tags)
 	emit_changed()
 	return true
+
+
+func add(raw_tag: Variant) -> bool:
+	return add_tag(raw_tag)
 
 
 func add_tags(raw_tags: Array) -> int:
 	var added := 0
 	for raw_tag in raw_tags:
-		var tag := _normalize(raw_tag)
-		if tag == &"" or tags.has(tag):
-			continue
-		tags.append(tag)
-		added += 1
-	if added > 0:
-		tags.sort_custom(Callable(self, "_sort_string_names"))
-		emit_changed()
+		if add_tag(raw_tag):
+			added += 1
 	return added
 
 
-func remove(raw_tag: Variant) -> bool:
-	var tag := _normalize(raw_tag)
+func remove_tag(raw_tag: Variant) -> bool:
+	var tag := GameplayTagDatabase.normalize_tag(raw_tag)
 	var index := tags.find(tag)
 	if index < 0:
 		return false
@@ -80,17 +80,15 @@ func remove(raw_tag: Variant) -> bool:
 	return true
 
 
+func remove(raw_tag: Variant) -> bool:
+	return remove_tag(raw_tag)
+
+
 func remove_tags(raw_tags: Array) -> int:
 	var removed := 0
 	for raw_tag in raw_tags:
-		var tag := _normalize(raw_tag)
-		var index := tags.find(tag)
-		if index < 0:
-			continue
-		tags.remove_at(index)
-		removed += 1
-	if removed > 0:
-		emit_changed()
+		if remove_tag(raw_tag):
+			removed += 1
 	return removed
 
 
@@ -105,44 +103,19 @@ static func _make(query_mode: Mode, tag_list: Array, require_exact: bool) -> Gam
 	var query := GameplayTagQuery.new()
 	query.mode = query_mode
 	query.exact = require_exact
-	query.add_tags(tag_list)
+	query.tags = GameplayTagDatabase.canonicalize_tag_array(tag_list)
 	return query
 
 
-func _is_valid_container(container: Variant) -> bool:
-	return container != null and container.has_method("has") and container.has_method("has_exact")
-
-
-func _matches_all(container: Variant) -> bool:
-	for tag in tags:
-		if not _container_has(container, tag):
-			return false
-	return true
-
-
-func _matches_any(container: Variant) -> bool:
-	for tag in tags:
-		if _container_has(container, tag):
-			return true
-	return false
-
-
-func _matches_none(container: Variant) -> bool:
-	for tag in tags:
-		if _container_has(container, tag):
-			return false
-	return true
-
-
-func _container_has(container: Variant, tag: StringName) -> bool:
-	if exact:
-		return container.has_exact(tag)
-	return container.has(tag)
-
-
-func _normalize(raw_tag: Variant) -> StringName:
-	return GameplayTagUtilsScript.normalize_tag_name(raw_tag)
-
-
-func _sort_string_names(a: StringName, b: StringName) -> bool:
-	return String(a) < String(b)
+func _container_from_variant(value: Variant) -> GameplayTagContainer:
+	if value is GameplayTagContainer:
+		return value
+	if value is GameplayTagComponent:
+		return value.get_owned_gameplay_tags()
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return null
+	var registry := tree.root.get_node_or_null("GameplayTags")
+	if registry != null and registry.has_method("get_owned_gameplay_tags"):
+		return registry.get_owned_gameplay_tags(value)
+	return null

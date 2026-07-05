@@ -1,8 +1,5 @@
 @echo off
-setlocal
-
-call "%~dp0build_native.cmd" %*
-if errorlevel 1 exit /b %ERRORLEVEL%
-
+echo Native GDExtension runtime is deferred in the clean restart.
+echo Running the GDScript workflow smoke suite instead.
 call "%~dp0test_native.cmd"
 exit /b %ERRORLEVEL%

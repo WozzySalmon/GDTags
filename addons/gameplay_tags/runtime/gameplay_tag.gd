@@ -2,13 +2,14 @@
 class_name GameplayTag
 extends Resource
 
-const GameplayTagUtilsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tag_utils.gd")
+@export var tag_name: StringName = &"":
+	set(value):
+		tag_name = GameplayTagDatabase.normalize_tag(value)
+		emit_changed()
 
-@export var tag_name: StringName = &""
 
-
-func _init(initial_name: StringName = &"") -> void:
-	tag_name = initial_name
+func _init(initial_name: Variant = &"") -> void:
+	tag_name = GameplayTagDatabase.normalize_tag(initial_name)
 
 
 func is_empty() -> bool:
@@ -16,27 +17,20 @@ func is_empty() -> bool:
 
 
 func parent_name() -> StringName:
-	var text := String(tag_name)
-	var dot := text.rfind(".")
-	if dot <= 0:
+	var parents := GameplayTagDatabase.get_parent_tags(tag_name)
+	if parents.is_empty():
 		return &""
-	return StringName(text.substr(0, dot))
+	return parents[parents.size() - 1]
 
 
 func is_child_of(parent_tag: Variant) -> bool:
-	var parent := String(GameplayTagUtilsScript.normalize_tag_name(parent_tag))
-	if parent.is_empty():
-		return false
 	var text := String(tag_name)
-	return text.begins_with(parent + ".")
+	var parent := String(GameplayTagDatabase.normalize_tag(parent_tag))
+	return not parent.is_empty() and text.begins_with(parent + ".")
 
 
 func matches(requested_tag: Variant, exact: bool = false) -> bool:
-	var requested := String(GameplayTagUtilsScript.normalize_tag_name(requested_tag))
-	var text := String(tag_name)
-	if exact:
-		return text == requested
-	return text == requested or text.begins_with(requested + ".")
+	return GameplayTagDatabase.tag_matches(tag_name, requested_tag, exact)
 
 
 func _to_string() -> String:

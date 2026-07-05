@@ -21,19 +21,18 @@ exit /b 1
 
 :godot_ready
 
-call "%~dp0prepare_project.cmd"
+call "%~dp0prepare_project.cmd" --force
 if errorlevel 1 exit /b %ERRORLEVEL%
 
 if exist "%PROJECT_DIR%\.godot\extension_list.cfg" (
     del "%PROJECT_DIR%\.godot\extension_list.cfg" >nul 2>nul
 )
 
-call :run_test "GDScript runtime smoke test" "res://tests/test_gameplay_tags.gd" || exit /b 1
-call :run_test "Native smoke test" "res://tests/test_native_gameplay_tags_headless.gd" || exit /b 1
-call :run_test "Autoload native-selection smoke test" "res://tests/test_gameplay_tags_autoload_native_headless.gd" || exit /b 1
+call :run_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_gameplay_tags.gd" || exit /b 1
+call :run_editor_smoke || exit /b 1
 
 echo.
-echo All Gameplay Tags smoke tests passed.
+echo All Gameplay Tags smoke tests passed. Native runtime is deferred in this clean restart.
 exit /b 0
 
 :run_test
@@ -45,4 +44,30 @@ if errorlevel 1 (
     echo FAILED: %~1
     exit /b 1
 )
+exit /b 0
+
+:run_editor_smoke
+set "EDITOR_OUTPUT=%TEMP%\gameplay_tags_editor_smoke_%RANDOM%%RANDOM%.log"
+echo.
+echo === Editor/plugin smoke check ===
+"%GODOT_BIN%" --headless --editor --path "%PROJECT_DIR%" --quit > "%EDITOR_OUTPUT%" 2>&1
+set "GODOT_EXIT=%ERRORLEVEL%"
+
+findstr /I /C:"SCRIPT ERROR" /C:"Compile Error" /C:"Parse Error" /C:"Parser Error" "%EDITOR_OUTPUT%" >nul
+if not errorlevel 1 (
+    echo Godot editor reported script errors:
+    findstr /I /C:"SCRIPT ERROR" /C:"Compile Error" /C:"Parse Error" /C:"Parser Error" "%EDITOR_OUTPUT%"
+    echo Full log:
+    echo   %EDITOR_OUTPUT%
+    exit /b 1
+)
+
+if not "%GODOT_EXIT%"=="0" (
+    echo Godot editor exited with code %GODOT_EXIT%.
+    type "%EDITOR_OUTPUT%"
+    del "%EDITOR_OUTPUT%" >nul 2>nul
+    exit /b %GODOT_EXIT%
+)
+
+del "%EDITOR_OUTPUT%" >nul 2>nul
 exit /b 0

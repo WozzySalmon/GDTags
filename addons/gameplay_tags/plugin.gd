@@ -6,13 +6,21 @@ const AUTOLOAD_PATH := "res://addons/gameplay_tags/runtime/gameplay_tags.gd"
 const DATABASE_SETTING := "gameplay_tags/database_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
 const TagEditorDock := preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
+const TagInspectorPlugin := preload(
+	"res://addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd"
+)
 
 var _dock: Control
+var _inspector_plugin: EditorInspectorPlugin
 
 
 func _enter_tree() -> void:
 	_ensure_project_settings()
 	_ensure_autoload()
+	_ensure_database_resource()
+
+	_inspector_plugin = TagInspectorPlugin.new()
+	add_inspector_plugin(_inspector_plugin)
 
 	_dock = TagEditorDock.new()
 	_dock.name = "Gameplay Tags"
@@ -20,6 +28,9 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	if _inspector_plugin != null:
+		remove_inspector_plugin(_inspector_plugin)
+		_inspector_plugin = null
 	if _dock != null:
 		remove_control_from_docks(_dock)
 		_dock.queue_free()
@@ -29,6 +40,7 @@ func _exit_tree() -> void:
 func _enable_plugin() -> void:
 	_ensure_project_settings()
 	_ensure_autoload()
+	_ensure_database_resource()
 
 
 func _disable_plugin() -> void:
@@ -36,12 +48,8 @@ func _disable_plugin() -> void:
 
 
 func _ensure_project_settings() -> void:
-	if ProjectSettings.has_setting(DATABASE_SETTING):
-		return
-
-	# Register the default for this editor session without writing project.godot.
-	# Saving the default every startup rewrites project.godot even when nothing changed.
-	ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+	if not ProjectSettings.has_setting(DATABASE_SETTING):
+		ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 
 
@@ -49,6 +57,30 @@ func _ensure_autoload() -> void:
 	if ProjectSettings.has_setting("autoload/%s" % AUTOLOAD_NAME):
 		return
 	add_autoload_singleton(AUTOLOAD_NAME, AUTOLOAD_PATH)
+
+
+func _ensure_database_resource() -> void:
+	var path := String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	if ResourceLoader.exists(path):
+		return
+	var directory_error := _ensure_database_directory(path)
+	if directory_error != OK:
+		push_error(
+			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
+		)
+		return
+	var database := GameplayTagDatabase.new()
+	database.resource_path = path
+	var save_error := ResourceSaver.save(database, path)
+	if save_error != OK:
+		push_error("Could not create gameplay tag database: %s" % error_string(save_error))
+
+
+func _ensure_database_directory(path: String) -> Error:
+	var directory := path.get_base_dir()
+	if directory.is_empty() or directory == "res://" or directory == "user://":
+		return OK
+	return DirAccess.make_dir_recursive_absolute(directory)
 
 
 func _remove_own_autoload() -> void:
