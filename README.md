@@ -19,21 +19,24 @@ Owning `State.Stunned` also satisfies checks for `State` unless exact matching i
 2. Add global tags in the **Gameplay Tags** dock.
 3. Add a `GameplayTagComponent` child to any gameplay node.
 4. Pick the component's `owned_tags` from the central database in the Inspector.
-5. Check tags in gameplay code:
+5. Check tags in gameplay code using generated constants:
 
 ```gdscript
-if GameplayTags.target_has_tag(enemy, "Team.Enemy"):
+if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM_ENEMY):
 	attack(enemy)
 
-if GameplayTags.target_has_tag(player, "State.Stunned"):
+if GameplayTags.target_has_tag(player, GameplayTagIds.STATE_STUNNED):
 	return
 ```
+
+The dock regenerates `res://gameplay_tag_ids.gd` from the central database so script autocomplete
+can show valid constants after `GameplayTagIds.`.
 
 Area trigger helper:
 
 ```gdscript
 func _on_body_entered(body: Node) -> void:
-	if not GameplayTags.target_has_tag(body, "Team.Enemy"):
+	if not GameplayTags.target_has_tag(body, GameplayTagIds.TEAM_ENEMY):
 		return
 	print("Enemy entered trigger")
 ```

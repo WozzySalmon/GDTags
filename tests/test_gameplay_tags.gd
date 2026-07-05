@@ -118,20 +118,27 @@ func _test_component_target_helpers() -> void:
 	actor.add_child(component)
 	root.add_child(actor)
 
-	assert_true(component.add_tag("Team.Enemy"), "Registered DB tags can be assigned")
+	assert_true(
+		GameplayTagIds.all().has(GameplayTagIds.TEAM_PLAYER),
+		"Generated tag IDs should expose database constants"
+	)
+	assert_true(component.add_tag(GameplayTagIds.TEAM_ENEMY), "Registered DB tags can be assigned")
 	assert_false(component.add_tag("Missing.Tag"), "Component rejects tags outside central DB")
 	component.owned_tags = [&"Missing.Tag"]
 	assert_false(
 		_registry.target_has_tag(component, "Missing"),
 		"Direct property assignment should reject unregistered tags"
 	)
-	component.set_owned_gameplay_tags([&"Team.Enemy", &"Missing.Tag"])
+	component.set_owned_gameplay_tags([GameplayTagIds.TEAM_ENEMY, &"Missing.Tag"])
 	assert_false(
 		_registry.target_has_tag(component, "Missing"),
 		"Direct component assignment should reject unregistered tags"
 	)
-	assert_true(_registry.target_has_tag(actor, "Team"), "Actor child component should be found")
-	assert_true(_registry.target_has_tag(component, "Team.Enemy", true))
+	assert_true(
+		_registry.target_has_tag(actor, GameplayTagIds.TEAM),
+		"Actor child component should be found"
+	)
+	assert_true(_registry.target_has_tag(component, GameplayTagIds.TEAM_ENEMY, true))
 	assert_false(_registry.target_has_tag(actor, "Team", true), "Exact parent should fail")
 
 	var owned: GameplayTagContainer = _registry.get_owned_gameplay_tags(actor)

@@ -4,8 +4,13 @@ extends EditorPlugin
 const AUTOLOAD_NAME := "GameplayTags"
 const AUTOLOAD_PATH := "res://addons/gameplay_tags/runtime/gameplay_tags.gd"
 const DATABASE_SETTING := "gameplay_tags/database_path"
+const TAG_IDS_SETTING := "gameplay_tags/generated_tag_ids_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
+const DEFAULT_TAG_IDS_PATH := "res://gameplay_tag_ids.gd"
 const TagEditorDock := preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
+const TagCodeGenerator := preload(
+	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
+)
 const TagInspectorPlugin := preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd"
 )
@@ -18,6 +23,7 @@ func _enter_tree() -> void:
 	_ensure_project_settings()
 	_ensure_autoload()
 	_ensure_database_resource()
+	_ensure_tag_ids_script()
 
 	_inspector_plugin = TagInspectorPlugin.new()
 	add_inspector_plugin(_inspector_plugin)
@@ -41,6 +47,7 @@ func _enable_plugin() -> void:
 	_ensure_project_settings()
 	_ensure_autoload()
 	_ensure_database_resource()
+	_ensure_tag_ids_script()
 
 
 func _disable_plugin() -> void:
@@ -51,6 +58,10 @@ func _ensure_project_settings() -> void:
 	if not ProjectSettings.has_setting(DATABASE_SETTING):
 		ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+
+	if not ProjectSettings.has_setting(TAG_IDS_SETTING):
+		ProjectSettings.set_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
+	ProjectSettings.set_initial_value(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
 
 
 func _ensure_autoload() -> void:
@@ -74,6 +85,25 @@ func _ensure_database_resource() -> void:
 	var save_error := ResourceSaver.save(database, path)
 	if save_error != OK:
 		push_error("Could not create gameplay tag database: %s" % error_string(save_error))
+
+
+func _ensure_tag_ids_script() -> void:
+	var database := _load_database_for_generation()
+	var output_path := String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
+	var save_error := TagCodeGenerator.save_tag_ids(database, output_path)
+	if save_error != OK:
+		push_error("Could not generate gameplay tag IDs: %s" % error_string(save_error))
+
+
+func _load_database_for_generation() -> GameplayTagDatabase:
+	var database_path := String(
+		ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+	)
+	if ResourceLoader.exists(database_path):
+		var database := load(database_path) as GameplayTagDatabase
+		if database != null:
+			return database
+	return GameplayTagDatabase.new()
 
 
 func _ensure_database_directory(path: String) -> Error:

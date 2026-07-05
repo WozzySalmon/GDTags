@@ -2,7 +2,12 @@
 extends VBoxContainer
 
 const DATABASE_SETTING := "gameplay_tags/database_path"
+const TAG_IDS_SETTING := "gameplay_tags/generated_tag_ids_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
+const DEFAULT_TAG_IDS_PATH := "res://gameplay_tag_ids.gd"
+const TagCodeGenerator := preload(
+	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
+)
 
 var _database: GameplayTagDatabase
 var _tag_list: ItemList
@@ -27,7 +32,9 @@ func _build_ui() -> void:
 	add_child(title)
 
 	var path_label := Label.new()
-	path_label.text = "Database: %s" % _get_database_path()
+	path_label.text = (
+		"Database: %s\nCode constants: %s" % [_get_database_path(), _get_tag_ids_path()]
+	)
 	path_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(path_label)
 
@@ -69,6 +76,11 @@ func _build_ui() -> void:
 	refresh_button.text = "Refresh"
 	refresh_button.pressed.connect(_on_refresh_pressed)
 	buttons.add_child(refresh_button)
+
+	var regenerate_button := Button.new()
+	regenerate_button.text = "Regenerate IDs"
+	regenerate_button.pressed.connect(_on_regenerate_pressed)
+	buttons.add_child(regenerate_button)
 
 	_status_label = Label.new()
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -125,6 +137,8 @@ func _on_add_pressed() -> void:
 	if registry != null and registry.has_method("add_tag"):
 		added = bool(registry.add_tag(tag_text, _description_input.text.strip_edges()))
 		_database = registry.get_database()
+		if added and not _save_tag_ids_script():
+			return
 	else:
 		added = _database.add_tag(tag_text, _description_input.text.strip_edges())
 		if added and not _save_database():
@@ -149,6 +163,8 @@ func _on_remove_pressed() -> void:
 	if registry != null and registry.has_method("remove_tag"):
 		removed = bool(registry.remove_tag(_selected_tag, true))
 		_database = registry.get_database()
+		if removed and not _save_tag_ids_script():
+			return
 	else:
 		removed = _database.remove_tag(_selected_tag, true)
 		if removed and not _save_database():
@@ -162,6 +178,11 @@ func _on_remove_pressed() -> void:
 func _on_refresh_pressed() -> void:
 	_load_database()
 	_refresh()
+
+
+func _on_regenerate_pressed() -> void:
+	if _save_tag_ids_script():
+		_set_status("Regenerated %s" % _get_tag_ids_path())
 
 
 func _on_search_changed(_text: String) -> void:
@@ -192,6 +213,18 @@ func _save_database() -> bool:
 	if err != OK:
 		_set_status("Could not save database: %s" % error_string(err))
 		return false
+	return _save_tag_ids_script()
+
+
+func _save_tag_ids_script() -> bool:
+	if _database == null:
+		return false
+	var path := _get_tag_ids_path()
+	var err := TagCodeGenerator.save_tag_ids(_database, path)
+	if err != OK:
+		_set_status("Could not generate GameplayTagIds: %s" % error_string(err))
+		return false
+	TagCodeGenerator.refresh_editor_filesystem()
 	return true
 
 
@@ -204,6 +237,10 @@ func _ensure_database_directory(path: String) -> Error:
 
 func _get_database_path() -> String:
 	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+
+
+func _get_tag_ids_path() -> String:
+	return String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
 
 
 func _get_registry() -> Node:

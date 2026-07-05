@@ -8,6 +8,7 @@ Godot 4.6+ addon for Unreal-style hierarchical gameplay tags.
 - `GameplayTagDatabase`: global registry saved at `res://gameplay_tags_database.tres` by default.
 - Gameplay Tags dock: add/remove/search global tags.
 - Inspector picker: tag arrays are selected from the central database, not typed freeform.
+- Generated `GameplayTagIds` constants for autocomplete-safe script checks.
 - `GameplayTagComponent`: attach to nodes that own tags.
 - `GameplayTagTrigger3D`: Area3D helper for tag-gated overlap events.
 
@@ -17,26 +18,29 @@ Add a `GameplayTagComponent` child to your player/enemy/item node and pick `owne
 the Inspector.
 
 ```gdscript
-if GameplayTags.target_has_tag(enemy, "Team.Enemy"):
+if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM_ENEMY):
 	attack(enemy)
 
-if GameplayTags.target_has_tag(player, "State.Stunned"):
+if GameplayTags.target_has_tag(player, GameplayTagIds.STATE_STUNNED):
 	return
 ```
+
+When you add/remove tags in the dock, the addon regenerates `res://gameplay_tag_ids.gd`.
+Type `GameplayTagIds.` in the script editor to get autocomplete for valid tags.
 
 Hierarchical matching is enabled by default:
 
 ```gdscript
 # Enemy owns Team.Enemy.
-GameplayTags.target_has_tag(enemy, "Team") # true
-GameplayTags.target_has_tag(enemy, "Team", true) # false, exact check
+GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM) # true
+GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM, true) # false, exact check
 ```
 
 ## Trigger example
 
 ```gdscript
 func _on_body_entered(body: Node) -> void:
-	if not GameplayTags.target_has_tag(body, "Team.Enemy"):
+	if not GameplayTags.target_has_tag(body, GameplayTagIds.TEAM_ENEMY):
 		return
 	print("Enemy entered")
 ```
@@ -60,6 +64,18 @@ Default:
 
 ```text
 res://gameplay_tags_database.tres
+```
+
+Generated constants setting:
+
+```text
+gameplay_tags/generated_tag_ids_path
+```
+
+Default:
+
+```text
+res://gameplay_tag_ids.gd
 ```
 
 ## Tests
