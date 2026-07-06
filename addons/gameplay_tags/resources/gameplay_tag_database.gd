@@ -65,6 +65,16 @@ static func canonicalize_tag_array(raw_tags: Array) -> Array[StringName]:
 	return canonical
 
 
+static func tags_from_csv_text(csv_text: String) -> Array[StringName]:
+	var parsed_tags: Array[StringName] = []
+	for line in csv_text.split("\n", false):
+		var tag_text := String(line).strip_edges().replace(",", ".")
+		var tag := normalize_tag(tag_text)
+		if tag != &"":
+			parsed_tags.append(tag)
+	return canonicalize_tag_array(parsed_tags)
+
+
 static func tag_matches(owned_tag: Variant, requested_tag: Variant, exact: bool = false) -> bool:
 	var owned := String(normalize_tag(owned_tag))
 	var requested := String(normalize_tag(requested_tag))
@@ -145,6 +155,19 @@ func add_tags(raw_tags: Array) -> int:
 		tags = canonicalize_tag_array(existing.values())
 		_notify_changed()
 	return added
+
+
+func add_tags_from_csv_text(csv_text: String) -> int:
+	return add_tags(tags_from_csv_text(csv_text))
+
+
+func to_csv_text() -> String:
+	var lines: Array[String] = []
+	for tag in tags:
+		lines.append(String(tag))
+	if lines.is_empty():
+		return ""
+	return "\n".join(lines) + "\n"
 
 
 func remove_tag(raw_tag: Variant, remove_children: bool = false) -> bool:

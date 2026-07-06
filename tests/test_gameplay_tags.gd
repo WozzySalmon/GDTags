@@ -30,6 +30,7 @@ func _run_all_tests() -> void:
 	_run_test("database_normalizes_parents_and_searches", _test_database)
 	_run_test("container_hierarchical_matching", _test_container)
 	_run_test("component_target_helpers", _test_component_target_helpers)
+	_run_test("direct_node_tags_and_csv", _test_direct_node_tags_and_csv)
 	_run_test("plain_object_target_helpers", _test_plain_object_target_helpers)
 	_run_test("query_modes", _test_query_modes)
 	_run_test("area3d_trigger_helper", _test_area3d_trigger_helper)
@@ -110,6 +111,12 @@ func _test_container() -> void:
 	assert_false(container.has_exact("State"), "Parent should not exact-match child")
 	assert_true(container.has_all(["State", "Team.Enemy"]))
 	assert_true(container.has_any(["Damage", "Team"]))
+	assert_true(container.all(["State", "Team.Enemy"]), "GDTag-style all alias should work")
+	assert_true(container.any(["Damage", "Team"]), "GDTag-style any alias should work")
+	assert_true(container.none(["Damage.Ice"]), "Container none helper should reject overlaps")
+	assert_eq(container.overlap_count(["State", "Team.Enemy"]), 2)
+	assert_true(container.exact(["State.Stunned", "Team.Enemy"]))
+	assert_false(container.exact(["State", "Team.Enemy"]))
 
 
 func _test_component_target_helpers() -> void:
@@ -144,6 +151,43 @@ func _test_component_target_helpers() -> void:
 	var owned: GameplayTagContainer = _registry.get_owned_gameplay_tags(actor)
 	assert_true(owned.has_tag("Team.Enemy", true), "Owned tags should come back as a container")
 	actor.free()
+
+
+func _test_direct_node_tags_and_csv() -> void:
+	var actor := Node.new()
+	root.add_child(actor)
+
+	assert_eq(
+		_registry.add_tags_to_node(actor, [GameplayTagIds.TEAM_PLAYER, &"Missing.Tag"]),
+		1,
+		"Direct node tags should validate against the central DB"
+	)
+	assert_true(actor.is_in_group("gameplay_tagged_nodes"))
+	assert_true(_registry.target_has_tag(actor, GameplayTagIds.TEAM))
+
+	var component := GameplayTagComponent.new()
+	actor.add_child(component)
+	component.add_tag(GameplayTagIds.STATE_STUNNED)
+	assert_true(
+		_registry.target_has_all(actor, [GameplayTagIds.TEAM_PLAYER, GameplayTagIds.STATE_STUNNED]),
+		"Direct node tags and child component tags should combine"
+	)
+
+	var tagged_nodes: Array[Node] = _registry.get_nodes_with_tag(root, GameplayTagIds.TEAM_PLAYER)
+	assert_true(tagged_nodes.has(actor), "Node tag group lookup should find direct tags")
+	var component_nodes: Array[Node] = _registry.get_nodes_with_tag(
+		root, GameplayTagIds.STATE_STUNNED
+	)
+	assert_true(component_nodes.has(actor), "Node tag group lookup should find component owners")
+	assert_true(_registry.remove_tag_from_node(actor, GameplayTagIds.TEAM_PLAYER))
+	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
+	actor.free()
+
+	var database := GameplayTagDatabase.new()
+	assert_eq(database.add_tags_from_csv_text("Ability,Dash\nDamage/Ice\n"), 2)
+	assert_true(database.has_tag("Ability"), "CSV import should create parent tags")
+	assert_true(database.has_tag("Damage.Ice"), "CSV import should normalize slash paths")
+	assert_true(database.to_csv_text().contains("Ability.Dash"))
 
 
 func _test_plain_object_target_helpers() -> void:

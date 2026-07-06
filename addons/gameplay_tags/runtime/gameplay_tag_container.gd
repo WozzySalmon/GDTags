@@ -124,6 +124,10 @@ func has_any(required_tags: Variant, exact: bool = false) -> bool:
 	return false
 
 
+func any(required_tags: Variant, exact: bool = false) -> bool:
+	return has_any(required_tags, exact)
+
+
 func has_all(required_tags: Variant, exact: bool = false) -> bool:
 	var normalized_tags := _tags_from_variant(required_tags)
 	if normalized_tags.is_empty():
@@ -132,6 +136,26 @@ func has_all(required_tags: Variant, exact: bool = false) -> bool:
 		if not has_tag(tag, exact):
 			return false
 	return true
+
+
+func all(required_tags: Variant, exact: bool = false) -> bool:
+	return has_all(required_tags, exact)
+
+
+func none(blocked_tags: Variant, exact: bool = false) -> bool:
+	return not has_any(blocked_tags, exact)
+
+
+func exact(other_tags: Variant) -> bool:
+	return tags == _tags_from_variant(other_tags)
+
+
+func overlap_count(other_tags: Variant, exact: bool = false) -> int:
+	var overlaps := 0
+	for tag in _tags_from_variant(other_tags):
+		if has_tag(tag, exact):
+			overlaps += 1
+	return overlaps
 
 
 func is_empty() -> bool:

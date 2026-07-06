@@ -5,8 +5,9 @@ This document explains what the Gameplay Tags plugin does, how to use it, and ho
 The addon is a GDScript-first, Unreal-style gameplay tag workflow for Godot 4.6+:
 
 - One central tag database for the whole project.
-- Inspector pickers backed by that database.
+- Inspector pickers backed by that database, including single-tag Resource pickers.
 - `GameplayTagComponent` nodes that own tags.
+- Optional direct node metadata tags for quick Godot-native integration.
 - `GameplayTags` autoload helpers for gameplay checks.
 - Generated `GameplayTagIds` constants so gameplay code does not depend on typo-prone strings.
 - `GameplayTagTrigger3D` for Area3D tag-gated overlap events.
@@ -129,6 +130,8 @@ It lets you:
 - Search existing tags.
 - Add tags.
 - Remove tags and their children.
+- Import simple CSV tag lists.
+- Export the current database to CSV.
 - Save the central database.
 - Regenerate `GameplayTagIds` constants.
 
@@ -148,6 +151,26 @@ Entity.Player
 ```
 
 The database prevents duplicate tags and invalid tag names.
+
+### CSV import/export
+
+CSV import is intentionally simple: one tag path per line. Commas are treated as hierarchy separators, so this file:
+
+```csv
+Entity,Player
+State.Stunned
+Damage/Fire
+```
+
+imports these normalized tags:
+
+```text
+Entity.Player
+State.Stunned
+Damage.Fire
+```
+
+Missing parent tags are still created automatically. CSV export writes one normalized tag per line.
 
 ## Tag naming rules
 
@@ -180,9 +203,9 @@ Ability.Cooldown
 
 ## Inspector tag picker
 
-The plugin adds a picker button for supported tag arrays. The picker reads from the central database, so you select valid tags instead of typing freeform strings.
+The plugin adds picker buttons backed by the central database, so you select valid tags instead of typing freeform strings.
 
-Supported Inspector properties:
+Supported multi-tag Inspector properties:
 
 ```text
 GameplayTagComponent.owned_tags
@@ -191,15 +214,23 @@ GameplayTagContainer.tags
 GameplayTagQuery.tags
 ```
 
+Supported single-tag properties:
+
+```gdscript
+@export var damage_type: GameplayTag
+```
+
+The picker also appears when editing `GameplayTag.tag_name` directly.
+
 The picker gives you:
 
 - Search.
-- Multi-select.
+- Single-select or multi-select depending on the property.
 - Clear button.
 - Status text showing known/invalid tags.
 - Tooltips from tag descriptions when present.
 
-The picker intentionally does not hijack every random `Array[StringName]` in the project. It only appears on known gameplay tag types/properties.
+The array picker intentionally does not hijack every random `Array[StringName]` in the project. It only appears on known gameplay tag types/properties.
 
 ## GameplayTagComponent
 
@@ -239,6 +270,36 @@ Signal:
 ```gdscript
 owned_tags_changed(tags: Array[StringName])
 ```
+
+## Direct node tags
+
+For quick prototypes or integration with existing scenes, you can tag a node directly without adding a component:
+
+```gdscript
+GameplayTags.add_tag_to_node(enemy, GameplayTagIds.TEAM_ENEMY)
+
+if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM):
+	print("enemy team")
+```
+
+Direct tags are stored in node metadata named `gameplay_tags` and the node is added to the `gameplay_tagged_nodes` group. The API still validates against the central database by default.
+
+Useful methods:
+
+```gdscript
+GameplayTags.set_node_tags(node, [GameplayTagIds.TEAM_ENEMY])
+GameplayTags.add_tag_to_node(node, GameplayTagIds.STATE_STUNNED)
+GameplayTags.add_tags_to_node(node, [GameplayTagIds.TEAM_ENEMY, GameplayTagIds.STATE_STUNNED])
+GameplayTags.remove_tag_from_node(node, GameplayTagIds.STATE_STUNNED)
+GameplayTags.clear_node_tags(node)
+GameplayTags.get_node_tags(node)
+GameplayTags.get_tagged_nodes(root)
+GameplayTags.get_nodes_with_tag(root, GameplayTagIds.TEAM_ENEMY)
+```
+
+`get_tagged_nodes()` and `get_nodes_with_tag()` use Godot groups to quickly find direct metadata-tagged nodes and `GameplayTagComponent` owners under the optional `root`.
+
+`GameplayTagComponent` remains the recommended reusable scene setup. Direct node tags are best when you want OctoD-style metadata/group integration while keeping this addon's central validation and hierarchy matching.
 
 ## GameplayTags autoload
 
@@ -304,13 +365,15 @@ GameplayTags.get_all_tags()
 GameplayTags.find_tags("player")
 GameplayTags.is_valid_tag(tag)
 GameplayTags.request_tag(tag)
+GameplayTags.import_tags_from_csv("res://tags.csv")
+GameplayTags.export_tags_to_csv("res://tags_export.csv")
 ```
 
 ## How `GameplayTags` finds tags on a target
 
 You can pass a `Node`, `GameplayTagComponent`, `GameplayTagContainer`, `GameplayTag`, or array of tags.
 
-For nodes, `GameplayTags` looks for tags in this order:
+For objects/nodes, `GameplayTags` collects tags from these sources:
 
 1. The object is a `GameplayTagComponent`.
 2. The object has `get_owned_gameplay_tags()`.
@@ -319,8 +382,10 @@ For nodes, `GameplayTags` looks for tags in this order:
    - `owned_tags`
    - `gameplay_tags`
    - `tags`
-5. The object has metadata named `gameplay_tags`.
+5. The object has metadata named `gameplay_tags`, including tags set through the direct node tag API.
 6. The node has a child `GameplayTagComponent` somewhere under it.
+
+If more than one source exists, the tags are merged before central database filtering.
 
 This means the recommended pattern is simple:
 
@@ -361,6 +426,11 @@ container.has_tag(tag, exact := false)
 container.has_exact(tag)
 container.has_any(tags, exact := false)
 container.has_all(tags, exact := false)
+container.any(tags, exact := false)
+container.all(tags, exact := false)
+container.none(tags, exact := false)
+container.exact(tags)
+container.overlap_count(tags, exact := false)
 container.is_empty()
 container.get_tags()
 container.to_array()

@@ -16,6 +16,8 @@ var _tag_input: LineEdit
 var _description_input: LineEdit
 var _status_label: Label
 var _remove_button: Button
+var _import_dialog: FileDialog
+var _export_dialog: FileDialog
 var _selected_tag: StringName = &""
 
 
@@ -82,9 +84,39 @@ func _build_ui() -> void:
 	regenerate_button.pressed.connect(_on_regenerate_pressed)
 	buttons.add_child(regenerate_button)
 
+	var import_button := Button.new()
+	import_button.text = "Import CSV"
+	import_button.pressed.connect(_on_import_csv_pressed)
+	buttons.add_child(import_button)
+
+	var export_button := Button.new()
+	export_button.text = "Export CSV"
+	export_button.pressed.connect(_on_export_csv_pressed)
+	buttons.add_child(export_button)
+
+	_build_file_dialogs()
+
 	_status_label = Label.new()
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_status_label)
+
+
+func _build_file_dialogs() -> void:
+	_import_dialog = FileDialog.new()
+	_import_dialog.access = FileDialog.ACCESS_RESOURCES
+	_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	_import_dialog.filters = PackedStringArray(["*.csv ; CSV files"])
+	_import_dialog.title = "Import Gameplay Tags CSV"
+	_import_dialog.file_selected.connect(_on_import_csv_selected)
+	add_child(_import_dialog)
+
+	_export_dialog = FileDialog.new()
+	_export_dialog.access = FileDialog.ACCESS_RESOURCES
+	_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
+	_export_dialog.filters = PackedStringArray(["*.csv ; CSV files"])
+	_export_dialog.title = "Export Gameplay Tags CSV"
+	_export_dialog.file_selected.connect(_on_export_csv_selected)
+	add_child(_export_dialog)
 
 
 func _load_database() -> void:
@@ -185,6 +217,32 @@ func _on_regenerate_pressed() -> void:
 		_set_status("Regenerated %s" % _get_tag_ids_path())
 
 
+func _on_import_csv_pressed() -> void:
+	_import_dialog.popup_centered(Vector2i(720, 480))
+
+
+func _on_export_csv_pressed() -> void:
+	_export_dialog.current_file = "gameplay_tags.csv"
+	_export_dialog.popup_centered(Vector2i(720, 480))
+
+
+func _on_import_csv_selected(path: String) -> void:
+	var added := _import_tags_from_csv(path)
+	if added == 0:
+		_set_status("No new tags imported from %s." % path)
+		return
+	_refresh()
+	_set_status("Imported %d tags from %s." % [added, path])
+
+
+func _on_export_csv_selected(path: String) -> void:
+	var err := _export_tags_to_csv(path)
+	if err == OK:
+		_set_status("Exported tags to %s." % path)
+	else:
+		_set_status("Could not export CSV: %s" % error_string(err))
+
+
 func _on_search_changed(_text: String) -> void:
 	_refresh()
 
@@ -226,6 +284,47 @@ func _save_tag_ids_script() -> bool:
 		return false
 	TagCodeGenerator.refresh_editor_filesystem()
 	return true
+
+
+func _import_tags_from_csv(path: String) -> int:
+	var added := 0
+	var registry := _get_registry()
+	if registry != null and registry.has_method("import_tags_from_csv"):
+		added = int(registry.import_tags_from_csv(path, true))
+		_database = registry.get_database()
+	elif _database != null:
+		added = _import_tags_from_csv_without_registry(path)
+	if added > 0 and not _save_tag_ids_script():
+		return 0
+	return added
+
+
+func _import_tags_from_csv_without_registry(path: String) -> int:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		_set_status("Could not open CSV: %s" % path)
+		return 0
+	var added := _database.add_tags_from_csv_text(file.get_as_text())
+	file.close()
+	if added > 0 and not _save_database():
+		return 0
+	return added
+
+
+func _export_tags_to_csv(path: String) -> Error:
+	var registry := _get_registry()
+	if registry != null and registry.has_method("export_tags_to_csv"):
+		return registry.export_tags_to_csv(path)
+
+	var directory_error := _ensure_database_directory(path)
+	if directory_error != OK:
+		return directory_error
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		return ERR_CANT_OPEN
+	file.store_string(_database.to_csv_text())
+	file.close()
+	return OK
 
 
 func _ensure_database_directory(path: String) -> Error:

@@ -1,7 +1,7 @@
 # GDTags
 
 Gameplay Tags addon for Godot 4.6+, rebuilt around the Unreal Gameplay Tags workflow:
-central registry, inspector picker, tag components on nodes, and simple yes/no gameplay checks.
+central registry, inspector picker, tag components on nodes, optional direct node tags, and simple yes/no gameplay checks.
 
 Tags are hierarchical:
 
@@ -19,7 +19,8 @@ Owning `State.Stunned` also satisfies checks for `State` unless exact matching i
 2. Add global tags in the **Gameplay Tags** dock.
 3. Add a `GameplayTagComponent` child to any gameplay node.
 4. Pick the component's `owned_tags` from the central database in the Inspector.
-5. Check tags in gameplay code using generated constants:
+5. Optionally import/export simple CSV tag lists from the dock.
+6. Check tags in gameplay code using generated constants:
 
 ```gdscript
 if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM_ENEMY):
@@ -50,6 +51,10 @@ Or use `GameplayTagTrigger3D` directly and set `required_tags` in the Inspector.
 - `GameplayTags.get_owned_gameplay_tags(target)`.
 - `GameplayTags.target_has_any(target, tags, exact := false)`.
 - `GameplayTags.target_has_all(target, tags, exact := false)`.
+- `GameplayTags.add_tag_to_node(node, tag)` - optional metadata/group tagging.
+- `GameplayTags.get_tagged_nodes(root)`.
+- `GameplayTags.get_nodes_with_tag(root, tag, exact := false)`.
+- `GameplayTags.import_tags_from_csv(path)` / `export_tags_to_csv(path)`.
 - `GameplayTags.get_overlapping_bodies_with_tag(area, tag, exact := false)`.
 - `GameplayTagComponent` - attach to nodes to own tags.
 - `GameplayTagTrigger3D` - Area3D helper that emits only for matching tagged targets.
