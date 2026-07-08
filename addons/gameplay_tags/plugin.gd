@@ -7,6 +7,11 @@ const DATABASE_SETTING := "gameplay_tags/database_path"
 const TAG_IDS_SETTING := "gameplay_tags/generated_tag_ids_path"
 const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
 const DEFAULT_TAG_IDS_PATH := "res://gameplay_tag_ids.gd"
+# Keep the tag manager out of Godot's Inspector tab stack. DOCK_SLOT_RIGHT_UL
+# is where Inspector/Node/History live by default, and adding a plugin dock there
+# can steal focus/collapse the visible Inspector area when the addon loads.
+const TAG_DOCK_SLOT := DOCK_SLOT_RIGHT_BL
+const TAG_DOCK_MINIMUM_SIZE := Vector2(320, 240)
 const TagEditorDock := preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
 const TagCodeGenerator := preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
@@ -30,7 +35,8 @@ func _enter_tree() -> void:
 
 	_dock = TagEditorDock.new()
 	_dock.name = "Gameplay Tags"
-	add_control_to_dock(DOCK_SLOT_RIGHT_UL, _dock)
+	_dock.custom_minimum_size = TAG_DOCK_MINIMUM_SIZE
+	add_control_to_dock(TAG_DOCK_SLOT, _dock)
 
 
 func _exit_tree() -> void:
