@@ -10,6 +10,16 @@ class TaggedObject:
 		return owned_tags
 
 
+class MethodTaggedObject:
+	extends RefCounted
+
+	var owned_tags: Array[StringName] = []
+	var method_tags: Array[StringName] = []
+
+	func get_owned_gameplay_tags() -> Array[StringName]:
+		return method_tags
+
+
 const GameplayTagsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 
 var _assertion_count := 0
@@ -115,8 +125,12 @@ func _test_container() -> void:
 	assert_true(container.any(["Damage", "Team"]), "GDTag-style any alias should work")
 	assert_true(container.none(["Damage.Ice"]), "Container none helper should reject overlaps")
 	assert_eq(container.overlap_count(["State", "Team.Enemy"]), 2)
-	assert_true(container.exact(["State.Stunned", "Team.Enemy"]))
-	assert_false(container.exact(["State", "Team.Enemy"]))
+	assert_true(container.exact([GameplayTagIds.STATE_STUNNED, GameplayTagIds.TEAM_ENEMY]))
+	assert_false(container.exact([GameplayTagIds.STATE, GameplayTagIds.TEAM_ENEMY]))
+	assert_true(container.remove_tag(GameplayTagIds.TEAM_ENEMY))
+	assert_false(container.has_exact(GameplayTagIds.TEAM_ENEMY))
+	container.clear()
+	assert_true(container.is_empty(), "Container clear should remove all tags")
 
 
 func _test_component_target_helpers() -> void:
@@ -192,11 +206,27 @@ func _test_direct_node_tags_and_csv() -> void:
 
 func _test_plain_object_target_helpers() -> void:
 	var tagged_object := TaggedObject.new()
-	tagged_object.owned_tags = [&"State.Stunned"]
+	tagged_object.owned_tags = [GameplayTagIds.STATE_STUNNED]
 
-	assert_true(_registry.target_has_tag(tagged_object, "State"))
-	assert_true(_registry.target_has_all(tagged_object, ["State.Stunned"]))
-	assert_false(_registry.target_has_any(tagged_object, ["Team.Enemy", "Damage.Fire"]))
+	assert_true(_registry.target_has_tag(tagged_object, GameplayTagIds.STATE))
+	assert_true(_registry.target_has_all(tagged_object, [GameplayTagIds.STATE_STUNNED]))
+	assert_false(
+		_registry.target_has_any(
+			tagged_object, [GameplayTagIds.TEAM_ENEMY, GameplayTagIds.DAMAGE_FIRE]
+		)
+	)
+
+	var method_tagged_object := MethodTaggedObject.new()
+	method_tagged_object.owned_tags = [GameplayTagIds.TEAM_ENEMY]
+	method_tagged_object.method_tags = [GameplayTagIds.STATE_STUNNED]
+	assert_true(
+		_registry.target_has_tag(method_tagged_object, GameplayTagIds.STATE),
+		"Explicit get_owned_gameplay_tags() method should provide plain-object tags"
+	)
+	assert_false(
+		_registry.target_has_tag(method_tagged_object, GameplayTagIds.TEAM_ENEMY, true),
+		"Explicit tag method should take precedence over duplicate plain-object properties"
+	)
 
 
 func _test_query_modes() -> void:

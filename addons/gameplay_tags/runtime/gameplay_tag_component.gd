@@ -43,8 +43,9 @@ func remove_tag(raw_tag: Variant) -> bool:
 	var index := owned_tags.find(tag)
 	if index < 0:
 		return false
-	owned_tags.remove_at(index)
-	owned_tags_changed.emit(owned_tags)
+	var updated_tags := owned_tags.duplicate()
+	updated_tags.remove_at(index)
+	owned_tags = updated_tags
 	return true
 
 
@@ -86,11 +87,4 @@ func _is_registered_tag(tag: StringName) -> bool:
 
 
 func _get_registry() -> Node:
-	var tree: SceneTree
-	if is_inside_tree():
-		tree = get_tree()
-	if tree == null:
-		tree = Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return null
-	return tree.root.get_node_or_null("GameplayTags")
+	return GameplayTagUtils.get_registry(self)

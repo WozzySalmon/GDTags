@@ -124,8 +124,8 @@ func _remove_own_autoload() -> void:
 
 
 func _autoload_points_to_own_script(value: String) -> bool:
-	var autoload_path := value.trim_prefix("*")
-	if autoload_path == AUTOLOAD_PATH or autoload_path.contains(AUTOLOAD_PATH):
+	var autoload_path := value.trim_prefix("*").strip_edges()
+	if autoload_path == AUTOLOAD_PATH:
 		return true
 
 	if autoload_path.begins_with("uid://"):

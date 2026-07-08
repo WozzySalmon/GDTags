@@ -77,11 +77,4 @@ func _on_area_entered(area: Area3D) -> void:
 
 
 func _get_registry() -> Node:
-	var tree: SceneTree
-	if is_inside_tree():
-		tree = get_tree()
-	if tree == null:
-		tree = Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return null
-	return tree.root.get_node_or_null("GameplayTags")
+	return GameplayTagUtils.get_registry(self)

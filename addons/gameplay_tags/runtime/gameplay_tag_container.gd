@@ -15,10 +15,8 @@ var _match_tag_set := {}
 
 
 func _init(initial_tags: Array = []) -> void:
-	_rebuild_cache()
 	if not initial_tags.is_empty():
 		tags = GameplayTagDatabase.canonicalize_tag_array(initial_tags)
-		_rebuild_cache()
 
 
 func set_tags(raw_tags: Array) -> void:
@@ -62,9 +60,9 @@ func remove_tag(raw_tag: Variant) -> bool:
 	var index := tags.find(tag)
 	if index < 0:
 		return false
-	tags.remove_at(index)
-	_rebuild_cache()
-	_notify_changed()
+	var updated_tags := tags.duplicate()
+	updated_tags.remove_at(index)
+	tags = updated_tags
 	return true
 
 
@@ -95,9 +93,7 @@ func remove_tags(raw_tags: Array) -> int:
 func clear() -> void:
 	if tags.is_empty():
 		return
-	tags.clear()
-	_rebuild_cache()
-	_notify_changed()
+	tags = []
 
 
 func has_tag(raw_tag: Variant, exact: bool = false) -> bool:

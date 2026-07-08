@@ -153,7 +153,6 @@ func add_tags(raw_tags: Array) -> int:
 
 	if changed:
 		tags = canonicalize_tag_array(existing.values())
-		_notify_changed()
 	return added
 
 
@@ -190,13 +189,19 @@ func remove_tag(raw_tag: Variant, remove_children: bool = false) -> bool:
 		return false
 
 	tags = kept
+	var description_changed := false
 	if remove_children:
 		for existing_key in tag_descriptions.keys():
 			if tag_matches(existing_key, tag, false):
 				tag_descriptions.erase(existing_key)
+				description_changed = true
 	else:
-		tag_descriptions.erase(String(tag))
-	_notify_changed()
+		var tag_key := String(tag)
+		if tag_descriptions.has(tag_key):
+			tag_descriptions.erase(tag_key)
+			description_changed = true
+	if description_changed:
+		_notify_changed()
 	return true
 
 
@@ -225,9 +230,13 @@ func remove_tags(raw_tags: Array) -> int:
 
 	if removed > 0:
 		tags = kept
+		var description_changed := false
 		for removed_key in remove_set.keys():
-			tag_descriptions.erase(removed_key)
-		_notify_changed()
+			if tag_descriptions.has(removed_key):
+				tag_descriptions.erase(removed_key)
+				description_changed = true
+		if description_changed:
+			_notify_changed()
 	return removed
 
 
@@ -241,8 +250,6 @@ func ensure_parent_tags(raw_tag: Variant = &"") -> bool:
 		for parent in get_parent_tags(raw_tag):
 			changed = _add_tag_unchecked(parent) or changed
 
-	if changed:
-		_notify_changed()
 	return changed
 
 

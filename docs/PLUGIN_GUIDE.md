@@ -294,7 +294,7 @@ GameplayTags.remove_tag_from_node(node, GameplayTagIds.STATE_STUNNED)
 GameplayTags.clear_node_tags(node)
 GameplayTags.get_node_tags(node)
 GameplayTags.get_tagged_nodes(root)
-GameplayTags.get_nodes_with_tag(root, GameplayTagIds.TEAM_ENEMY)
+GameplayTags.get_nodes_with_tag(root, GameplayTagIds.TEAM_ENEMY, exact := false)
 ```
 
 `get_tagged_nodes()` and `get_nodes_with_tag()` use Godot groups to quickly find direct metadata-tagged nodes and `GameplayTagComponent` owners under the optional `root`.
@@ -378,14 +378,14 @@ For objects/nodes, `GameplayTags` collects tags from these sources:
 1. The object is a `GameplayTagComponent`.
 2. The object has `get_owned_gameplay_tags()`.
 3. The object has `get_gameplay_tags()`.
-4. The object has a known property:
+4. If no explicit method returned tags, the object has a known property:
    - `owned_tags`
    - `gameplay_tags`
    - `tags`
 5. The object has metadata named `gameplay_tags`, including tags set through the direct node tag API.
 6. The node has a child `GameplayTagComponent` somewhere under it.
 
-If more than one source exists, the tags are merged before central database filtering.
+For nodes, direct node metadata and child `GameplayTagComponent` tags are merged before central database filtering. For plain objects, explicit `get_owned_gameplay_tags()` / `get_gameplay_tags()` methods take precedence over similarly named properties.
 
 This means the recommended pattern is simple:
 

@@ -83,22 +83,22 @@ func request_tag(raw_tag: Variant) -> GameplayTag:
 
 func add_tag(raw_tag: Variant, description: String = "", save_now: bool = true) -> bool:
 	var added := get_database().add_tag(raw_tag, description)
-	if added and save_now and save_database() != OK:
-		return false
+	if added and save_now:
+		save_database()
 	return added
 
 
 func remove_tag(raw_tag: Variant, remove_children: bool = false, save_now: bool = true) -> bool:
 	var removed := get_database().remove_tag(raw_tag, remove_children)
-	if removed and save_now and save_database() != OK:
-		return false
+	if removed and save_now:
+		save_database()
 	return removed
 
 
 func ensure_parent_tags(raw_tag: Variant = &"", save_now: bool = true) -> bool:
 	var changed := get_database().ensure_parent_tags(raw_tag)
-	if changed and save_now and save_database() != OK:
-		return false
+	if changed and save_now:
+		save_database()
 	return changed
 
 
@@ -118,8 +118,8 @@ func import_tags_from_csv(path: String, save_now: bool = true) -> int:
 
 	var added := get_database().add_tags_from_csv_text(file.get_as_text())
 	file.close()
-	if added > 0 and save_now and save_database() != OK:
-		return 0
+	if added > 0 and save_now:
+		save_database()
 	return added
 
 
@@ -290,16 +290,25 @@ func get_first_overlapping_target_with_tag(area: Area3D, tag: Variant, exact: bo
 
 func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContainer:
 	var result := GameplayTagContainer.new()
+	var used_explicit_method := false
 	if object is GameplayTagComponent:
 		_add_container_tags(result, object.get_owned_gameplay_tags())
+		used_explicit_method = true
 	elif object.has_method("get_owned_gameplay_tags") and object != self:
 		var method_value: Variant = object.call("get_owned_gameplay_tags")
-		_add_container_tags(result, _container_from_variant(method_value))
+		var method_container := _container_from_variant(method_value)
+		if method_container != null:
+			_add_container_tags(result, method_container)
+			used_explicit_method = true
 	elif object.has_method("get_gameplay_tags"):
 		var tags_value: Variant = object.call("get_gameplay_tags")
-		_add_container_tags(result, _container_from_variant(tags_value))
+		var tags_container := _container_from_variant(tags_value)
+		if tags_container != null:
+			_add_container_tags(result, tags_container)
+			used_explicit_method = true
 
-	_add_container_tags(result, _container_from_known_properties(object))
+	if not used_explicit_method or object is Node:
+		_add_container_tags(result, _container_from_known_properties(object))
 	if object is Node:
 		var component := _find_tag_component(object)
 		if component != null:

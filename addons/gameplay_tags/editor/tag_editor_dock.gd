@@ -343,10 +343,7 @@ func _get_tag_ids_path() -> String:
 
 
 func _get_registry() -> Node:
-	var tree := Engine.get_main_loop() as SceneTree
-	if tree == null:
-		return null
-	return tree.root.get_node_or_null("GameplayTags")
+	return GameplayTagUtils.get_registry(self)
 
 
 func _set_status(message: String) -> void:
