@@ -72,6 +72,7 @@ rm -f "$PROJECT_DIR/.godot/extension_list.cfg" 2>/dev/null || true
 
 run_script_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_gameplay_tags.gd"
 run_script_test "GDScript editor workflow tests" "res://tests/test_editor_workflows.gd"
+run_script_test "GDScript runtime edge-case tests" "res://tests/test_runtime_edge_cases.gd"
 run_editor_smoke
 
 printf '\nAll Gameplay Tags smoke tests passed with %s. Native runtime is deferred in this clean restart.\n' "$GODOT_BIN"

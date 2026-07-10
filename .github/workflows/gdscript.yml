@@ -1,0 +1,79 @@
+name: GDScript Validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gdscript-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-tests:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Godot 4.6.3
+            release: 4.6.3-stable
+            archive: Godot_v4.6.3-stable_linux.x86_64.zip
+            executable: Godot_v4.6.3-stable_linux.x86_64
+          - label: Godot 4.7
+            release: 4.7-stable
+            archive: Godot_v4.7-stable_linux.x86_64.zip
+            executable: Godot_v4.7-stable_linux.x86_64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download ${{ matrix.label }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install_dir="$RUNNER_TEMP/godot/${{ matrix.release }}"
+          archive_path="$RUNNER_TEMP/${{ matrix.archive }}"
+          mkdir -p "$install_dir"
+          curl --fail --location --retry 3 \
+            "https://github.com/godotengine/godot/releases/download/${{ matrix.release }}/${{ matrix.archive }}" \
+            --output "$archive_path"
+          unzip -q "$archive_path" -d "$install_dir"
+          godot_bin="$install_dir/${{ matrix.executable }}"
+          chmod +x "$godot_bin"
+          echo "GODOT_BIN=$godot_bin" >> "$GITHUB_ENV"
+          "$godot_bin" --version
+
+      - name: Run GDScript and editor smoke tests
+        run: tools/linux/check_gdscript.sh
+
+      - name: Run performance regression smoke test
+        run: tools/linux/benchmark.sh
+
+      - name: Build and validate addon package
+        if: matrix.release == '4.7-stable'
+        run: tools/linux/package_addon.sh
+
+      - name: Upload addon package
+        if: matrix.release == '4.7-stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gameplay-tags-gdscript
+          path: dist/gameplay_tags-*-gdscript.zip
+          if-no-files-found: error
+
+      - name: Upload failed Godot logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-logs-${{ matrix.release }}
+          path: /tmp/gameplay_tags_*.failed
+          if-no-files-found: ignore

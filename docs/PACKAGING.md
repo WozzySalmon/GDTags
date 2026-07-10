@@ -1,8 +1,8 @@
 # Packaging the Gameplay Tags Addon
 
-The clean restart is GDScript-only. Do not package native build caches or development files.
+The addon is GDScript-only. Packages must not contain native build caches or development files.
 
-A user package should contain:
+A user package contains:
 
 ```text
 addons/gameplay_tags/plugin.cfg
@@ -15,17 +15,30 @@ addons/gameplay_tags/README.md
 LICENSE
 ```
 
+## Linux package script
+
+Linux is the canonical build environment. Create and validate the package with:
+
+```bash
+tools/linux/package_addon.sh
+```
+
+The script stages the addon, removes native/development leftovers, creates the archive, and verifies
+that `addons/gameplay_tags/plugin.cfg` exists and forbidden artifacts are absent.
+
 ## Windows package script
 
 ```bat
 tools\windows\package_addon.cmd
 ```
 
-Output:
+Both scripts write:
 
 ```text
 dist/gameplay_tags-<version>-gdscript.zip
 ```
+
+GitHub Actions also builds and uploads this archive from the Godot 4.7 matrix job.
 
 ## Install test
 

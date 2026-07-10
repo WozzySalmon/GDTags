@@ -66,7 +66,7 @@ addons/gameplay_tags/   Addon files users install into Godot projects
 docs/                   Packaging and style notes
 tests/                  Headless Godot smoke tests
 benchmarks/             Runtime benchmark scripts
-tools/linux/            Linux lint/test helpers
+tools/linux/            Linux lint/test/benchmark/package helpers
 tools/windows/          Windows test/package helpers
 ```
 
@@ -80,10 +80,12 @@ tools/linux/check_gdscript.sh
 tools/linux/test_native.sh      # compatibility name; runs GDScript/editor smoke tests
 ```
 
-Smoke-test configured Godot versions:
+Smoke-test configured Godot versions, run the benchmark, and build a package:
 
 ```bash
 tools/linux/test_all_godot_versions.sh
+tools/linux/benchmark.sh
+tools/linux/package_addon.sh
 ```
 
 Windows:
@@ -99,5 +101,5 @@ tools\windows\package_addon.cmd
 - `docs/PLUGIN_GUIDE.md` - full plugin behavior and usage guide.
 - `addons/gameplay_tags/README.md` - addon usage notes.
 - `docs/PACKAGING.md` - release/package notes.
-- `docs/CI.md` - CI status notes.
+- `docs/CI.md` - CI automation and local validation notes.
 - `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo.
