@@ -9,6 +9,8 @@ const TagCodeGenerator := preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
 )
 
+var undo_redo_manager: EditorUndoRedoManager
+
 var _database: GameplayTagDatabase
 var _tag_list: ItemList
 var _search_input: LineEdit
@@ -18,7 +20,9 @@ var _status_label: Label
 var _remove_button: Button
 var _import_dialog: FileDialog
 var _export_dialog: FileDialog
+var _remove_confirmation: ConfirmationDialog
 var _selected_tag: StringName = &""
+var _pending_remove_tag: StringName = &""
 
 
 func _ready() -> void:
@@ -118,6 +122,11 @@ func _build_file_dialogs() -> void:
 	_export_dialog.file_selected.connect(_on_export_csv_selected)
 	add_child(_export_dialog)
 
+	_remove_confirmation = ConfirmationDialog.new()
+	_remove_confirmation.title = "Remove Gameplay Tags"
+	_remove_confirmation.confirmed.connect(_on_remove_confirmed)
+	add_child(_remove_confirmation)
+
 
 func _load_database() -> void:
 	var registry := _get_registry()
@@ -127,11 +136,17 @@ func _load_database() -> void:
 
 	var path := _get_database_path()
 	if ResourceLoader.exists(path):
-		_database = load(path) as GameplayTagDatabase
-	if _database == null:
-		_database = GameplayTagDatabase.new()
-		_database.resource_path = path
-		_save_database()
+		var existing_resource := load(path)
+		if existing_resource is GameplayTagDatabase:
+			_database = existing_resource
+			return
+		_database = null
+		_set_status("Database path contains another resource type: %s" % path)
+		return
+
+	_database = GameplayTagDatabase.new()
+	_database.resource_path = path
+	_save_database()
 
 
 func _refresh() -> void:
@@ -190,21 +205,106 @@ func _on_remove_pressed() -> void:
 	if _database == null or _selected_tag == &"":
 		return
 
+	_pending_remove_tag = _selected_tag
+	var child_count := _database.get_children(_pending_remove_tag, true).size()
+	var affected_count := child_count + 1
+	_remove_confirmation.dialog_text = (
+		"Remove %s and %d child tag(s)?\n\nThis operation can be undone from the editor."
+		% [String(_pending_remove_tag), child_count]
+	)
+	_remove_confirmation.get_ok_button().text = "Remove %d Tags" % affected_count
+	_remove_confirmation.popup_centered(Vector2i(520, 200))
+
+
+func _on_remove_confirmed() -> void:
+	var tag := _pending_remove_tag
+	_pending_remove_tag = &""
+	if tag == &"" or _database == null:
+		return
+	_remove_tag_with_undo(tag)
+
+
+func _remove_tag_with_undo(tag: StringName) -> void:
+	if undo_redo_manager == null:
+		_remove_tag_immediately(tag)
+		return
+
+	var before_tags := _database.get_all_tags()
+	var before_descriptions := _database.tag_descriptions.duplicate(true)
+	var preview := GameplayTagDatabase.new()
+	preview.tags = before_tags
+	preview.tag_descriptions = before_descriptions
+	if not preview.remove_tag(tag, true):
+		return
+
+	(
+		undo_redo_manager
+		. create_action(
+			"Remove Gameplay Tag %s" % String(tag),
+			UndoRedo.MERGE_DISABLE,
+			_database,
+		)
+	)
+	(
+		undo_redo_manager
+		. add_do_method(
+			self,
+			"_apply_database_state",
+			preview.get_all_tags(),
+			preview.tag_descriptions.duplicate(true),
+			"Removed %s and its children." % String(tag),
+		)
+	)
+	(
+		undo_redo_manager
+		. add_undo_method(
+			self,
+			"_apply_database_state",
+			before_tags,
+			before_descriptions,
+			"Restored %s and its children." % String(tag),
+		)
+	)
+	undo_redo_manager.commit_action()
+
+
+func _remove_tag_immediately(tag: StringName) -> void:
 	var removed := false
 	var registry := _get_registry()
 	if registry != null and registry.has_method("remove_tag"):
-		removed = bool(registry.remove_tag(_selected_tag, true))
+		removed = bool(registry.remove_tag(tag, true))
 		_database = registry.get_database()
 		if removed and not _save_tag_ids_script():
 			return
 	else:
-		removed = _database.remove_tag(_selected_tag, true)
+		removed = _database.remove_tag(tag, true)
 		if removed and not _save_database():
 			return
 
 	if removed:
 		_refresh()
-		_set_status("Removed %s and its children." % String(_selected_tag))
+		_set_status("Removed %s and its children." % String(tag))
+
+
+func _apply_database_state(
+	raw_tags: Array,
+	descriptions: Dictionary,
+	status_message: String,
+) -> void:
+	if _database == null:
+		_load_database()
+	if _database == null:
+		return
+
+	_database.tags = GameplayTagDatabase.canonicalize_tag_array(raw_tags)
+	_database.tag_descriptions = descriptions.duplicate(true)
+	var registry := _get_registry()
+	if registry != null and registry.has_method("set_database"):
+		registry.set_database(_database)
+	_refresh()
+	if not _save_database():
+		return
+	_set_status(status_message)
 
 
 func _on_refresh_pressed() -> void:
@@ -262,7 +362,13 @@ func _on_item_selected(index: int) -> void:
 
 
 func _save_database() -> bool:
+	if _database == null:
+		_set_status("No gameplay tag database loaded.")
+		return false
 	var path := _get_database_path()
+	if ResourceLoader.exists(path) and not load(path) is GameplayTagDatabase:
+		_set_status("Refusing to overwrite another resource at: %s" % path)
+		return false
 	var directory_error := _ensure_database_directory(path)
 	if directory_error != OK:
 		_set_status("Could not create database directory: %s" % error_string(directory_error))

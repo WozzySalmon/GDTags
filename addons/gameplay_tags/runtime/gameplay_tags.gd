@@ -51,6 +51,9 @@ func reload_database() -> GameplayTagDatabase:
 func save_database() -> Error:
 	var database := get_database()
 	var path := get_database_path()
+	if _database_path_has_incompatible_resource(path):
+		push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
+		return ERR_INVALID_DATA
 	var directory_error := _ensure_database_directory(path)
 	if directory_error != OK:
 		push_error(
@@ -399,25 +402,31 @@ func _ensure_database_directory(path: String) -> Error:
 
 func _load_or_create_database() -> GameplayTagDatabase:
 	var path := get_database_path()
-	var database: GameplayTagDatabase
 	if ResourceLoader.exists(path):
-		database = load(path) as GameplayTagDatabase
-	if database == null:
-		database = GameplayTagDatabase.new()
-		database.resource_path = path
-		var directory_error := _ensure_database_directory(path)
-		if directory_error == OK:
-			var save_error := ResourceSaver.save(database, path)
-			if save_error != OK:
-				push_error("Could not save gameplay tag database: %s" % error_string(save_error))
-		else:
-			push_error(
-				(
-					"Could not create gameplay tag database directory: %s"
-					% error_string(directory_error)
-				)
-			)
+		var existing_resource := load(path)
+		if existing_resource is GameplayTagDatabase:
+			return existing_resource
+		push_error("Expected a GameplayTagDatabase but found another resource at: %s" % path)
+		return GameplayTagDatabase.new()
+
+	var database := GameplayTagDatabase.new()
+	database.resource_path = path
+	var directory_error := _ensure_database_directory(path)
+	if directory_error == OK:
+		var save_error := ResourceSaver.save(database, path)
+		if save_error != OK:
+			push_error("Could not save gameplay tag database: %s" % error_string(save_error))
+	else:
+		push_error(
+			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
+		)
 	return database
+
+
+func _database_path_has_incompatible_resource(path: String) -> bool:
+	if not ResourceLoader.exists(path):
+		return false
+	return not load(path) is GameplayTagDatabase
 
 
 func _container_from_variant(value: Variant) -> GameplayTagContainer:

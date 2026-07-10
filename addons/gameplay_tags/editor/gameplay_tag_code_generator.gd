@@ -12,6 +12,11 @@ static func save_tag_ids(
 	if clean_path.is_empty():
 		return ERR_INVALID_PARAMETER
 
+	var collisions := get_constant_name_collisions(database)
+	if not collisions.is_empty():
+		push_error(_format_constant_name_collisions(collisions))
+		return ERR_ALREADY_EXISTS
+
 	var directory_error := _ensure_directory(clean_path)
 	if directory_error != OK:
 		return directory_error
@@ -25,6 +30,10 @@ static func save_tag_ids(
 
 
 static func build_tag_ids_source(database: GameplayTagDatabase) -> String:
+	var collisions := get_constant_name_collisions(database)
+	if not collisions.is_empty():
+		push_error(_format_constant_name_collisions(collisions))
+		return ""
 	var entries := _get_constant_entries(database)
 	var lines: Array[String] = [
 		"@tool",
@@ -65,18 +74,42 @@ static func refresh_editor_filesystem() -> void:
 		filesystem.call_deferred("scan")
 
 
+static func get_constant_name_collisions(
+	database: GameplayTagDatabase,
+) -> Array[Dictionary]:
+	var tags_by_name := {}
+	if database == null:
+		return []
+
+	for tag in database.get_all_tags():
+		var constant_name := _constant_base_name_for_tag(tag)
+		var mapped_tags: Array[StringName] = []
+		if tags_by_name.has(constant_name):
+			mapped_tags = tags_by_name[constant_name]
+		mapped_tags.append(GameplayTagDatabase.normalize_tag(tag))
+		tags_by_name[constant_name] = mapped_tags
+
+	var constant_names := tags_by_name.keys()
+	constant_names.sort()
+	var collisions: Array[Dictionary] = []
+	for constant_name in constant_names:
+		var mapped_tags: Array[StringName] = tags_by_name[constant_name]
+		if mapped_tags.size() > 1:
+			collisions.append({"name": constant_name, "tags": mapped_tags})
+	return collisions
+
+
 static func _get_constant_entries(database: GameplayTagDatabase) -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
 	if database == null:
 		return entries
 
-	var used_names := {}
 	for tag in database.get_all_tags():
 		(
 			entries
 			. append(
 				{
-					"name": _constant_name_for_tag(tag, used_names),
+					"name": _constant_base_name_for_tag(tag),
 					"tag": GameplayTagDatabase.normalize_tag(tag),
 				}
 			)
@@ -84,7 +117,7 @@ static func _get_constant_entries(database: GameplayTagDatabase) -> Array[Dictio
 	return entries
 
 
-static func _constant_name_for_tag(raw_tag: Variant, used_names: Dictionary) -> String:
+static func _constant_base_name_for_tag(raw_tag: Variant) -> String:
 	var tag_text := String(GameplayTagDatabase.normalize_tag(raw_tag))
 	var constant_name := ""
 	for index in range(tag_text.length()):
@@ -97,20 +130,24 @@ static func _constant_name_for_tag(raw_tag: Variant, used_names: Dictionary) -> 
 	while constant_name.contains("__"):
 		constant_name = constant_name.replace("__", "_")
 	constant_name = constant_name.trim_prefix("_").trim_suffix("_")
-
 	if constant_name.is_empty():
-		constant_name = "TAG"
+		return "TAG"
 	if _is_ascii_digit(constant_name.substr(0, 1)):
-		constant_name = "TAG_%s" % constant_name
-
-	var base_name := constant_name
-	var suffix := 2
-	while used_names.has(constant_name):
-		constant_name = "%s_%d" % [base_name, suffix]
-		suffix += 1
-
-	used_names[constant_name] = true
+		return "TAG_%s" % constant_name
 	return constant_name
+
+
+static func _format_constant_name_collisions(collisions: Array[Dictionary]) -> String:
+	var details: Array[String] = []
+	for collision in collisions:
+		var tag_names: Array[String] = []
+		for tag in collision["tags"]:
+			tag_names.append(String(tag))
+		details.append("%s: %s" % [String(collision["name"]), ", ".join(tag_names)])
+	return (
+		"Cannot generate GameplayTagIds because tag names map to the same constant: %s"
+		% "; ".join(details)
+	)
 
 
 static func _escape_tag_literal(raw_tag: Variant) -> String:

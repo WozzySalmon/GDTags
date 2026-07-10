@@ -35,6 +35,7 @@ func _enter_tree() -> void:
 
 	_dock = TagEditorDock.new()
 	_dock.name = "Gameplay Tags"
+	_dock.set("undo_redo_manager", get_undo_redo())
 	_dock.custom_minimum_size = TAG_DOCK_MINIMUM_SIZE
 	add_control_to_dock(TAG_DOCK_SLOT, _dock)
 
@@ -79,6 +80,8 @@ func _ensure_autoload() -> void:
 func _ensure_database_resource() -> void:
 	var path := String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
 	if ResourceLoader.exists(path):
+		if not load(path) is GameplayTagDatabase:
+			push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return
 	var directory_error := _ensure_database_directory(path)
 	if directory_error != OK:
@@ -95,6 +98,8 @@ func _ensure_database_resource() -> void:
 
 func _ensure_tag_ids_script() -> void:
 	var database := _load_database_for_generation()
+	if database == null:
+		return
 	var output_path := String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
 	var save_error := TagCodeGenerator.save_tag_ids(database, output_path)
 	if save_error != OK:
@@ -106,9 +111,13 @@ func _load_database_for_generation() -> GameplayTagDatabase:
 		ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 	)
 	if ResourceLoader.exists(database_path):
-		var database := load(database_path) as GameplayTagDatabase
-		if database != null:
-			return database
+		var existing_resource := load(database_path)
+		if existing_resource is GameplayTagDatabase:
+			return existing_resource
+		push_error(
+			"Expected a GameplayTagDatabase but found another resource at: %s" % database_path
+		)
+		return null
 	return GameplayTagDatabase.new()
 
 

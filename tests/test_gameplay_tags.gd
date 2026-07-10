@@ -21,6 +21,9 @@ class MethodTaggedObject:
 
 
 const GameplayTagsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
+const TagCodeGenerator := preload(
+	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
+)
 
 var _assertion_count := 0
 var _failed := false
@@ -38,6 +41,7 @@ func _run_all_tests() -> void:
 	_registry.set_database(_make_test_database())
 
 	_run_test("database_normalizes_parents_and_searches", _test_database)
+	_run_test("generated_id_collisions_are_rejected", _test_generated_id_collisions)
 	_run_test("container_hierarchical_matching", _test_container)
 	_run_test("component_target_helpers", _test_component_target_helpers)
 	_run_test("direct_node_tags_and_csv", _test_direct_node_tags_and_csv)
@@ -108,6 +112,17 @@ func _test_database() -> void:
 	var tag := database.get_tag("State.Stunned.Heavy")
 	assert_true(tag != null, "get_tag should return a GameplayTag")
 	assert_true(tag.matches("State.Stunned"), "GameplayTag should use hierarchical matching")
+
+
+func _test_generated_id_collisions() -> void:
+	var database := GameplayTagDatabase.new()
+	database.add_tag(&"Foo_Bar")
+	database.add_tag(&"Foo-Bar")
+
+	var collisions := TagCodeGenerator.get_constant_name_collisions(database)
+	assert_eq(collisions.size(), 1, "Generated ID collisions should be detected")
+	assert_eq(collisions[0]["name"], "FOO_BAR")
+	assert_eq(collisions[0]["tags"].size(), 2)
 
 
 func _test_container() -> void:

@@ -98,7 +98,8 @@ gameplay_tags/database_path = res://gameplay_tags_database.tres
 gameplay_tags/generated_tag_ids_path = res://gameplay_tag_ids.gd
 ```
 
-Most projects can leave these alone.
+Most projects can leave these alone. The database path must either be unused or point to a
+`GameplayTagDatabase`; the addon refuses to replace another resource type at that path.
 
 ## Enabling the plugin
 
@@ -129,7 +130,7 @@ It lets you:
 
 - Search existing tags.
 - Add tags.
-- Remove tags and their children.
+- Remove tags and their children after confirming the affected count; removals support editor undo.
 - Import simple CSV tag lists.
 - Export the current database to CSV.
 - Save the central database.
@@ -515,6 +516,10 @@ GameplayTags.target_has_tag(body, GameplayTagIds.ENTITY_PLAYER)
 ```
 
 This mirrors the same general idea Unreal uses in C++: gameplay tags are central data, but code usually references native symbols/constants instead of raw strings.
+
+Generated constant names must be unique after punctuation is converted to underscores and letters
+are uppercased. For example, `Foo-Bar` and `Foo_Bar` both map to `FOO_BAR`. The generator rejects
+such collisions instead of silently changing which tag an existing constant references.
 
 If autocomplete does not immediately show a new tag:
 
