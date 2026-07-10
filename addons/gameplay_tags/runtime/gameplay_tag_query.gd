@@ -8,13 +8,24 @@ enum Mode {
 	NONE,
 }
 
-@export var mode: Mode = Mode.ALL
+@export var mode: Mode = Mode.ALL:
+	set(value):
+		if mode == value:
+			return
+		mode = value
+		emit_changed()
+
 @export var tags: Array[StringName] = []:
 	set(value):
 		tags = GameplayTagDatabase.canonicalize_tag_array(value)
 		emit_changed()
 
-@export var exact: bool = false
+@export var exact: bool = false:
+	set(value):
+		if exact == value:
+			return
+		exact = value
+		emit_changed()
 
 
 static func all(tag_list: Array, require_exact: bool = false) -> GameplayTagQuery:

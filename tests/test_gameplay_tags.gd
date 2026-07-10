@@ -28,6 +28,7 @@ const TagCodeGenerator := preload(
 var _assertion_count := 0
 var _failed := false
 var _previous_database: GameplayTagDatabase
+var _query_change_count := 0
 var _registry
 
 
@@ -41,6 +42,7 @@ func _run_all_tests() -> void:
 	_registry.set_database(_make_test_database())
 
 	_run_test("database_normalizes_parents_and_searches", _test_database)
+	_run_test("database_reload_reads_disk", _test_database_reload)
 	_run_test("generated_id_collisions_are_rejected", _test_generated_id_collisions)
 	_run_test("container_hierarchical_matching", _test_container)
 	_run_test("component_target_helpers", _test_component_target_helpers)
@@ -112,6 +114,51 @@ func _test_database() -> void:
 	var tag := database.get_tag("State.Stunned.Heavy")
 	assert_true(tag != null, "get_tag should return a GameplayTag")
 	assert_true(tag.matches("State.Stunned"), "GameplayTag should use hierarchical matching")
+
+	var bulk_database := GameplayTagDatabase.new()
+	bulk_database.add_tag(&"State.Stunned")
+	bulk_database.add_tag(&"State.Running")
+	bulk_database.tag_descriptions = {
+		"State": "State root",
+		"State.Stunned": "Stunned state",
+	}
+	assert_eq(bulk_database.remove_tags([&"State", &"State.Stunned"]), 1)
+	assert_true(bulk_database.has_tag(&"State"), "Parents with remaining children stay protected")
+	assert_eq(
+		bulk_database.tag_descriptions.get("State", ""),
+		"State root",
+		"Protected parent descriptions should be preserved",
+	)
+	assert_false(bulk_database.tag_descriptions.has("State.Stunned"))
+
+
+func _test_database_reload() -> void:
+	var previous_path: String = _registry.get_database_path()
+	var previous_database: GameplayTagDatabase = _registry.get_database()
+	var test_path := "user://gameplay_tags_reload_test.tres"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
+
+	var initial_database := GameplayTagDatabase.new()
+	initial_database.add_tag(&"Reload.Before")
+	assert_eq(ResourceSaver.save(initial_database, test_path), OK)
+	_registry.set_database_path(test_path)
+	var cached_database: GameplayTagDatabase = _registry.reload_database()
+	assert_true(cached_database.has_tag(&"Reload.Before"))
+
+	var disk_database := GameplayTagDatabase.new()
+	disk_database.add_tag(&"Reload.After")
+	assert_eq(ResourceSaver.save(disk_database, test_path), OK)
+	assert_false(cached_database.has_tag(&"Reload.After"), "Cached database should still be stale")
+
+	var reloaded_database: GameplayTagDatabase = _registry.reload_database()
+	assert_true(
+		reloaded_database.has_tag(&"Reload.After"), "Reload should re-read the disk resource"
+	)
+	assert_false(reloaded_database.has_tag(&"Reload.Before"))
+
+	_registry.set_database_path(previous_path)
+	_registry.set_database(previous_database)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
 
 
 func _test_generated_id_collisions() -> void:
@@ -254,6 +301,15 @@ func _test_query_modes() -> void:
 	assert_true(GameplayTagQuery.any(["Damage.Fire", "State"]).matches(component))
 	assert_true(GameplayTagQuery.none(["State.Invulnerable", "Team.Player"]).matches(component))
 	assert_false(GameplayTagQuery.exact_all(["State"]).matches(component))
+
+	var observed_query := GameplayTagQuery.new()
+	_query_change_count = 0
+	observed_query.changed.connect(_on_query_changed)
+	observed_query.mode = GameplayTagQuery.Mode.ANY
+	observed_query.exact = true
+	observed_query.mode = GameplayTagQuery.Mode.ANY
+	observed_query.exact = true
+	assert_eq(_query_change_count, 2, "Mode and exact changes should emit Resource.changed")
 	component.free()
 
 
@@ -278,6 +334,10 @@ func _test_area3d_trigger_helper() -> void:
 
 	actor.free()
 	trigger.free()
+
+
+func _on_query_changed() -> void:
+	_query_change_count += 1
 
 
 func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:

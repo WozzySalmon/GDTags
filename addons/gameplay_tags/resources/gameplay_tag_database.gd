@@ -216,6 +216,7 @@ func remove_tags(raw_tags: Array) -> int:
 		return 0
 
 	var protected_tags := _get_protected_parent_removals(remove_set)
+	var removed_keys := {}
 	var removed := 0
 	var kept: Array[StringName] = []
 	for existing in tags:
@@ -224,6 +225,7 @@ func remove_tags(raw_tags: Array) -> int:
 			if protected_tags.has(existing_key):
 				kept.append(existing)
 				continue
+			removed_keys[existing_key] = true
 			removed += 1
 			continue
 		kept.append(existing)
@@ -231,7 +233,7 @@ func remove_tags(raw_tags: Array) -> int:
 	if removed > 0:
 		tags = kept
 		var description_changed := false
-		for removed_key in remove_set.keys():
+		for removed_key in removed_keys.keys():
 			if tag_descriptions.has(removed_key):
 				tag_descriptions.erase(removed_key)
 				description_changed = true

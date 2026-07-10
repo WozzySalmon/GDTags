@@ -26,7 +26,8 @@ var _inspector_plugin: EditorInspectorPlugin
 
 func _enter_tree() -> void:
 	_ensure_project_settings()
-	_ensure_autoload()
+	if not _ensure_autoload():
+		return
 	_ensure_database_resource()
 	_ensure_tag_ids_script()
 
@@ -52,7 +53,8 @@ func _exit_tree() -> void:
 
 func _enable_plugin() -> void:
 	_ensure_project_settings()
-	_ensure_autoload()
+	if not _ensure_autoload():
+		return
 	_ensure_database_resource()
 	_ensure_tag_ids_script()
 
@@ -71,16 +73,46 @@ func _ensure_project_settings() -> void:
 	ProjectSettings.set_initial_value(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
 
 
-func _ensure_autoload() -> void:
-	if ProjectSettings.has_setting("autoload/%s" % AUTOLOAD_NAME):
-		return
+func _ensure_autoload() -> bool:
+	var existing_conflict := _get_autoload_conflict()
+	if not existing_conflict.is_empty():
+		push_error(
+			(
+				"Gameplay Tags requires the '%s' autoload name, but it already points to: %s"
+				% [AUTOLOAD_NAME, existing_conflict]
+			)
+		)
+		return false
+
+	var setting_name := "autoload/%s" % AUTOLOAD_NAME
+	if ProjectSettings.has_setting(setting_name):
+		return true
 	add_autoload_singleton(AUTOLOAD_NAME, AUTOLOAD_PATH)
+	return true
+
+
+static func _get_autoload_conflict() -> String:
+	var setting_name := "autoload/%s" % AUTOLOAD_NAME
+	if not ProjectSettings.has_setting(setting_name):
+		return ""
+	var existing_value := String(ProjectSettings.get_setting(setting_name))
+	if _autoload_points_to_own_script(existing_value):
+		return ""
+	return existing_value
 
 
 func _ensure_database_resource() -> void:
 	var path := String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
 	if ResourceLoader.exists(path):
-		if not load(path) is GameplayTagDatabase:
+		var existing_resource := (
+			ResourceLoader
+			. load(
+				path,
+				"",
+				ResourceLoader.CACHE_MODE_IGNORE,
+			)
+		)
+		if not existing_resource is GameplayTagDatabase:
 			push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return
 	var directory_error := _ensure_database_directory(path)
@@ -111,7 +143,14 @@ func _load_database_for_generation() -> GameplayTagDatabase:
 		ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 	)
 	if ResourceLoader.exists(database_path):
-		var existing_resource := load(database_path)
+		var existing_resource := (
+			ResourceLoader
+			. load(
+				database_path,
+				"",
+				ResourceLoader.CACHE_MODE_REPLACE,
+			)
+		)
 		if existing_resource is GameplayTagDatabase:
 			return existing_resource
 		push_error(
@@ -138,7 +177,7 @@ func _remove_own_autoload() -> void:
 		remove_autoload_singleton(AUTOLOAD_NAME)
 
 
-func _autoload_points_to_own_script(value: String) -> bool:
+static func _autoload_points_to_own_script(value: String) -> bool:
 	var autoload_path := value.trim_prefix("*").strip_edges()
 	if autoload_path == AUTOLOAD_PATH:
 		return true

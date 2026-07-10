@@ -122,6 +122,10 @@ Most projects can leave these alone. The database path must either be unused or 
    - Inspector tag picker for supported tag properties.
    - Generated `GameplayTagIds` constants.
 
+The `GameplayTags` autoload name is reserved by the addon. If another autoload already uses that
+name, the plugin reports the conflicting path and stops setup instead of silently using the wrong
+singleton. Rename or remove the conflicting autoload, then re-enable the plugin.
+
 ## Gameplay Tags dock
 
 The dock is where you manage the global tag database.
@@ -172,6 +176,9 @@ Damage.Fire
 ```
 
 Missing parent tags are still created automatically. CSV export writes one normalized tag per line.
+If an import succeeds but `GameplayTagIds` regeneration fails, the dock reports the imported count
+and the generation failure separately; the saved database import is not mislabeled as "No new tags."
+Fix the reported constant collision or output-path problem, then click **Regenerate IDs**.
 
 ## Tag naming rules
 
@@ -370,6 +377,9 @@ GameplayTags.import_tags_from_csv("res://tags.csv")
 GameplayTags.export_tags_to_csv("res://tags_export.csv")
 ```
 
+`reload_database()` bypasses the ResourceLoader reuse cache and re-reads the configured database
+from disk. The dock's **Refresh** button uses the same reload path.
+
 ## How `GameplayTags` finds tags on a target
 
 You can pass a `Node`, `GameplayTagComponent`, `GameplayTagContainer`, `GameplayTag`, or array of tags.
@@ -466,6 +476,9 @@ Exact query:
 ```gdscript
 var exact_player := GameplayTagQuery.exact_all([GameplayTagIds.ENTITY_PLAYER])
 ```
+
+Changing a query's `mode`, `tags`, or `exact` property emits the standard `Resource.changed` signal,
+so inspector and tool scripts can react to query edits consistently.
 
 ## GameplayTagTrigger3D
 

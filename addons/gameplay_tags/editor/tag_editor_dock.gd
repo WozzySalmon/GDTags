@@ -308,7 +308,11 @@ func _apply_database_state(
 
 
 func _on_refresh_pressed() -> void:
-	_load_database()
+	var registry := _get_registry()
+	if registry != null and registry.has_method("reload_database"):
+		_database = registry.reload_database()
+	else:
+		_load_database()
 	_refresh()
 
 
@@ -328,10 +332,17 @@ func _on_export_csv_pressed() -> void:
 
 func _on_import_csv_selected(path: String) -> void:
 	var added := _import_tags_from_csv(path)
+	if added < 0:
+		return
 	if added == 0:
 		_set_status("No new tags imported from %s." % path)
 		return
 	_refresh()
+	if not _save_tag_ids_script():
+		_set_status(
+			"Imported %d tags from %s, but GameplayTagIds could not be regenerated." % [added, path]
+		)
+		return
 	_set_status("Imported %d tags from %s." % [added, path])
 
 
@@ -362,13 +373,28 @@ func _on_item_selected(index: int) -> void:
 
 
 func _save_database() -> bool:
+	if not _save_database_resource():
+		return false
+	return _save_tag_ids_script()
+
+
+func _save_database_resource() -> bool:
 	if _database == null:
 		_set_status("No gameplay tag database loaded.")
 		return false
 	var path := _get_database_path()
-	if ResourceLoader.exists(path) and not load(path) is GameplayTagDatabase:
-		_set_status("Refusing to overwrite another resource at: %s" % path)
-		return false
+	if ResourceLoader.exists(path):
+		var existing_resource := (
+			ResourceLoader
+			. load(
+				path,
+				"",
+				ResourceLoader.CACHE_MODE_IGNORE,
+			)
+		)
+		if not existing_resource is GameplayTagDatabase:
+			_set_status("Refusing to overwrite another resource at: %s" % path)
+			return false
 	var directory_error := _ensure_database_directory(path)
 	if directory_error != OK:
 		_set_status("Could not create database directory: %s" % error_string(directory_error))
@@ -377,7 +403,7 @@ func _save_database() -> bool:
 	if err != OK:
 		_set_status("Could not save database: %s" % error_string(err))
 		return false
-	return _save_tag_ids_script()
+	return true
 
 
 func _save_tag_ids_script() -> bool:
@@ -400,8 +426,6 @@ func _import_tags_from_csv(path: String) -> int:
 		_database = registry.get_database()
 	elif _database != null:
 		added = _import_tags_from_csv_without_registry(path)
-	if added > 0 and not _save_tag_ids_script():
-		return 0
 	return added
 
 
@@ -409,11 +433,11 @@ func _import_tags_from_csv_without_registry(path: String) -> int:
 	var file := FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		_set_status("Could not open CSV: %s" % path)
-		return 0
+		return -1
 	var added := _database.add_tags_from_csv_text(file.get_as_text())
 	file.close()
-	if added > 0 and not _save_database():
-		return 0
+	if added > 0 and not _save_database_resource():
+		return -1
 	return added
 
 

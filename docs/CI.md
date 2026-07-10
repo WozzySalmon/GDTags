@@ -14,7 +14,11 @@ tools/linux/test_all_godot_versions.sh
 against configured Godot versions. That script now runs:
 
 1. `tests/test_gameplay_tags.gd` headlessly.
-2. A headless editor/plugin load check.
+2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.
+3. A headless editor/plugin load check.
+
+Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
+with status 0.
 
 ## Hosted runner note
 

@@ -44,7 +44,7 @@ func set_database_path(path: String, save_project_settings: bool = false) -> voi
 
 
 func reload_database() -> GameplayTagDatabase:
-	_database = _load_or_create_database()
+	_database = _load_or_create_database(ResourceLoader.CACHE_MODE_REPLACE)
 	return _database
 
 
@@ -400,10 +400,12 @@ func _ensure_database_directory(path: String) -> Error:
 	return DirAccess.make_dir_recursive_absolute(directory)
 
 
-func _load_or_create_database() -> GameplayTagDatabase:
+func _load_or_create_database(
+	cache_mode: ResourceLoader.CacheMode = ResourceLoader.CACHE_MODE_REUSE,
+) -> GameplayTagDatabase:
 	var path := get_database_path()
 	if ResourceLoader.exists(path):
-		var existing_resource := load(path)
+		var existing_resource := ResourceLoader.load(path, "", cache_mode)
 		if existing_resource is GameplayTagDatabase:
 			return existing_resource
 		push_error("Expected a GameplayTagDatabase but found another resource at: %s" % path)
@@ -426,7 +428,8 @@ func _load_or_create_database() -> GameplayTagDatabase:
 func _database_path_has_incompatible_resource(path: String) -> bool:
 	if not ResourceLoader.exists(path):
 		return false
-	return not load(path) is GameplayTagDatabase
+	var existing_resource := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	return not existing_resource is GameplayTagDatabase
 
 
 func _container_from_variant(value: Variant) -> GameplayTagContainer:
