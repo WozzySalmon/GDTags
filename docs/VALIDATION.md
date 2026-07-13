@@ -1,9 +1,8 @@
 # Local Validation
 
-The addon uses a GDScript/editor workflow; native GDExtension code remains deferred.
+The addon uses a pure GDScript runtime and editor workflow.
 
-GitHub Actions are intentionally not configured. Validation runs locally with the scripts under
-`tools/linux/`.
+Validation runs locally with the scripts under `tools/linux/`.
 
 ## Complete smoke suite
 
@@ -13,7 +12,7 @@ Run the complete suite with the default Godot executable:
 tools/linux/check_gdscript.sh
 ```
 
-`check_gdscript.sh` delegates to the compatibility-named `test_native.sh` suite, which runs:
+`check_gdscript.sh` delegates to the complete `test_addon.sh` suite, which runs:
 
 1. `tests/test_gameplay_tags.gd` headlessly.
 2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.

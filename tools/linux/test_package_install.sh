@@ -18,7 +18,7 @@ if [[ -z "$PACKAGE_ZIP" ]]; then
   "$PROJECT_DIR/tools/linux/package_addon.sh"
   version="$(awk -F'"' '/^version="[^"]+"/{print $2; exit}' \
     "$PROJECT_DIR/addons/gameplay_tags/plugin.cfg")"
-  PACKAGE_ZIP="$PROJECT_DIR/dist/gameplay_tags-${version}-gdscript.zip"
+  PACKAGE_ZIP="$PROJECT_DIR/dist/gameplay_tags-${version}.zip"
 fi
 
 if [[ ! -f "$PACKAGE_ZIP" ]]; then

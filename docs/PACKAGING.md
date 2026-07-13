@@ -1,6 +1,6 @@
 # Packaging the Gameplay Tags Addon
 
-The addon is GDScript-only. Packages must not contain native build caches or development files.
+The release ZIP contains only the files needed to install and use the addon.
 
 A user package contains:
 
@@ -23,8 +23,8 @@ Linux is the canonical build environment. Create and validate the package with:
 tools/linux/package_addon.sh
 ```
 
-The script stages the addon, removes native/development leftovers, creates the archive, and verifies
-that `addons/gameplay_tags/plugin.cfg` exists and forbidden artifacts are absent.
+The script stages the addon, removes development leftovers, creates the archive, and verifies that
+`addons/gameplay_tags/plugin.cfg` exists and forbidden artifacts are absent.
 
 ## Windows package script
 
@@ -35,7 +35,7 @@ tools\windows\package_addon.cmd
 Both scripts write:
 
 ```text
-dist/gameplay_tags-<version>-gdscript.zip
+dist/gameplay_tags-<version>.zip
 ```
 
 ## Install test
@@ -67,15 +67,8 @@ addons/gameplay_tags/plugin.cfg
 
 ```text
 .godot/
-.pi-subagents/
 dist/
 tests/
 benchmarks/
-*.obj
-*.lib
-*.exp
-*.pdb
 *.tmp
 ```
-
-Native GDExtension files are intentionally absent until native parity is explicitly rebuilt later.

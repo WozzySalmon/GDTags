@@ -15,13 +15,13 @@ When editing this project, follow these rules.
 - Use the `GameplayTags` autoload for target checks, containers, queries, and database operations.
 - Do not directly mutate `GameplayTagDatabase.tags` from editor/runtime code. Use `add_tag()`, `remove_tag()`, and `ensure_parent_tags()`.
 - Editor plugin scripts are `@tool`; any Resource/RefCounted script whose methods are called by editor tool code must also be `@tool`.
-- Native C++ is deferred in the clean restart. Do not restore the old backend-first implementation unless explicitly asked; build future native code from the current public API.
+- Keep the addon implementation pure GDScript.
 
 ## Project layout
 
 - `addons/gameplay_tags/` - addon files that users install.
 - `tests/` and `benchmarks/` - validation and performance scripts.
-- `docs/` - style, packaging, and restart notes.
+- `docs/` - usage, style, and packaging notes.
 - `tools/linux/` - Linux build/test/lint commands.
 - `tools/windows/` - Windows test/lint/package commands.
 
@@ -31,10 +31,7 @@ When editing this project, follow these rules.
 
 ```bash
 tools/linux/check_gdscript.sh
-tools/linux/test_native.sh
 ```
-
-- `tools/linux/test_native.sh` is a compatibility name; it now runs GDScript/editor smoke tests.
 
 - To smoke-test the configured Godot versions, run:
 
@@ -59,7 +56,6 @@ tools/linux/lint_gdscript.sh
 
 ```bat
 tools\windows\check_gdscript.cmd
-tools\windows\test_native.cmd
-tools\windows\dev_native.cmd
+tools\windows\test_addon.cmd
 tools\windows\package_addon.cmd
 ```

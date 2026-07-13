@@ -24,15 +24,12 @@ exit /b 1
 call "%~dp0prepare_project.cmd" --force
 if errorlevel 1 exit /b %ERRORLEVEL%
 
-if exist "%PROJECT_DIR%\.godot\extension_list.cfg" (
-    del "%PROJECT_DIR%\.godot\extension_list.cfg" >nul 2>nul
-)
 
 call :run_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_gameplay_tags.gd" || exit /b 1
 call :run_editor_smoke || exit /b 1
 
 echo.
-echo All Gameplay Tags smoke tests passed. Native runtime is deferred in this clean restart.
+echo All Gameplay Tags smoke tests passed.
 exit /b 0
 
 :run_test

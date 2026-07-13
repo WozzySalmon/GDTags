@@ -2,27 +2,10 @@
 .godot/
 /android/
 
-# Local/editor automation tooling and external native dependency
-.pi-subagents/
-addons/godot_ai/
-godot-cpp/
-godot-cpp
-.devbox.env
-
-# Local GDExtension build outputs/cache
-bin/
-addons/gameplay_tags/bin/
+# Generated package output
 dist/
-.sconsign.dblite
-*.obj
-*.obj.import
-*.os
-*.os.import
-*.pdb
-*.ilk
-*.exp
-*.lib
-vc*.pdb
+
+# Editor and temporary files
 ~*/
 ~*
 *.tmp

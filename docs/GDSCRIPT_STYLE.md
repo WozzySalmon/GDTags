@@ -109,14 +109,13 @@ Run these before considering GDScript changes done:
 
 ```bash
 tools/linux/check_gdscript.sh
-tools/linux/test_native.sh # compatibility name; runs GDScript/editor smoke tests
 ```
 
 On Windows, use the equivalent scripts:
 
 ```bat
 tools\windows\check_gdscript.cmd
-tools\windows\test_native.cmd
+tools\windows\test_addon.cmd
 ```
 
 Optional formatter/linter if `gdtoolkit` is installed:

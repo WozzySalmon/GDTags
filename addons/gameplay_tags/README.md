@@ -90,8 +90,4 @@ res://gameplay_tag_ids.gd
 
 ```bash
 tools/linux/check_gdscript.sh
-tools/linux/test_native.sh
 ```
-
-`test_native.sh` is kept as a compatibility script name; native C++ is deferred in this clean
-restart and the script runs GDScript/editor workflow smoke tests.

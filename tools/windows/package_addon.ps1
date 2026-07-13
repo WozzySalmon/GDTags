@@ -1,9 +1,3 @@
-param(
-    [ValidateSet("gdscript")]
-    [string] $Variant = "gdscript",
-
-    [switch] $SkipBuild
-)
 
 $ErrorActionPreference = "Stop"
 
@@ -22,13 +16,10 @@ if ($null -eq $VersionLine) {
 }
 
 $Version = $VersionLine.Matches[0].Groups[1].Value
-$PackageName = "gameplay_tags-$Version-$Variant"
+$PackageName = "gameplay_tags-$Version"
 $StageDir = Join-Path $DistDir $PackageName
 $ZipPath = Join-Path $DistDir "$PackageName.zip"
 
-if (-not $SkipBuild) {
-    Write-Host "GDScript-only addon package: no native build step."
-}
 
 if (Test-Path $StageDir) {
     Remove-Item $StageDir -Recurse -Force
@@ -50,16 +41,13 @@ Copy-Item `
 
 $StageAddon = Join-Path $StageDir "addons\gameplay_tags"
 
-# Remove build/linker/editor leftovers that are not needed to use the addon.
+# Remove editor and temporary leftovers that are not needed to use the addon.
 Get-ChildItem $StageAddon -Recurse -File | Where-Object {
     $_.Name -like "~*" `
-    -or $_.Extension -in @(".exp", ".lib", ".pdb", ".ilk", ".obj", ".tmp", ".TMP")
+    -or $_.Name -eq ".DS_Store" `
+    -or $_.Extension -eq ".tmp"
 } | Remove-Item -Force
 
-# GDScript-only package works on every Godot desktop platform and avoids native binary errors.
-Remove-Item (Join-Path $StageAddon "bin") -Recurse -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path $StageAddon "gameplay_tags.gdextension") -Force -ErrorAction SilentlyContinue
-Remove-Item (Join-Path $StageAddon "gameplay_tags.gdextension.uid") -Force -ErrorAction SilentlyContinue
 
 $LicensePath = Join-Path $Root "LICENSE"
 if (Test-Path $LicensePath) {

@@ -7,12 +7,12 @@ The addon is a GDScript-first, Unreal-style gameplay tag workflow for Godot 4.6+
 - One central tag database for the whole project.
 - Inspector pickers backed by that database, including single-tag Resource pickers.
 - `GameplayTagComponent` nodes that own tags.
-- Optional direct node metadata tags for quick Godot-native integration.
+- Optional direct node metadata tags for quick integration with existing scenes.
 - `GameplayTags` autoload helpers for gameplay checks.
 - Generated `GameplayTagIds` constants so gameplay code does not depend on typo-prone strings.
 - `GameplayTagTrigger3D` for Area3D tag-gated overlap events.
 
-Native C++/GDExtension code is intentionally deferred. The current plugin is pure GDScript.
+The plugin is implemented entirely in GDScript.
 
 ## Core idea
 
@@ -577,7 +577,7 @@ The plugin handles this by generating real GDScript constants:
 GameplayTags.target_has_tag(body, GameplayTagIds.ENTITY_PLAYER)
 ```
 
-This mirrors the same general idea Unreal uses in C++: gameplay tags are central data, but code usually references native symbols/constants instead of raw strings.
+This keeps tags centralized while letting gameplay code use generated constants instead of raw strings.
 
 Generated constant names must be unique after punctuation is converted to underscores and letters
 are uppercased. For example, `Foo-Bar` and `Foo_Bar` both map to `FOO_BAR`. The generator rejects
@@ -638,7 +638,6 @@ func clear_stun() -> void:
 
 Current intentional limits:
 
-- No native C++/GDExtension backend.
 - No visual graph/query builder beyond simple `GameplayTagQuery` resources/code.
 - Inspector picker is limited to known gameplay tag classes/properties.
 - No multiplayer replication layer; replicate your gameplay state using your project's networking approach.

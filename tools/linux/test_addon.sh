@@ -10,7 +10,7 @@ if ! command -v "$GODOT_BIN" >/dev/null 2>&1 && [[ ! -x "$GODOT_BIN" ]]; then
 Could not find Godot executable: $GODOT_BIN
 
 Set GODOT_BIN before running this script, for example:
-  GODOT_BIN=/usr/local/bin/godot4.6 tools/linux/test_native.sh
+  GODOT_BIN=/usr/local/bin/godot4.6 tools/linux/test_addon.sh
 EOF
   exit 1
 fi
@@ -94,7 +94,6 @@ run_editor_smoke() {
 }
 
 "$PROJECT_DIR/tools/linux/prepare_project.sh" --force
-rm -f "$PROJECT_DIR/.godot/extension_list.cfg" 2>/dev/null || true
 
 run_script_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_gameplay_tags.gd"
 run_script_test "GDScript editor workflow tests" "res://tests/test_editor_workflows.gd"
@@ -104,4 +103,4 @@ run_editor_script_test \
   "res://tests/test_editor_picker_interactions.gd"
 run_editor_smoke
 
-printf '\nAll Gameplay Tags smoke tests passed with %s. Native runtime is deferred in this clean restart.\n' "$GODOT_BIN"
+printf '\nAll Gameplay Tags smoke tests passed with %s.\n' "$GODOT_BIN"

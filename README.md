@@ -76,14 +76,11 @@ tools/linux/            Linux lint/test/benchmark/package helpers
 tools/windows/          Windows test/package helpers
 ```
 
-Native GDExtension code is intentionally deferred in this clean restart. The workflow is
-GDScript-first until the editor/runtime UX is solid.
 
 ## Development commands
 
 ```bash
 tools/linux/check_gdscript.sh
-tools/linux/test_native.sh      # compatibility name; runs GDScript/editor smoke tests
 ```
 
 Smoke-test configured Godot versions, run the benchmark, and build a package:
@@ -98,7 +95,7 @@ Windows:
 
 ```bat
 tools\windows\check_gdscript.cmd
-tools\windows\test_native.cmd
+tools\windows\test_addon.cmd
 tools\windows\package_addon.cmd
 ```
 
@@ -107,5 +104,5 @@ tools\windows\package_addon.cmd
 - `docs/PLUGIN_GUIDE.md` - full plugin behavior and usage guide.
 - `addons/gameplay_tags/README.md` - addon usage notes.
 - `docs/PACKAGING.md` - release/package notes.
-- `docs/CI.md` - local validation, compatibility, benchmark, and package-test notes.
+- `docs/VALIDATION.md` - local validation, compatibility, benchmark, and package-test notes.
 - `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo.

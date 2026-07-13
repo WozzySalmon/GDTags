@@ -1,18 +1,9 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
 
-# Keep local tooling/dependencies out of distributable git archives.
-addons/godot_ai/** export-ignore
-godot-cpp/** export-ignore
+# Keep local caches and generated output out of distributable git archives.
 .godot/** export-ignore
-bin/** export-ignore
 dist/** export-ignore
-addons/gameplay_tags/bin/** export-ignore
-*.obj export-ignore
-*.obj.import export-ignore
-*.pdb export-ignore
-*.lib export-ignore
-*.exp export-ignore
 *.tmp export-ignore
 *.TMP export-ignore
 ~* export-ignore
