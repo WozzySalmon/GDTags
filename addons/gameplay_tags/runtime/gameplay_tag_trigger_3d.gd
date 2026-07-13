@@ -18,7 +18,7 @@ enum MatchMode {
 @export var exact_match: bool = false
 @export var trigger_once: bool = false
 
-var _has_triggered := false
+var _has_triggered: bool = false
 
 
 func _ready() -> void:
@@ -31,12 +31,12 @@ func _ready() -> void:
 
 
 func can_trigger(target: Node) -> bool:
-	var allowed := false
+	var allowed: bool = false
 	if target != null and not (trigger_once and _has_triggered):
 		if required_tags.is_empty():
 			allowed = true
 		else:
-			var registry := _get_registry()
+			var registry: Node = _get_registry()
 			if registry != null:
 				match match_mode:
 					MatchMode.ALL:

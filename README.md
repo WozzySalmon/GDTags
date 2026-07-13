@@ -47,17 +47,23 @@ Or use `GameplayTagTrigger3D` directly and set `required_tags` in the Inspector.
 ## Public API
 
 - `GameplayTags.get_database()` - central `GameplayTagDatabase` resource.
-- `GameplayTags.target_has_tag(target, tag, exact := false)`.
-- `GameplayTags.get_owned_gameplay_tags(target)`.
-- `GameplayTags.target_has_any(target, tags, exact := false)`.
-- `GameplayTags.target_has_all(target, tags, exact := false)`.
+- `GameplayTags.target_has_tag(target: Object, tag: StringName, exact: bool = false)`.
+- `GameplayTags.get_owned_gameplay_tags(target: Object)`.
+- `GameplayTags.target_has_any(target: Object, tags: Array[StringName], exact: bool = false)`.
+- `GameplayTags.target_has_all(target: Object, tags: Array[StringName], exact: bool = false)`.
+- `GameplayTags.set_tag_description(tag: StringName, description: String, save_now: bool = true)`.
+- `GameplayTags.rename_tag(tag: StringName, new_tag: StringName, save_now: bool = true)`.
 - `GameplayTags.add_tag_to_node(node, tag)` - optional metadata/group tagging.
 - `GameplayTags.get_tagged_nodes(root)`.
-- `GameplayTags.get_nodes_with_tag(root, tag, exact := false)`.
+- `GameplayTags.get_nodes_with_tag(root: Node, tag: StringName, exact: bool = false)`.
 - `GameplayTags.import_tags_from_csv(path)` / `export_tags_to_csv(path)`.
-- `GameplayTags.get_overlapping_bodies_with_tag(area, tag, exact := false)`.
+- `GameplayTags.get_overlapping_bodies_with_tag(area: Area3D, tag: StringName, exact: bool = false)`.
 - `GameplayTagComponent` - attach to nodes to own tags.
 - `GameplayTagTrigger3D` - Area3D helper that emits only for matching tagged targets.
+
+The runtime API is deliberately strict: use `StringName` for individual tags and explicitly
+written `Array[StringName]` variables for tag collections. Arbitrary values are not converted
+into tag strings.
 
 ## Project layout
 

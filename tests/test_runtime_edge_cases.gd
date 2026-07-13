@@ -1,14 +1,14 @@
 extends SceneTree
 
-const GameplayTagsScript := preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
+const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 
-var _assertion_count := 0
-var _failed := false
+var _assertion_count: int = 0
+var _failed: bool = false
 var _previous_database: GameplayTagDatabase
-var _query_change_count := 0
-var _body_emission_count := 0
-var _area_emission_count := 0
-var _registry
+var _query_change_count: int = 0
+var _body_emission_count: int = 0
+var _area_emission_count: int = 0
+var _registry: Node
 
 
 func _init() -> void:
@@ -34,28 +34,28 @@ func _run_all_tests() -> void:
 		quit(0)
 
 
-func _get_or_create_registry():
-	var existing := root.get_node_or_null("GameplayTags")
+func _get_or_create_registry() -> Node:
+	var existing: Node = root.get_node_or_null("GameplayTags")
 	if existing != null:
 		return existing
 
-	var registry := GameplayTagsScript.new()
+	var registry: Node = GameplayTagsScript.new()
 	registry.name = "GameplayTags"
 	root.add_child(registry)
 	return registry
 
 
 func _make_test_database() -> GameplayTagDatabase:
-	var database := GameplayTagDatabase.new()
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	(
 		database
 		. add_tags(
 			[
-				"Ability.Dash",
-				"Damage.Fire",
-				"State.Stunned",
-				"Team.Enemy",
-				"Team.Player",
+				&"Ability.Dash",
+				&"Damage.Fire",
+				&"State.Stunned",
+				&"Team.Enemy",
+				&"Team.Player",
 			]
 		)
 	)
@@ -71,7 +71,7 @@ func _run_test(test_name: String, test_callable: Callable) -> void:
 
 
 func _test_database_edges() -> void:
-	var database := GameplayTagDatabase.new()
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	database.add_tag(&"State.Stunned.Heavy", "Heavy stun")
 	database.tag_descriptions["State"] = "State root"
 	database.tag_descriptions["State.Stunned"] = "Stunned state"
@@ -86,15 +86,15 @@ func _test_database_edges() -> void:
 	assert_false(database.tag_descriptions.has("State.Stunned"))
 	assert_false(database.tag_descriptions.has("State.Stunned.Heavy"))
 
-	var batch_database := GameplayTagDatabase.new()
+	var batch_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	batch_database.add_tags([&"Ability.Dash", &"Damage.Fire", &"Team.Enemy"])
 	assert_eq(batch_database.remove_tags([&"Ability.Dash", &"Damage.Fire"]), 2)
 	assert_false(batch_database.has_tag(&"Ability.Dash"))
 	assert_false(batch_database.has_tag(&"Damage.Fire"))
 	assert_true(batch_database.has_tag(&"Team.Enemy"))
 
-	var csv_text := batch_database.to_csv_text()
-	var round_trip := GameplayTagDatabase.new()
+	var csv_text: String = batch_database.to_csv_text()
+	var round_trip: GameplayTagDatabase = GameplayTagDatabase.new()
 	round_trip.add_tags_from_csv_text(csv_text)
 	assert_eq(round_trip.get_all_tags(), batch_database.get_all_tags())
 	assert_true(GameplayTagDatabase.is_valid_tag_name(&"Valid.Child-1"))
@@ -103,7 +103,7 @@ func _test_database_edges() -> void:
 
 
 func _test_runtime_mutations() -> void:
-	var container := GameplayTagContainer.new()
+	var container: GameplayTagContainer = GameplayTagContainer.new()
 	assert_eq(container.add_tags([&"State.Stunned", &"Team.Enemy", &"Team.Enemy"]), 2)
 	assert_true(container.has_all([]), "An empty required set should match")
 	assert_false(container.has_all([&"State"], true))
@@ -111,11 +111,11 @@ func _test_runtime_mutations() -> void:
 	assert_eq(container.remove_tags([&"State.Stunned", &"Missing.Tag"]), 1)
 	assert_false(container.has_tag(&"State"))
 
-	var duplicate := container.duplicate_container()
+	var duplicate: GameplayTagContainer = container.duplicate_container()
 	duplicate.add_tag(&"Damage.Fire")
 	assert_false(container.has_tag(&"Damage.Fire", true), "Container copies must be independent")
 
-	var component := GameplayTagComponent.new()
+	var component: GameplayTagComponent = GameplayTagComponent.new()
 	component.validate_with_database = false
 	root.add_child(component)
 	assert_true(component.is_in_group(GameplayTagComponent.GROUP_NAME))
@@ -127,7 +127,7 @@ func _test_runtime_mutations() -> void:
 	assert_false(component.has_tag(&"Custom"))
 	component.free()
 
-	var query := GameplayTagQuery.new()
+	var query: GameplayTagQuery = GameplayTagQuery.new()
 	_query_change_count = 0
 	query.changed.connect(_on_query_changed)
 	assert_true(query.add(&"State"))
@@ -144,62 +144,75 @@ func _test_runtime_mutations() -> void:
 
 
 func _test_autoload_helpers() -> void:
-	var csv_path := "user://gameplay_tags_edge_export.csv"
+	var csv_path: String = "user://gameplay_tags_edge_export.csv"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(csv_path))
 
-	var source_database := GameplayTagDatabase.new()
+	var source_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	source_database.add_tags([&"Ability.Dash", &"Damage.Fire", &"Team.Enemy"])
 	_registry.set_database(source_database)
 	assert_eq(_registry.export_tags_to_csv(csv_path), OK)
 
-	var imported_database := GameplayTagDatabase.new()
+	var imported_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	_registry.set_database(imported_database)
 	assert_true(_registry.import_tags_from_csv(csv_path, false) > 0)
 	assert_eq(imported_database.get_all_tags(), source_database.get_all_tags())
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(csv_path))
 
 	_registry.set_database(_make_test_database())
-	var actor := Node.new()
+	var actor: Node = Node.new()
 	root.add_child(actor)
-	assert_true(_registry.set_node_tags(actor, [&"Custom.Unregistered"], false))
+	var custom_tags: Array[StringName] = [&"Custom.Unregistered"]
+	assert_true(_registry.set_node_tags(actor, custom_tags, false))
 	assert_true(_registry.get_node_tags(actor).has_tag(&"Custom"))
 	assert_true(actor.is_in_group("gameplay_tagged_nodes"))
 	_registry.clear_node_tags(actor)
 	assert_true(_registry.get_node_tags(actor).is_empty())
 	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
 
-	assert_true(_registry.make_container([&"Team.Enemy"]).has_tag(&"Team"))
-	assert_true(_registry.make_query_all([&"Team"]).matches([&"Team.Enemy"]))
-	assert_true(_registry.make_query_any([&"Damage", &"Team"]).matches([&"Team.Enemy"]))
-	assert_true(_registry.make_query_none([&"Damage"]).matches([&"Team.Enemy"]))
+	var team_enemy_tags: Array[StringName] = [&"Team.Enemy"]
+	var team_tags: Array[StringName] = [&"Team"]
+	var damage_or_team_tags: Array[StringName] = [&"Damage", &"Team"]
+	var damage_tags: Array[StringName] = [&"Damage"]
+	assert_true(_registry.make_container(team_enemy_tags).has_tag(&"Team"))
+	assert_true(
+		_registry.make_query_all(team_tags).matches(GameplayTagContainer.new(team_enemy_tags))
+	)
+	assert_true(
+		_registry.make_query_any(damage_or_team_tags).matches(
+			GameplayTagContainer.new(team_enemy_tags)
+		)
+	)
+	assert_true(
+		_registry.make_query_none(damage_tags).matches(GameplayTagContainer.new(team_enemy_tags))
+	)
 	actor.free()
 
 
 func _test_overlap_helpers_and_trigger_once() -> void:
 	_registry.set_database(_make_test_database())
 
-	var trigger := GameplayTagTrigger3D.new()
+	var trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
 	trigger.collision_layer = 0
 	trigger.collision_mask = 1
 	trigger.monitoring = true
 	_add_sphere_collision(trigger)
 	root.add_child(trigger)
 
-	var body := StaticBody3D.new()
+	var body: StaticBody3D = StaticBody3D.new()
 	body.collision_layer = 1
 	body.collision_mask = 0
 	_add_sphere_collision(body)
-	var body_component := GameplayTagComponent.new()
+	var body_component: GameplayTagComponent = GameplayTagComponent.new()
 	body.add_child(body_component)
 	root.add_child(body)
 	body_component.add_tag(&"Team.Enemy")
 
-	var area := Area3D.new()
+	var area: Area3D = Area3D.new()
 	area.collision_layer = 1
 	area.collision_mask = 0
 	area.monitorable = true
 	_add_sphere_collision(area)
-	var area_component := GameplayTagComponent.new()
+	var area_component: GameplayTagComponent = GameplayTagComponent.new()
 	area.add_child(area_component)
 	root.add_child(area)
 	area_component.add_tag(&"Team.Player")
@@ -216,7 +229,7 @@ func _test_overlap_helpers_and_trigger_once() -> void:
 	trigger.required_tags = [&"Team.Player"]
 	assert_true(trigger.get_matching_overlapping_areas().has(area))
 
-	var once_body_trigger := GameplayTagTrigger3D.new()
+	var once_body_trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
 	root.add_child(once_body_trigger)
 	once_body_trigger.match_mode = GameplayTagTrigger3D.MatchMode.ANY
 	once_body_trigger.required_tags = [&"Damage.Fire", &"Team.Enemy"]
@@ -235,7 +248,7 @@ func _test_overlap_helpers_and_trigger_once() -> void:
 	assert_eq(_body_emission_count, 1, "trigger_once should suppress later body emissions")
 	assert_false(once_body_trigger.can_trigger(body))
 
-	var once_area_trigger := GameplayTagTrigger3D.new()
+	var once_area_trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
 	root.add_child(once_area_trigger)
 	once_area_trigger.required_tags = [&"Team.Player"]
 	once_area_trigger.trigger_once = true
@@ -253,8 +266,8 @@ func _test_overlap_helpers_and_trigger_once() -> void:
 
 
 func _add_sphere_collision(collision_object: CollisionObject3D) -> void:
-	var collision_shape := CollisionShape3D.new()
-	var sphere := SphereShape3D.new()
+	var collision_shape: CollisionShape3D = CollisionShape3D.new()
+	var sphere: SphereShape3D = SphereShape3D.new()
 	sphere.radius = 2.0
 	collision_shape.shape = sphere
 	collision_object.add_child(collision_shape)
@@ -287,7 +300,7 @@ func assert_false(condition: bool, message: String = "Expected condition to be f
 func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void:
 	_assertion_count += 1
 	if actual != expected:
-		var prefix := "%s: " % message if not message.is_empty() else ""
+		var prefix: String = "%s: " % message if not message.is_empty() else ""
 		_fail("%sexpected %s, got %s" % [prefix, str(expected), str(actual)])
 
 

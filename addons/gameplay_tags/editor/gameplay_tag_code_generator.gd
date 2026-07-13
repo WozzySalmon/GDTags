@@ -1,27 +1,28 @@
 @tool
+class_name GameplayTagCodeGenerator
 extends RefCounted
 
-const DEFAULT_TAG_IDS_PATH := "res://gameplay_tag_ids.gd"
-const GENERATED_CLASS_NAME := "GameplayTagIds"
+const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
+const GENERATED_CLASS_NAME: String = "GameplayTagIds"
 
 
 static func save_tag_ids(
 	database: GameplayTagDatabase, output_path: String = DEFAULT_TAG_IDS_PATH
 ) -> Error:
-	var clean_path := output_path.strip_edges()
+	var clean_path: String = output_path.strip_edges()
 	if clean_path.is_empty():
 		return ERR_INVALID_PARAMETER
 
-	var collisions := get_constant_name_collisions(database)
+	var collisions: Array[Dictionary] = get_constant_name_collisions(database)
 	if not collisions.is_empty():
 		push_error(_format_constant_name_collisions(collisions))
 		return ERR_ALREADY_EXISTS
 
-	var directory_error := _ensure_directory(clean_path)
+	var directory_error: Error = _ensure_directory(clean_path)
 	if directory_error != OK:
 		return directory_error
 
-	var file := FileAccess.open(clean_path, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(clean_path, FileAccess.WRITE)
 	if file == null:
 		return FileAccess.get_open_error()
 
@@ -30,11 +31,11 @@ static func save_tag_ids(
 
 
 static func build_tag_ids_source(database: GameplayTagDatabase) -> String:
-	var collisions := get_constant_name_collisions(database)
+	var collisions: Array[Dictionary] = get_constant_name_collisions(database)
 	if not collisions.is_empty():
 		push_error(_format_constant_name_collisions(collisions))
 		return ""
-	var entries := _get_constant_entries(database)
+	var entries: Array[Dictionary] = _get_constant_entries(database)
 	var lines: Array[String] = [
 		"@tool",
 		"class_name %s" % GENERATED_CLASS_NAME,
@@ -50,7 +51,10 @@ static func build_tag_ids_source(database: GameplayTagDatabase) -> String:
 	else:
 		for entry in entries:
 			lines.append(
-				'const %s := &"%s"' % [String(entry["name"]), _escape_tag_literal(entry["tag"])]
+				(
+					'const %s: StringName = &"%s"'
+					% [String(entry["name"]), _escape_tag_literal(entry["tag"])]
+				)
 			)
 
 	lines.append("")
@@ -69,7 +73,7 @@ static func build_tag_ids_source(database: GameplayTagDatabase) -> String:
 static func refresh_editor_filesystem() -> void:
 	if not Engine.is_editor_hint():
 		return
-	var filesystem := EditorInterface.get_resource_filesystem()
+	var filesystem: EditorFileSystem = EditorInterface.get_resource_filesystem()
 	if filesystem != null:
 		filesystem.call_deferred("scan")
 
@@ -77,19 +81,21 @@ static func refresh_editor_filesystem() -> void:
 static func get_constant_name_collisions(
 	database: GameplayTagDatabase,
 ) -> Array[Dictionary]:
-	var tags_by_name := {}
+	var tags_by_name: Dictionary[String, Array] = {}
 	if database == null:
 		return []
 
 	for tag in database.get_all_tags():
-		var constant_name := _constant_base_name_for_tag(tag)
+		var constant_name: String = _constant_base_name_for_tag(tag)
 		var mapped_tags: Array[StringName] = []
 		if tags_by_name.has(constant_name):
 			mapped_tags = tags_by_name[constant_name]
-		mapped_tags.append(GameplayTagDatabase.normalize_tag(tag))
+		mapped_tags.append(tag)
 		tags_by_name[constant_name] = mapped_tags
 
-	var constant_names := tags_by_name.keys()
+	var constant_names: Array[String] = []
+	for constant_name in tags_by_name:
+		constant_names.append(constant_name)
 	constant_names.sort()
 	var collisions: Array[Dictionary] = []
 	for constant_name in constant_names:
@@ -110,18 +116,18 @@ static func _get_constant_entries(database: GameplayTagDatabase) -> Array[Dictio
 			. append(
 				{
 					"name": _constant_base_name_for_tag(tag),
-					"tag": GameplayTagDatabase.normalize_tag(tag),
+					"tag": tag,
 				}
 			)
 		)
 	return entries
 
 
-static func _constant_base_name_for_tag(raw_tag: Variant) -> String:
-	var tag_text := String(GameplayTagDatabase.normalize_tag(raw_tag))
-	var constant_name := ""
+static func _constant_base_name_for_tag(raw_tag: StringName) -> String:
+	var tag_text: String = String(raw_tag)
+	var constant_name: String = ""
 	for index in range(tag_text.length()):
-		var character := tag_text.substr(index, 1)
+		var character: String = tag_text.substr(index, 1)
 		if _is_ascii_letter_or_digit(character):
 			constant_name += character.to_upper()
 		else:
@@ -137,6 +143,10 @@ static func _constant_base_name_for_tag(raw_tag: Variant) -> String:
 	return constant_name
 
 
+static func _escape_tag_literal(raw_tag: StringName) -> String:
+	return String(raw_tag).replace("\\", "\\\\").replace('"', '\\"')
+
+
 static func _format_constant_name_collisions(collisions: Array[Dictionary]) -> String:
 	var details: Array[String] = []
 	for collision in collisions:
@@ -150,16 +160,10 @@ static func _format_constant_name_collisions(collisions: Array[Dictionary]) -> S
 	)
 
 
-static func _escape_tag_literal(raw_tag: Variant) -> String:
-	return String(GameplayTagDatabase.normalize_tag(raw_tag)).replace("\\", "\\\\").replace(
-		'"', '\\"'
-	)
-
-
 static func _is_ascii_letter_or_digit(character: String) -> bool:
 	if character.length() != 1:
 		return false
-	var code := character.unicode_at(0)
+	var code: int = character.unicode_at(0)
 	return _is_ascii_digit_code(code) or (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
 
 
@@ -174,7 +178,7 @@ static func _is_ascii_digit_code(code: int) -> bool:
 
 
 static func _ensure_directory(path: String) -> Error:
-	var directory := path.get_base_dir()
+	var directory: String = path.get_base_dir()
 	if directory.is_empty() or directory == "res://" or directory == "user://":
 		return OK
 	return DirAccess.make_dir_recursive_absolute(directory)

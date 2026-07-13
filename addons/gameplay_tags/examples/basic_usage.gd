@@ -2,8 +2,8 @@ extends Node
 
 
 func _ready() -> void:
-	var enemy := Node.new()
-	var tags := GameplayTagComponent.new()
+	var enemy: Node = Node.new()
+	var tags: GameplayTagComponent = GameplayTagComponent.new()
 	enemy.add_child(tags)
 	add_child(enemy)
 
@@ -18,8 +18,8 @@ func _ready() -> void:
 	if GameplayTags.target_has_tag(enemy, GameplayTagIds.STATE):
 		print("Hierarchical match: State.Stunned satisfies State")
 
-	var can_damage := GameplayTags.target_has_all(enemy, [GameplayTagIds.TEAM_ENEMY])
-	var cannot_act := GameplayTags.target_has_any(enemy, [GameplayTagIds.STATE_STUNNED])
+	var can_damage: bool = GameplayTags.target_has_all(enemy, [GameplayTagIds.TEAM_ENEMY])
+	var cannot_act: bool = GameplayTags.target_has_any(enemy, [GameplayTagIds.STATE_STUNNED])
 
 	print("Can damage: ", can_damage)
 	print("Cannot act: ", cannot_act)

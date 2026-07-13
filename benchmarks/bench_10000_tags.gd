@@ -1,20 +1,20 @@
 extends SceneTree
 
-const TAG_COUNT := 10000
-const RNG_SEED := 0xC0FFEE
+const TAG_COUNT: int = 10000
+const RNG_SEED: int = 0xC0FFEE
 
 
 func _init() -> void:
-	var database := GameplayTagDatabase.new()
-	var tag_names: Array[String] = []
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	var tag_names: Array[StringName] = []
 	tag_names.resize(TAG_COUNT)
 
 	for index in range(TAG_COUNT):
-		tag_names[index] = "Perf.Group%03d.Tag%05d" % [index % 100, index]
+		tag_names[index] = StringName(&"Perf.Group%03d.Tag%05d" % [index % 100, index])
 
-	var add_start := Time.get_ticks_usec()
+	var add_start: int = Time.get_ticks_usec()
 	database.add_tags(tag_names)
-	var add_usec := Time.get_ticks_usec() - add_start
+	var add_usec: int = Time.get_ticks_usec() - add_start
 
 	for tag_name in tag_names:
 		if not database.has_tag(tag_name):
@@ -22,24 +22,24 @@ func _init() -> void:
 			quit(1)
 			return
 
-	var container := GameplayTagContainer.new(tag_names)
-	var match_start := Time.get_ticks_usec()
+	var container: GameplayTagContainer = GameplayTagContainer.new(tag_names)
+	var match_start: int = Time.get_ticks_usec()
 	for index in range(TAG_COUNT):
-		container.has_tag("Perf.Group%03d" % [index % 100])
-	var match_usec := Time.get_ticks_usec() - match_start
+		container.has_tag(&"Perf.Group%03d" % [index % 100])
+	var match_usec: int = Time.get_ticks_usec() - match_start
 
-	var rng := RandomNumberGenerator.new()
+	var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 	rng.seed = RNG_SEED
-	var removal_order: Array[String] = tag_names.duplicate()
+	var removal_order: Array[StringName] = tag_names.duplicate()
 	for index in range(removal_order.size() - 1, 0, -1):
 		var swap_index: int = rng.randi_range(0, index)
-		var temporary: String = removal_order[index]
+		var temporary: StringName = removal_order[index]
 		removal_order[index] = removal_order[swap_index]
 		removal_order[swap_index] = temporary
 
-	var remove_start := Time.get_ticks_usec()
+	var remove_start: int = Time.get_ticks_usec()
 	database.remove_tags(removal_order)
-	var remove_usec := Time.get_ticks_usec() - remove_start
+	var remove_usec: int = Time.get_ticks_usec() - remove_start
 
 	for tag_name in tag_names:
 		if database.has_tag(tag_name):
@@ -47,7 +47,7 @@ func _init() -> void:
 			quit(1)
 			return
 
-	var total_usec := add_usec + match_usec + remove_usec
+	var total_usec: int = add_usec + match_usec + remove_usec
 	print("METRIC count=%d" % TAG_COUNT)
 	print("METRIC database_tags_with_parents=%d" % database.tags.size())
 	print("METRIC add_ms=%.3f" % (add_usec / 1000.0))

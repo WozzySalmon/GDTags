@@ -6,7 +6,8 @@ When editing this project, follow these rules.
 
 - Follow `docs/GDSCRIPT_STYLE.md` and Godot's official GDScript style guide:
   https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
-- Use typed function signatures and typed variables when inference is unclear.
+- Write explicit types on every variable, constant, function parameter, and return value; do not use `:=`.
+- Use `Variant` only in narrow adapters for dynamic Godot engine values, then validate and convert immediately.
 - Keep code readable as simple gameplay-tag gates where possible: "has tag -> yes/no -> continue/stop".
 
 ## Gameplay Tags conventions
@@ -39,6 +40,12 @@ tools/linux/test_native.sh
 
 ```bash
 tools/linux/test_all_godot_versions.sh
+```
+
+- To validate the packaged release ZIP in a clean temporary project, run:
+
+```bash
+tools/linux/test_package_install.sh
 ```
 
 - Optional style tools if `gdtoolkit` is installed:

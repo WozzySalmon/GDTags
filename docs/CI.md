@@ -21,6 +21,7 @@ runs:
 2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.
 3. `tests/test_runtime_edge_cases.gd` headlessly for CSV, mutation, trigger, and overlap paths.
 4. A headless editor/plugin load check.
+5. A packaged-addon installation smoke test in a fresh temporary Godot project.
 
 Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
 with status 0. Each matrix job also runs the 10,000-tag performance regression smoke test. The Godot
@@ -46,6 +47,7 @@ Run the performance regression smoke test or build the addon package:
 ```bash
 tools/linux/benchmark.sh
 tools/linux/package_addon.sh
+tools/linux/test_package_install.sh
 ```
 
 The benchmark fails above a deliberately generous 5,000 ms regression ceiling. Override it for a

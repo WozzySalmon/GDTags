@@ -42,6 +42,18 @@ GitHub Actions also builds and uploads this archive from the Godot 4.7 matrix jo
 
 ## Install test
 
+Run the automated clean-project installation smoke test with:
+
+```bash
+tools/linux/test_package_install.sh
+```
+
+Set `GODOT_BIN` to test a specific editor version. The script builds the release ZIP, extracts it
+outside the repository, enables the packaged plugin, verifies its generated database and IDs, and
+checks the `GameplayTags` autoload from a separate runtime process.
+
+For a manual install check:
+
 1. Unzip into a clean Godot project.
 2. Confirm this exists:
 

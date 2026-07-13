@@ -1,22 +1,22 @@
 @tool
 extends EditorPlugin
 
-const AUTOLOAD_NAME := "GameplayTags"
-const AUTOLOAD_PATH := "res://addons/gameplay_tags/runtime/gameplay_tags.gd"
-const DATABASE_SETTING := "gameplay_tags/database_path"
-const TAG_IDS_SETTING := "gameplay_tags/generated_tag_ids_path"
-const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
-const DEFAULT_TAG_IDS_PATH := "res://gameplay_tag_ids.gd"
+const AUTOLOAD_NAME: String = "GameplayTags"
+const AUTOLOAD_PATH: String = "res://addons/gameplay_tags/runtime/gameplay_tags.gd"
+const DATABASE_SETTING: String = "gameplay_tags/database_path"
+const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
+const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
+const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
 # Keep the tag manager out of Godot's Inspector tab stack. DOCK_SLOT_RIGHT_UL
 # is where Inspector/Node/History live by default, and adding a plugin dock there
 # can steal focus/collapse the visible Inspector area when the addon loads.
-const TAG_DOCK_SLOT := DOCK_SLOT_RIGHT_BL
-const TAG_DOCK_MINIMUM_SIZE := Vector2(320, 240)
-const TagEditorDock := preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
-const TagCodeGenerator := preload(
+const TAG_DOCK_SLOT: int = DOCK_SLOT_RIGHT_BL
+const TAG_DOCK_MINIMUM_SIZE: Vector2 = Vector2(320, 240)
+const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
+const TagCodeGenerator: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
 )
-const TagInspectorPlugin := preload(
+const TagInspectorPlugin: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd"
 )
 
@@ -74,7 +74,7 @@ func _ensure_project_settings() -> void:
 
 
 func _ensure_autoload() -> bool:
-	var existing_conflict := _get_autoload_conflict()
+	var existing_conflict: String = _get_autoload_conflict()
 	if not existing_conflict.is_empty():
 		push_error(
 			(
@@ -84,7 +84,7 @@ func _ensure_autoload() -> bool:
 		)
 		return false
 
-	var setting_name := "autoload/%s" % AUTOLOAD_NAME
+	var setting_name: String = "autoload/%s" % AUTOLOAD_NAME
 	if ProjectSettings.has_setting(setting_name):
 		return true
 	add_autoload_singleton(AUTOLOAD_NAME, AUTOLOAD_PATH)
@@ -92,19 +92,19 @@ func _ensure_autoload() -> bool:
 
 
 static func _get_autoload_conflict() -> String:
-	var setting_name := "autoload/%s" % AUTOLOAD_NAME
+	var setting_name: String = "autoload/%s" % AUTOLOAD_NAME
 	if not ProjectSettings.has_setting(setting_name):
 		return ""
-	var existing_value := String(ProjectSettings.get_setting(setting_name))
+	var existing_value: String = String(ProjectSettings.get_setting(setting_name))
 	if _autoload_points_to_own_script(existing_value):
 		return ""
 	return existing_value
 
 
 func _ensure_database_resource() -> void:
-	var path := String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	var path: String = String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
 	if ResourceLoader.exists(path):
-		var existing_resource := (
+		var existing_resource: Resource = (
 			ResourceLoader
 			. load(
 				path,
@@ -115,35 +115,37 @@ func _ensure_database_resource() -> void:
 		if not existing_resource is GameplayTagDatabase:
 			push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return
-	var directory_error := _ensure_database_directory(path)
+	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error != OK:
 		push_error(
 			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
 		)
 		return
-	var database := GameplayTagDatabase.new()
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	database.resource_path = path
-	var save_error := ResourceSaver.save(database, path)
+	var save_error: Error = ResourceSaver.save(database, path)
 	if save_error != OK:
 		push_error("Could not create gameplay tag database: %s" % error_string(save_error))
 
 
 func _ensure_tag_ids_script() -> void:
-	var database := _load_database_for_generation()
+	var database: GameplayTagDatabase = _load_database_for_generation()
 	if database == null:
 		return
-	var output_path := String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
-	var save_error := TagCodeGenerator.save_tag_ids(database, output_path)
+	var output_path: String = String(
+		ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
+	)
+	var save_error: Error = TagCodeGenerator.save_tag_ids(database, output_path)
 	if save_error != OK:
 		push_error("Could not generate gameplay tag IDs: %s" % error_string(save_error))
 
 
 func _load_database_for_generation() -> GameplayTagDatabase:
-	var database_path := String(
+	var database_path: String = String(
 		ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 	)
 	if ResourceLoader.exists(database_path):
-		var existing_resource := (
+		var existing_resource: Resource = (
 			ResourceLoader
 			. load(
 				database_path,
@@ -161,29 +163,29 @@ func _load_database_for_generation() -> GameplayTagDatabase:
 
 
 func _ensure_database_directory(path: String) -> Error:
-	var directory := path.get_base_dir()
+	var directory: String = path.get_base_dir()
 	if directory.is_empty() or directory == "res://" or directory == "user://":
 		return OK
 	return DirAccess.make_dir_recursive_absolute(directory)
 
 
 func _remove_own_autoload() -> void:
-	var setting_name := "autoload/%s" % AUTOLOAD_NAME
+	var setting_name: String = "autoload/%s" % AUTOLOAD_NAME
 	if not ProjectSettings.has_setting(setting_name):
 		return
 
-	var value := String(ProjectSettings.get_setting(setting_name))
+	var value: String = String(ProjectSettings.get_setting(setting_name))
 	if _autoload_points_to_own_script(value):
 		remove_autoload_singleton(AUTOLOAD_NAME)
 
 
 static func _autoload_points_to_own_script(value: String) -> bool:
-	var autoload_path := value.trim_prefix("*").strip_edges()
+	var autoload_path: String = value.trim_prefix("*").strip_edges()
 	if autoload_path == AUTOLOAD_PATH:
 		return true
 
 	if autoload_path.begins_with("uid://"):
-		var uid := ResourceUID.text_to_id(autoload_path)
+		var uid: int = ResourceUID.text_to_id(autoload_path)
 		if ResourceUID.has_id(uid):
 			return ResourceUID.get_id_path(uid) == AUTOLOAD_PATH
 

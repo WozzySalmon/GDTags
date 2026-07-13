@@ -6,8 +6,8 @@ Godot 4.6+ addon for Unreal-style hierarchical gameplay tags.
 
 - `GameplayTags` autoload: central database and gameplay helper API.
 - `GameplayTagDatabase`: global registry saved at `res://gameplay_tags_database.tres` by default.
-- Gameplay Tags dock: add/remove/search global tags.
-- Inspector picker: tag arrays and single `GameplayTag` resources are selected from the central database.
+- Gameplay Tags dock: browse nested tags and add, describe, rename, search, or remove them.
+- Inspector picker: select single or multiple tags from the same nested central database tree.
 - CSV import/export from the Gameplay Tags dock.
 - Generated `GameplayTagIds` constants for autocomplete-safe script checks.
 - `GameplayTagComponent`: attach to nodes that own tags.

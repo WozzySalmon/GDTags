@@ -58,9 +58,8 @@ jobs:
       - name: Run performance regression smoke test
         run: tools/linux/benchmark.sh
 
-      - name: Build and validate addon package
-        if: matrix.release == '4.7-stable'
-        run: tools/linux/package_addon.sh
+      - name: Test packaged addon installation
+        run: tools/linux/test_package_install.sh
 
       - name: Upload addon package
         if: matrix.release == '4.7-stable'

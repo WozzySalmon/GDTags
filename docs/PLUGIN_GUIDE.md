@@ -65,9 +65,9 @@ res://gameplay_tag_ids.gd
 class_name GameplayTagIds
 extends RefCounted
 
-const ENTITY := &"Entity"
-const ENTITY_PLAYER := &"Entity.Player"
-const STATE_STUNNED := &"State.Stunned"
+const ENTITY: StringName = &"Entity"
+const ENTITY_PLAYER: StringName = &"Entity.Player"
+const STATE_STUNNED: StringName = &"State.Stunned"
 ```
 
 Use those constants in scripts instead of raw strings:
@@ -132,9 +132,13 @@ The dock is where you manage the global tag database.
 
 It lets you:
 
-- Search existing tags.
+- Browse tags as a collapsible parent/child tree.
+- Search existing tags while preserving their parent hierarchy.
 - Add tags.
+- Edit or clear existing tag descriptions with editor undo/redo.
+- Rename or move a tag branch with editor undo/redo.
 - Remove tags and their children after confirming the affected count; removals support editor undo.
+- Bulk-paste tag lists from **Tools > Paste Tags…**.
 - Import simple CSV tag lists.
 - Export the current database to CSV.
 - Save the central database.
@@ -157,6 +161,10 @@ Entity.Player
 
 The database prevents duplicate tags and invalid tag names.
 
+Renaming a branch also renames all child tags, migrates their descriptions, creates any missing new
+parents, and regenerates `GameplayTagIds`. Existing scene/resource values and script constant names
+are not rewritten automatically, so update references after a rename.
+
 ### CSV import/export
 
 CSV import is intentionally simple: one tag path per line. Commas are treated as hierarchy separators, so this file:
@@ -178,7 +186,8 @@ Damage.Fire
 Missing parent tags are still created automatically. CSV export writes one normalized tag per line.
 If an import succeeds but `GameplayTagIds` regeneration fails, the dock reports the imported count
 and the generation failure separately; the saved database import is not mislabeled as "No new tags."
-Fix the reported constant collision or output-path problem, then click **Regenerate IDs**.
+Fix the reported constant collision or output-path problem, then select
+**Tools > Regenerate IDs** in the dock.
 
 ## Tag naming rules
 
@@ -302,7 +311,9 @@ GameplayTags.remove_tag_from_node(node, GameplayTagIds.STATE_STUNNED)
 GameplayTags.clear_node_tags(node)
 GameplayTags.get_node_tags(node)
 GameplayTags.get_tagged_nodes(root)
-GameplayTags.get_nodes_with_tag(root, GameplayTagIds.TEAM_ENEMY, exact := false)
+GameplayTags.get_nodes_with_tag(
+	root, GameplayTagIds.TEAM_ENEMY, false
+)
 ```
 
 `get_tagged_nodes()` and `get_nodes_with_tag()` use Godot groups to quickly find direct metadata-tagged nodes and `GameplayTagComponent` owners under the optional `root`.
@@ -312,6 +323,25 @@ GameplayTags.get_nodes_with_tag(root, GameplayTagIds.TEAM_ENEMY, exact := false)
 ## GameplayTags autoload
 
 `GameplayTags` is the main runtime API. Use it from gameplay scripts.
+
+### Strict tag types
+
+Runtime APIs use `StringName` for one tag and `Array[StringName]` for tag collections.
+Generated `GameplayTagIds` constants already have the correct `StringName` type. When storing a
+collection before a call, declare it explicitly:
+
+```gdscript
+var required_tags: Array[StringName] = [
+	GameplayTagIds.ENTITY_PLAYER,
+	GameplayTagIds.STATE_INVULNERABLE,
+]
+```
+
+The strict API intentionally does not convert arbitrary values into tag strings. Container
+`has_any()`, `has_all()`, `none()`, `exact()`, and `overlap_count()` require an
+`Array[StringName]`; wrap a single tag in a typed array when using those collection operations.
+`GameplayTagQuery.matches()` accepts an `Object` target such as a node, component, or
+`GameplayTagContainer`. To match a raw array, first construct a `GameplayTagContainer` from it.
 
 ### Check a target for one tag
 
@@ -330,7 +360,7 @@ if GameplayTags.target_has_tag(body, GameplayTagIds.ENTITY_PLAYER, true):
 ### Get all tags from a target
 
 ```gdscript
-var tags := GameplayTags.get_owned_gameplay_tags(body)
+var tags: GameplayTagContainer = GameplayTags.get_owned_gameplay_tags(body)
 
 if tags.has_tag(GameplayTagIds.STATE_STUNNED):
 	return
@@ -349,16 +379,20 @@ if GameplayTags.target_has_all(body, [GameplayTagIds.ENTITY_PLAYER, GameplayTagI
 ### Area3D helpers
 
 ```gdscript
-var enemies := GameplayTags.get_overlapping_bodies_with_tag(area, GameplayTagIds.ENTITY_ENEMY)
-var first_player := GameplayTags.get_first_overlapping_target_with_tag(area, GameplayTagIds.ENTITY_PLAYER)
+var enemies: Array[Node] = GameplayTags.get_overlapping_bodies_with_tag(
+	area, GameplayTagIds.ENTITY_ENEMY
+)
+var first_player: Node = GameplayTags.get_first_overlapping_target_with_tag(
+	area, GameplayTagIds.ENTITY_PLAYER
+)
 ```
 
 Available helpers:
 
 ```gdscript
-GameplayTags.get_overlapping_bodies_with_tag(area, tag, exact := false)
-GameplayTags.get_overlapping_areas_with_tag(area, tag, exact := false)
-GameplayTags.get_first_overlapping_target_with_tag(area, tag, exact := false)
+GameplayTags.get_overlapping_bodies_with_tag(area: Area3D, tag: StringName, exact: bool = false)
+GameplayTags.get_overlapping_areas_with_tag(area: Area3D, tag: StringName, exact: bool = false)
+GameplayTags.get_first_overlapping_target_with_tag(area: Area3D, tag: StringName, exact: bool = false)
 ```
 
 ### Database helpers
@@ -367,8 +401,11 @@ GameplayTags.get_first_overlapping_target_with_tag(area, tag, exact := false)
 GameplayTags.get_database()
 GameplayTags.reload_database()
 GameplayTags.save_database()
-GameplayTags.add_tag(tag, description := "", save_now := true)
-GameplayTags.remove_tag(tag, remove_children := false, save_now := true)
+GameplayTags.add_tag(tag: StringName, description: String = "", save_now: bool = true)
+GameplayTags.add_tags(tags: Array[StringName], save_now: bool = true)
+GameplayTags.set_tag_description(tag: StringName, description: String, save_now: bool = true)
+GameplayTags.rename_tag(tag: StringName, new_tag: StringName, save_now: bool = true)
+GameplayTags.remove_tag(tag: StringName, remove_children: bool = false, save_now: bool = true)
 GameplayTags.get_all_tags()
 GameplayTags.find_tags("player")
 GameplayTags.is_valid_tag(tag)
@@ -378,7 +415,7 @@ GameplayTags.export_tags_to_csv("res://tags_export.csv")
 ```
 
 `reload_database()` bypasses the ResourceLoader reuse cache and re-reads the configured database
-from disk. The dock's **Refresh** button uses the same reload path.
+from disk. The dock's **Tools > Refresh** action uses the same reload path.
 
 ## How `GameplayTags` finds tags on a target
 
@@ -418,7 +455,8 @@ GameplayTags.target_has_tag(actor_root, GameplayTagIds.ENTITY_PLAYER)
 Example:
 
 ```gdscript
-var tags := GameplayTagContainer.new([GameplayTagIds.ENTITY_PLAYER])
+var initial_tags: Array[StringName] = [GameplayTagIds.ENTITY_PLAYER]
+var tags: GameplayTagContainer = GameplayTagContainer.new(initial_tags)
 
 tags.has_tag(GameplayTagIds.ENTITY) # true
 tags.has_tag(GameplayTagIds.ENTITY, true) # false
@@ -433,15 +471,15 @@ container.add_tags(tags)
 container.remove_tag(tag)
 container.remove_tags(tags)
 container.clear()
-container.has_tag(tag, exact := false)
-container.has_exact(tag)
-container.has_any(tags, exact := false)
-container.has_all(tags, exact := false)
-container.any(tags, exact := false)
-container.all(tags, exact := false)
-container.none(tags, exact := false)
-container.exact(tags)
-container.overlap_count(tags, exact := false)
+container.has_tag(tag: StringName, exact: bool = false)
+container.has_exact(tag: StringName)
+container.has_any(tags: Array[StringName], exact: bool = false)
+container.has_all(tags: Array[StringName], exact: bool = false)
+container.any(tags: Array[StringName], exact: bool = false)
+container.all(tags: Array[StringName], exact: bool = false)
+container.none(tags: Array[StringName], exact: bool = false)
+container.exact(tags: Array[StringName])
+container.overlap_count(tags: Array[StringName], exact: bool = false)
 container.is_empty()
 container.get_tags()
 container.to_array()
@@ -463,9 +501,15 @@ NONE
 Examples:
 
 ```gdscript
-var must_be_player := GameplayTagQuery.all([GameplayTagIds.ENTITY_PLAYER])
-var hostile_or_neutral := GameplayTagQuery.any([GameplayTagIds.ENTITY_ENEMY, GameplayTagIds.ENTITY_NEUTRAL])
-var not_stunned := GameplayTagQuery.none([GameplayTagIds.STATE_STUNNED])
+var player_tags: Array[StringName] = [GameplayTagIds.ENTITY_PLAYER]
+var faction_tags: Array[StringName] = [
+	GameplayTagIds.ENTITY_ENEMY,
+	GameplayTagIds.ENTITY_NEUTRAL,
+]
+var stunned_tags: Array[StringName] = [GameplayTagIds.STATE_STUNNED]
+var must_be_player: GameplayTagQuery = GameplayTagQuery.all(player_tags)
+var hostile_or_neutral: GameplayTagQuery = GameplayTagQuery.any(faction_tags)
+var not_stunned: GameplayTagQuery = GameplayTagQuery.none(stunned_tags)
 
 if must_be_player.matches(body):
 	print("player")
@@ -474,7 +518,8 @@ if must_be_player.matches(body):
 Exact query:
 
 ```gdscript
-var exact_player := GameplayTagQuery.exact_all([GameplayTagIds.ENTITY_PLAYER])
+var player_tags: Array[StringName] = [GameplayTagIds.ENTITY_PLAYER]
+var exact_player: GameplayTagQuery = GameplayTagQuery.exact_all(player_tags)
 ```
 
 Changing a query's `mode`, `tags`, or `exact` property emits the standard `Resource.changed` signal,
@@ -510,8 +555,8 @@ func _on_tagged_body_entered(body: Node) -> void:
 You can also query overlaps manually:
 
 ```gdscript
-var matching_bodies := trigger.get_matching_overlapping_bodies()
-var matching_areas := trigger.get_matching_overlapping_areas()
+var matching_bodies: Array[Node] = trigger.get_matching_overlapping_bodies()
+var matching_areas: Array[Area3D] = trigger.get_matching_overlapping_areas()
 ```
 
 ## Generated constants and autocomplete
@@ -536,7 +581,7 @@ such collisions instead of silently changing which tag an existing constant refe
 
 If autocomplete does not immediately show a new tag:
 
-1. Click **Regenerate IDs** in the Gameplay Tags dock.
+1. Select **Tools > Regenerate IDs** in the Gameplay Tags dock.
 2. Save the project.
 3. Wait for Godot's filesystem scan, or reopen the script/project.
 

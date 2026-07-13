@@ -1,11 +1,12 @@
 @tool
 extends Node
 
-const DATABASE_SETTING := "gameplay_tags/database_path"
-const DEFAULT_DATABASE_PATH := "res://gameplay_tags_database.tres"
-const COMPONENT_GROUP := "gameplay_tag_components"
-const NODE_TAGS_META_NAME := "gameplay_tags"
-const NODE_TAG_GROUP := "gameplay_tagged_nodes"
+const DATABASE_SETTING: String = "gameplay_tags/database_path"
+const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
+const COMPONENT_GROUP: StringName = &"gameplay_tag_components"
+const NODE_TAGS_META_NAME: String = "gameplay_tags"
+const NODE_TAG_GROUP: StringName = &"gameplay_tagged_nodes"
+const TAG_PROPERTY_NAMES: Array[String] = ["owned_tags", "gameplay_tags", "tags"]
 
 var _database: GameplayTagDatabase
 
@@ -33,7 +34,7 @@ func get_database_path() -> String:
 
 
 func set_database_path(path: String, save_project_settings: bool = false) -> void:
-	var clean_path := path.strip_edges()
+	var clean_path: String = path.strip_edges()
 	if clean_path.is_empty():
 		clean_path = DEFAULT_DATABASE_PATH
 	ProjectSettings.set_setting(DATABASE_SETTING, clean_path)
@@ -49,12 +50,12 @@ func reload_database() -> GameplayTagDatabase:
 
 
 func save_database() -> Error:
-	var database := get_database()
-	var path := get_database_path()
+	var database: GameplayTagDatabase = get_database()
+	var path: String = get_database_path()
 	if _database_path_has_incompatible_resource(path):
 		push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return ERR_INVALID_DATA
-	var directory_error := _ensure_database_directory(path)
+	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error != OK:
 		push_error(
 			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
@@ -62,44 +63,69 @@ func save_database() -> Error:
 		return directory_error
 	if database.resource_path.is_empty() or database.resource_path != path:
 		database.resource_path = path
-	var save_error := ResourceSaver.save(database, path)
+	var save_error: Error = ResourceSaver.save(database, path)
 	if save_error != OK:
 		push_error("Could not save gameplay tag database: %s" % error_string(save_error))
 	return save_error
 
 
-func normalize_tag(raw_tag: Variant) -> StringName:
+func normalize_tag(raw_tag: StringName) -> StringName:
 	return GameplayTagDatabase.normalize_tag(raw_tag)
 
 
-func is_valid_tag(raw_tag: Variant) -> bool:
+func is_valid_tag(raw_tag: StringName) -> bool:
 	return get_database().has_tag(raw_tag)
 
 
-func has_tag(raw_tag: Variant) -> bool:
+func has_tag(raw_tag: StringName) -> bool:
 	return is_valid_tag(raw_tag)
 
 
-func request_tag(raw_tag: Variant) -> GameplayTag:
+func request_tag(raw_tag: StringName) -> GameplayTag:
 	return get_database().get_tag(raw_tag)
 
 
-func add_tag(raw_tag: Variant, description: String = "", save_now: bool = true) -> bool:
-	var added := get_database().add_tag(raw_tag, description)
+func add_tag(raw_tag: StringName, description: String = "", save_now: bool = true) -> bool:
+	var added: bool = get_database().add_tag(raw_tag, description)
 	if added and save_now:
 		save_database()
 	return added
 
 
-func remove_tag(raw_tag: Variant, remove_children: bool = false, save_now: bool = true) -> bool:
-	var removed := get_database().remove_tag(raw_tag, remove_children)
+func add_tags(raw_tags: Array[StringName], save_now: bool = true) -> int:
+	var added: int = get_database().add_tags(raw_tags)
+	if added > 0 and save_now:
+		save_database()
+	return added
+
+
+func set_tag_description(
+	raw_tag: StringName,
+	description: String,
+	save_now: bool = true,
+) -> bool:
+	var changed: bool = get_database().set_tag_description(raw_tag, description)
+	if changed and save_now:
+		save_database()
+	return changed
+
+
+func rename_tag(raw_tag: StringName, new_tag: StringName, save_now: bool = true) -> bool:
+	var renamed: bool = get_database().rename_tag(raw_tag, new_tag)
+	if renamed and save_now:
+		save_database()
+	return renamed
+
+
+func remove_tag(raw_tag: StringName, remove_children: bool = false, save_now: bool = true) -> bool:
+	var removed: bool = get_database().remove_tag(raw_tag, remove_children)
 	if removed and save_now:
 		save_database()
 	return removed
 
 
-func ensure_parent_tags(raw_tag: Variant = &"", save_now: bool = true) -> bool:
-	var changed := get_database().ensure_parent_tags(raw_tag)
+func ensure_parent_tags(raw_tag: StringName = &"", save_now: bool = true) -> bool:
+	var changed: bool = get_database().ensure_parent_tags(raw_tag)
 	if changed and save_now:
 		save_database()
 	return changed
@@ -114,12 +140,12 @@ func find_tags(search_text: String = "") -> Array[StringName]:
 
 
 func import_tags_from_csv(path: String, save_now: bool = true) -> int:
-	var file := FileAccess.open(path, FileAccess.READ)
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
 		push_error("Could not open gameplay tags CSV: %s" % path)
 		return 0
 
-	var added := get_database().add_tags_from_csv_text(file.get_as_text())
+	var added: int = get_database().add_tags_from_csv_text(file.get_as_text())
 	file.close()
 	if added > 0 and save_now:
 		save_database()
@@ -127,14 +153,14 @@ func import_tags_from_csv(path: String, save_now: bool = true) -> int:
 
 
 func export_tags_to_csv(path: String) -> Error:
-	var directory_error := _ensure_database_directory(path)
+	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error != OK:
 		push_error(
 			"Could not create gameplay tags CSV directory: %s" % error_string(directory_error)
 		)
 		return directory_error
 
-	var file := FileAccess.open(path, FileAccess.WRITE)
+	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
 	if file == null:
 		push_error("Could not write gameplay tags CSV: %s" % path)
 		return ERR_CANT_OPEN
@@ -144,36 +170,40 @@ func export_tags_to_csv(path: String) -> Error:
 	return OK
 
 
-func make_container(initial_tags: Array = []) -> GameplayTagContainer:
+func make_container(initial_tags: Array[StringName] = []) -> GameplayTagContainer:
 	return GameplayTagContainer.new(initial_tags)
 
 
-func make_query_all(tags: Array, exact: bool = false) -> GameplayTagQuery:
+func make_query_all(tags: Array[StringName], exact: bool = false) -> GameplayTagQuery:
 	return GameplayTagQuery.all(tags, exact)
 
 
-func make_query_any(tags: Array, exact: bool = false) -> GameplayTagQuery:
+func make_query_any(tags: Array[StringName], exact: bool = false) -> GameplayTagQuery:
 	return GameplayTagQuery.any(tags, exact)
 
 
-func make_query_none(tags: Array, exact: bool = false) -> GameplayTagQuery:
+func make_query_none(tags: Array[StringName], exact: bool = false) -> GameplayTagQuery:
 	return GameplayTagQuery.none(tags, exact)
 
 
 func get_node_tags(node: Node) -> GameplayTagContainer:
 	if node == null:
 		return GameplayTagContainer.new()
-	var node_tags := _container_from_variant(node.get_meta(NODE_TAGS_META_NAME, []))
+	var node_tags: GameplayTagContainer = _container_from_dynamic_value(
+		node.get_meta(NODE_TAGS_META_NAME, [])
+	)
 	if node_tags == null:
 		return GameplayTagContainer.new()
 	return node_tags
 
 
-func set_node_tags(node: Node, raw_tags: Array, validate_with_database: bool = true) -> bool:
+func set_node_tags(
+	node: Node, raw_tags: Array[StringName], validate_with_database: bool = true
+) -> bool:
 	if node == null:
 		return false
 
-	var node_tags := GameplayTagDatabase.canonicalize_tag_array(raw_tags)
+	var node_tags: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(raw_tags)
 	if validate_with_database:
 		node_tags = _filter_tags_to_database(node_tags, true).get_tags()
 	node.set_meta(NODE_TAGS_META_NAME, node_tags)
@@ -181,30 +211,32 @@ func set_node_tags(node: Node, raw_tags: Array, validate_with_database: bool = t
 	return true
 
 
-func add_tag_to_node(node: Node, raw_tag: Variant, validate_with_database: bool = true) -> bool:
+func add_tag_to_node(node: Node, raw_tag: StringName, validate_with_database: bool = true) -> bool:
 	return add_tags_to_node(node, [raw_tag], validate_with_database) == 1
 
 
-func add_tags_to_node(node: Node, raw_tags: Array, validate_with_database: bool = true) -> int:
+func add_tags_to_node(
+	node: Node, raw_tags: Array[StringName], validate_with_database: bool = true
+) -> int:
 	if node == null:
 		return 0
 
-	var existing := get_node_tags(node)
-	var candidates := GameplayTagDatabase.canonicalize_tag_array(raw_tags)
+	var existing: GameplayTagContainer = get_node_tags(node)
+	var candidates: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(raw_tags)
 	if validate_with_database:
 		candidates = _filter_tags_to_database(candidates, true).get_tags()
-	var added := existing.add_tags(candidates)
+	var added: int = existing.add_tags(candidates)
 	if added > 0:
 		set_node_tags(node, existing.get_tags(), false)
 	return added
 
 
-func remove_tag_from_node(node: Node, raw_tag: Variant) -> bool:
+func remove_tag_from_node(node: Node, raw_tag: StringName) -> bool:
 	if node == null:
 		return false
 
-	var existing := get_node_tags(node)
-	var removed := existing.remove_tag(raw_tag)
+	var existing: GameplayTagContainer = get_node_tags(node)
+	var removed: bool = existing.remove_tag(raw_tag)
 	if removed:
 		set_node_tags(node, existing.get_tags(), false)
 	return removed
@@ -222,7 +254,9 @@ func get_tagged_nodes(root: Node = null) -> Array[Node]:
 	return _get_tagged_node_candidates(root)
 
 
-func get_nodes_with_tag(root: Node = null, tag: Variant = &"", exact: bool = false) -> Array[Node]:
+func get_nodes_with_tag(
+	root: Node = null, tag: StringName = &"", exact: bool = false
+) -> Array[Node]:
 	var matches: Array[Node] = []
 	for node in get_tagged_nodes(root):
 		if target_has_tag(node, tag, exact):
@@ -230,12 +264,11 @@ func get_nodes_with_tag(root: Node = null, tag: Variant = &"", exact: bool = fal
 	return matches
 
 
-func get_owned_gameplay_tags(target: Variant) -> GameplayTagContainer:
-	var result := GameplayTagContainer.new()
+# target is Object because it may be Node, Resource, or a custom RefCounted.
+func get_owned_gameplay_tags(target: Object) -> GameplayTagContainer:
+	var result: GameplayTagContainer = GameplayTagContainer.new()
 	if target is GameplayTagContainer:
 		result = target.duplicate_container()
-	elif target is Array:
-		result = GameplayTagContainer.new(target)
 	elif target is GameplayTag:
 		result = GameplayTagContainer.new([target.tag_name])
 	elif target is Object:
@@ -243,20 +276,24 @@ func get_owned_gameplay_tags(target: Variant) -> GameplayTagContainer:
 	return _filter_container_to_database(result)
 
 
-func target_has_tag(target: Variant, tag: Variant, exact: bool = false) -> bool:
+func target_has_tag(target: Object, tag: StringName, exact: bool = false) -> bool:
 	return get_owned_gameplay_tags(target).has_tag(tag, exact)
 
 
-func target_has_any(target: Variant, tags: Variant, exact: bool = false) -> bool:
-	return get_owned_gameplay_tags(target).has_any(tags, exact)
+func target_has_any(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
+	return get_owned_gameplay_tags(target).has_any(
+		GameplayTagDatabase.canonicalize_tag_array(tags), exact
+	)
 
 
-func target_has_all(target: Variant, tags: Variant, exact: bool = false) -> bool:
-	return get_owned_gameplay_tags(target).has_all(tags, exact)
+func target_has_all(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
+	return get_owned_gameplay_tags(target).has_all(
+		GameplayTagDatabase.canonicalize_tag_array(tags), exact
+	)
 
 
 func get_overlapping_bodies_with_tag(
-	area: Area3D, tag: Variant, exact: bool = false
+	area: Area3D, tag: StringName, exact: bool = false
 ) -> Array[Node]:
 	var matches: Array[Node] = []
 	if area == null:
@@ -268,7 +305,7 @@ func get_overlapping_bodies_with_tag(
 
 
 func get_overlapping_areas_with_tag(
-	area: Area3D, tag: Variant, exact: bool = false
+	area: Area3D, tag: StringName, exact: bool = false
 ) -> Array[Area3D]:
 	var matches: Array[Area3D] = []
 	if area == null:
@@ -279,7 +316,9 @@ func get_overlapping_areas_with_tag(
 	return matches
 
 
-func get_first_overlapping_target_with_tag(area: Area3D, tag: Variant, exact: bool = false) -> Node:
+func get_first_overlapping_target_with_tag(
+	area: Area3D, tag: StringName, exact: bool = false
+) -> Node:
 	if area == null:
 		return null
 	for body in area.get_overlapping_bodies():
@@ -292,20 +331,22 @@ func get_first_overlapping_target_with_tag(area: Area3D, tag: Variant, exact: bo
 
 
 func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContainer:
-	var result := GameplayTagContainer.new()
-	var used_explicit_method := false
+	var result: GameplayTagContainer = GameplayTagContainer.new()
+	var used_explicit_method: bool = false
 	if object is GameplayTagComponent:
 		_add_container_tags(result, object.get_owned_gameplay_tags())
 		used_explicit_method = true
 	elif object.has_method("get_owned_gameplay_tags") and object != self:
-		var method_value: Variant = object.call("get_owned_gameplay_tags")
-		var method_container := _container_from_variant(method_value)
+		var method_container: GameplayTagContainer = _container_from_dynamic_value(
+			object.call("get_owned_gameplay_tags")
+		)
 		if method_container != null:
 			_add_container_tags(result, method_container)
 			used_explicit_method = true
 	elif object.has_method("get_gameplay_tags"):
-		var tags_value: Variant = object.call("get_gameplay_tags")
-		var tags_container := _container_from_variant(tags_value)
+		var tags_container: GameplayTagContainer = _container_from_dynamic_value(
+			object.call("get_gameplay_tags")
+		)
 		if tags_container != null:
 			_add_container_tags(result, tags_container)
 			used_explicit_method = true
@@ -313,7 +354,7 @@ func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContaine
 	if not used_explicit_method or object is Node:
 		_add_container_tags(result, _container_from_known_properties(object))
 	if object is Node:
-		var component := _find_tag_component(object)
+		var component: GameplayTagComponent = _find_tag_component(object)
 		if component != null:
 			_add_container_tags(result, component.get_owned_gameplay_tags())
 	return result
@@ -324,10 +365,10 @@ func _filter_container_to_database(container: GameplayTagContainer) -> GameplayT
 
 
 func _filter_tags_to_database(
-	raw_tags: Array, warn_on_invalid: bool = false
+	raw_tags: Array[StringName], warn_on_invalid: bool = false
 ) -> GameplayTagContainer:
 	var registered_tags: Array[StringName] = []
-	var database := get_database()
+	var database: GameplayTagDatabase = get_database()
 	for tag in GameplayTagDatabase.canonicalize_tag_array(raw_tags):
 		if database.has_tag(tag):
 			registered_tags.append(tag)
@@ -353,8 +394,8 @@ func _update_node_tag_group(node: Node, node_tags: Array[StringName]) -> void:
 
 func _get_tagged_node_candidates(root: Node) -> Array[Node]:
 	var nodes: Array[Node] = []
-	var seen := {}
-	var tree := _get_tree_for_tag_search(root)
+	var seen: Dictionary[int, bool] = {}
+	var tree: SceneTree = _get_tree_for_tag_search(root)
 	if tree == null:
 		return nodes
 
@@ -364,7 +405,7 @@ func _get_tagged_node_candidates(root: Node) -> Array[Node]:
 
 	for candidate in tree.get_nodes_in_group(COMPONENT_GROUP):
 		if candidate is GameplayTagComponent:
-			var target := candidate.get_parent()
+			var target: Node = candidate.get_parent()
 			if target == null:
 				target = candidate
 			_append_tagged_node_candidate(nodes, seen, target, root)
@@ -372,11 +413,11 @@ func _get_tagged_node_candidates(root: Node) -> Array[Node]:
 
 
 func _append_tagged_node_candidate(
-	nodes: Array[Node], seen: Dictionary, node: Node, root: Node
+	nodes: Array[Node], seen: Dictionary[int, bool], node: Node, root: Node
 ) -> void:
 	if node == null or not _is_node_under_root(node, root):
 		return
-	var instance_id := node.get_instance_id()
+	var instance_id: int = node.get_instance_id()
 	if seen.has(instance_id):
 		return
 	seen[instance_id] = true
@@ -394,7 +435,7 @@ func _is_node_under_root(node: Node, root: Node) -> bool:
 
 
 func _ensure_database_directory(path: String) -> Error:
-	var directory := path.get_base_dir()
+	var directory: String = path.get_base_dir()
 	if directory.is_empty() or directory == "res://" or directory == "user://":
 		return OK
 	return DirAccess.make_dir_recursive_absolute(directory)
@@ -403,19 +444,19 @@ func _ensure_database_directory(path: String) -> Error:
 func _load_or_create_database(
 	cache_mode: ResourceLoader.CacheMode = ResourceLoader.CACHE_MODE_REUSE,
 ) -> GameplayTagDatabase:
-	var path := get_database_path()
+	var path: String = get_database_path()
 	if ResourceLoader.exists(path):
-		var existing_resource := ResourceLoader.load(path, "", cache_mode)
+		var existing_resource: Resource = ResourceLoader.load(path, "", cache_mode)
 		if existing_resource is GameplayTagDatabase:
 			return existing_resource
 		push_error("Expected a GameplayTagDatabase but found another resource at: %s" % path)
 		return GameplayTagDatabase.new()
 
-	var database := GameplayTagDatabase.new()
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	database.resource_path = path
-	var directory_error := _ensure_database_directory(path)
+	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error == OK:
-		var save_error := ResourceSaver.save(database, path)
+		var save_error: Error = ResourceSaver.save(database, path)
 		if save_error != OK:
 			push_error("Could not save gameplay tag database: %s" % error_string(save_error))
 	else:
@@ -428,34 +469,46 @@ func _load_or_create_database(
 func _database_path_has_incompatible_resource(path: String) -> bool:
 	if not ResourceLoader.exists(path):
 		return false
-	var existing_resource := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	var existing_resource: Resource = ResourceLoader.load(
+		path, "", ResourceLoader.CACHE_MODE_IGNORE
+	)
 	return not existing_resource is GameplayTagDatabase
 
 
-func _container_from_variant(value: Variant) -> GameplayTagContainer:
+# Accepts Variant because Object.call/get/metadata returns dynamic values.
+# Safely validates each element as StringName/String/GameplayTag/GameplayTagContainer;
+# rejects unsupported types instead of falling back to generic str().
+func _container_from_dynamic_value(value: Variant) -> GameplayTagContainer:
 	if value == null:
 		return null
 	if value is GameplayTagContainer:
 		return value.duplicate_container()
 	if value is Array:
-		return GameplayTagContainer.new(value)
+		var tags: Array[StringName] = []
+		for element in value:
+			if element is StringName or element is String:
+				tags.append(GameplayTagDatabase.normalize_tag(StringName(element)))
+			elif element is GameplayTag:
+				tags.append(element.tag_name)
+		return GameplayTagContainer.new(tags)
 	if value is GameplayTag:
 		return GameplayTagContainer.new([value.tag_name])
 	if value is StringName or value is String:
-		return GameplayTagContainer.new([value])
+		return GameplayTagContainer.new([GameplayTagDatabase.normalize_tag(StringName(value))])
 	return null
 
 
 func _container_from_known_properties(object: Object) -> GameplayTagContainer:
-	for property_name in ["owned_tags", "gameplay_tags", "tags"]:
+	for property_name in TAG_PROPERTY_NAMES:
 		if not _object_has_property(object, property_name):
 			continue
-		var value: Variant = object.get(property_name)
-		var container := _container_from_variant(value)
+		var container: GameplayTagContainer = _container_from_dynamic_value(
+			object.get(property_name)
+		)
 		if container != null:
 			return container
 	if object.has_meta(NODE_TAGS_META_NAME):
-		return _container_from_variant(object.get_meta(NODE_TAGS_META_NAME))
+		return _container_from_dynamic_value(object.get_meta(NODE_TAGS_META_NAME))
 	return null
 
 
@@ -471,7 +524,7 @@ func _find_tag_component(node: Node) -> GameplayTagComponent:
 		if child is GameplayTagComponent:
 			return child
 	for child in node.get_children():
-		var found := _find_tag_component(child)
+		var found: GameplayTagComponent = _find_tag_component(child)
 		if found != null:
 			return found
 	return null

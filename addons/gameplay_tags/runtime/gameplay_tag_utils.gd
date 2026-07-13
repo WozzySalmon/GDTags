@@ -3,15 +3,17 @@ class_name GameplayTagUtils
 extends RefCounted
 
 
-static func normalize_tag_name(raw_tag: Variant) -> StringName:
+static func normalize_tag_name(raw_tag: StringName) -> StringName:
 	return GameplayTagDatabase.normalize_tag(raw_tag)
 
 
-static func tag_matches(owned_tag: Variant, requested_tag: Variant, exact: bool = false) -> bool:
+static func tag_matches(
+	owned_tag: StringName, requested_tag: StringName, exact: bool = false
+) -> bool:
 	return GameplayTagDatabase.tag_matches(owned_tag, requested_tag, exact)
 
 
-static func canonicalize_tag_array(raw_tags: Array) -> Array[StringName]:
+static func canonicalize_tag_array(raw_tags: Array[StringName]) -> Array[StringName]:
 	return GameplayTagDatabase.canonicalize_tag_array(raw_tags)
 
 

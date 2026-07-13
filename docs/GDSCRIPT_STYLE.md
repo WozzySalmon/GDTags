@@ -13,15 +13,15 @@ Project baseline: Godot's official GDScript style guide.
 - Use spaces around operators:
 
 ```gdscript
-var damage := base_damage + bonus_damage
+var damage: int = base_damage + bonus_damage
 ```
 
 - Use trailing commas in multi-line arrays, dictionaries, and enums:
 
 ```gdscript
-var blocked_tags := [
-	"State.Stunned",
-	"State.Dead",
+var blocked_tags: Array[StringName] = [
+	&"State.Stunned",
+	&"State.Dead",
 ]
 ```
 
@@ -60,24 +60,33 @@ Use this order for GDScript files:
 
 ## Static typing
 
-- Prefer typed function parameters and return values:
+- **Always write explicit types on variables.** Do not use `:=` inference in project code.
+
+```gdscript
+var direction: Vector3 = Vector3.FORWARD
+var health: int = 100
+@onready var health_bar: ProgressBar = get_node("UI/HealthBar")
+```
+
+- Write explicit types on all function parameters and return values, not just return types:
 
 ```gdscript
 func can_move() -> bool:
-	return not tags.has("State.Stunned")
+	return not tags.has(&"State.Stunned")
+
+func add_tag(tag: StringName) -> bool:
+	...
 ```
 
-- Use `:=` when the type is obvious on the same line:
+- **Tag parameters:** Use `StringName` for single tags and `Array[StringName]` for collections. Use `Object` for APIs that accept Node, Resource, or custom RefCounted gameplay targets.
+
+- **Reserve `Variant` for engine boundary code only:** EditorProperty value handling, Object.call/get return values, undo-redo manager parameter passing, and other places where Godot itself supplies or requires dynamic values. At each such `Variant`, prefer an inline comment noting the reason. Do not propagate `Variant` into internal helper signatures; convert to concrete types at the boundary.
+
+- Explicitly type constants where GDScript allows:
 
 ```gdscript
-var direction := Vector3.FORWARD
-```
-
-- Write the type explicitly when inference would be unclear:
-
-```gdscript
-var health: int = 100
-@onready var health_bar: ProgressBar = get_node("UI/HealthBar")
+const AUTOLOAD_NAME: String = "GameplayTags"
+const TAG_COUNT: int = 10000
 ```
 
 ## Gameplay Tags project rules
@@ -88,7 +97,7 @@ var health: int = 100
 - Prefer tag checks that read like simple yes/no gates:
 
 ```gdscript
-if GameplayTags.target_has_tag(actor, "State.Stunned"):
+if GameplayTags.target_has_tag(actor, GameplayTagIds.STATE_STUNNED):
 	return
 ```
 
