@@ -162,8 +162,9 @@ Entity.Player
 The database prevents duplicate tags and invalid tag names.
 
 Renaming a branch also renames all child tags, migrates their descriptions, creates any missing new
-parents, and regenerates `GameplayTagIds`. Existing scene/resource values and script constant names
-are not rewritten automatically, so update references after a rename.
+parents, removes empty old parents unless they have their own description, and regenerates
+`GameplayTagIds`. Existing scene/resource values and script constant names are not rewritten
+automatically, so update references after a rename.
 
 ### CSV import/export
 

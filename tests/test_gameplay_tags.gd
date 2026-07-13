@@ -162,6 +162,28 @@ func _test_database() -> void:
 		"Rename should reject moving a branch beneath itself",
 	)
 
+	var moved_branch_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	moved_branch_database.add_tag(&"Old.Parent.Child")
+	assert_true(moved_branch_database.rename_tag(&"Old.Parent", &"New.Parent"))
+	assert_false(
+		moved_branch_database.has_tag(&"Old.Parent"),
+		"Rename should remove the old branch tag",
+	)
+	assert_false(
+		moved_branch_database.has_tag(&"Old"),
+		"Rename should remove an empty old parent created for the moved branch",
+	)
+	assert_true(moved_branch_database.has_tag(&"New.Parent.Child"))
+
+	var described_parent_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	described_parent_database.add_tag(&"Old.Parent.Child")
+	described_parent_database.set_tag_description(&"Old", "Explicit root description")
+	assert_true(described_parent_database.rename_tag(&"Old.Parent", &"New.Parent"))
+	assert_true(
+		described_parent_database.has_tag(&"Old"),
+		"An empty old parent with its own description should be preserved",
+	)
+
 	var orphan_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	orphan_database.tags = [&"State.Stunned"]
 	assert_eq(orphan_database.validate().size(), 1, "Database should report missing parents")

@@ -136,14 +136,15 @@ func _on_tag_multi_selected(item: TreeItem, _column: int, selected: bool) -> voi
 	else:
 		_current_tags.erase(tag)
 	_current_tags = GameplayTagDatabase.canonicalize_tag_array(_current_tags)
-	_emit_current_tags()
+	_emit_current_tags(false)
 
 
-func _emit_current_tags() -> void:
+func _emit_current_tags(refresh_popup: bool = true) -> void:
 	_updating = true
 	emit_changed(get_edited_property(), _current_tags.duplicate())
 	_refresh_summary()
-	_refresh_popup_list()
+	if refresh_popup:
+		_refresh_popup_list()
 	_updating = false
 
 

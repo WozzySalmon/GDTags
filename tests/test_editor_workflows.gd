@@ -128,6 +128,15 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		status_label.text.contains("Renamed CSV to Imported.CSV"),
 		"Dock rename should report success",
 	)
+	var reloaded_database: GameplayTagDatabase = registry.reload_database()
+	assert_false(
+		reloaded_database.has_tag(&"CSV.One"),
+		"The old renamed tag should remain absent after reloading from disk",
+	)
+	assert_true(
+		reloaded_database.has_tag(&"Imported.CSV.One"),
+		"The renamed tag should remain present after reloading from disk",
+	)
 
 	dock.free()
 	registry.set_database_path(original_database_path)

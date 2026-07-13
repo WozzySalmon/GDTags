@@ -41,6 +41,32 @@ run_script_test() {
   rm -f "$output_file"
 }
 
+run_editor_script_test() {
+  local label="$1"
+  local script_path="$2"
+  local output_file
+  output_file="$(mktemp -t gameplay_tags_editor_script_test_XXXXXX.log)"
+  printf '\n=== %s ===\n' "$label"
+  set +e
+  "$GODOT_BIN" --headless --editor --path "$PROJECT_DIR" --script "$script_path" >"$output_file" 2>&1
+  local godot_exit=$?
+  set -e
+
+  cat "$output_file"
+  if grep -Eiq 'SCRIPT ERROR|Compile Error|Parse Error|Parser Error' "$output_file"; then
+    cp "$output_file" "${output_file}.failed"
+    echo "Saved failed log: ${output_file}.failed"
+    exit 1
+  fi
+
+  if [[ $godot_exit -ne 0 ]]; then
+    rm -f "$output_file"
+    exit "$godot_exit"
+  fi
+
+  rm -f "$output_file"
+}
+
 run_editor_smoke() {
   local output_file
   output_file="$(mktemp -t gameplay_tags_editor_smoke_XXXXXX.log)"
@@ -73,6 +99,9 @@ rm -f "$PROJECT_DIR/.godot/extension_list.cfg" 2>/dev/null || true
 run_script_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_gameplay_tags.gd"
 run_script_test "GDScript editor workflow tests" "res://tests/test_editor_workflows.gd"
 run_script_test "GDScript runtime edge-case tests" "res://tests/test_runtime_edge_cases.gd"
+run_editor_script_test \
+  "GDScript editor picker interaction tests" \
+  "res://tests/test_editor_picker_interactions.gd"
 run_editor_smoke
 
 printf '\nAll Gameplay Tags smoke tests passed with %s. Native runtime is deferred in this clean restart.\n' "$GODOT_BIN"

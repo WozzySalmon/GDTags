@@ -187,9 +187,29 @@ func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 		updated_descriptions.erase(description_key)
 		updated_descriptions[renamed_description_key] = description
 
+	_prune_empty_old_parents(updated_tags, updated_descriptions, get_parent_tags(tag))
 	tags = canonicalize_tag_array(updated_tags)
 	tag_descriptions = updated_descriptions
 	return true
+
+
+func _prune_empty_old_parents(
+	updated_tags: Array[StringName],
+	updated_descriptions: Dictionary[String, String],
+	old_parents: Array[StringName],
+) -> void:
+	old_parents.reverse()
+	for old_parent in old_parents:
+		var old_parent_text: String = String(old_parent)
+		if updated_descriptions.has(old_parent_text):
+			continue
+		var has_remaining_child: bool = false
+		for candidate in updated_tags:
+			if String(candidate).begins_with(old_parent_text + "."):
+				has_remaining_child = true
+				break
+		if not has_remaining_child:
+			updated_tags.erase(old_parent)
 
 
 func add_tags(raw_tags: Array[StringName]) -> int:

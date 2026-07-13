@@ -135,10 +135,10 @@ func _on_tree_item_selected() -> void:
 	if item == null:
 		return
 	_current_tag = StringName(item.get_metadata(0))
-	_emit_current_tag()
+	_emit_current_tag(false)
 
 
-func _emit_current_tag() -> void:
+func _emit_current_tag(refresh_popup: bool = true) -> void:
 	_updating = true
 	if value_mode == VALUE_RESOURCE:
 		emit_changed(
@@ -147,7 +147,8 @@ func _emit_current_tag() -> void:
 	else:
 		emit_changed(get_edited_property(), _current_tag)
 	_refresh_summary()
-	_refresh_popup_list()
+	if refresh_popup:
+		_refresh_popup_list()
 	_updating = false
 
 
