@@ -107,5 +107,5 @@ tools\windows\package_addon.cmd
 - `docs/PLUGIN_GUIDE.md` - full plugin behavior and usage guide.
 - `addons/gameplay_tags/README.md` - addon usage notes.
 - `docs/PACKAGING.md` - release/package notes.
-- `docs/CI.md` - CI automation and local validation notes.
+- `docs/CI.md` - local validation, compatibility, benchmark, and package-test notes.
 - `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo.

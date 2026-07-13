@@ -38,8 +38,6 @@ Both scripts write:
 dist/gameplay_tags-<version>-gdscript.zip
 ```
 
-GitHub Actions also builds and uploads this archive from the Godot 4.7 matrix job.
-
 ## Install test
 
 Run the automated clean-project installation smoke test with:

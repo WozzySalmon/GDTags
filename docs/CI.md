@@ -1,48 +1,42 @@
-# CI
+# Local Validation
 
 The addon uses a GDScript/editor workflow; native GDExtension code remains deferred.
 
-GitHub Actions runs `.github/workflows/gdscript.yml` for pushes to `main`, pull requests, and
-manual dispatches. Its matrix validates both supported Godot versions:
+GitHub Actions are intentionally not configured. Validation runs locally with the scripts under
+`tools/linux/`.
 
-- Godot 4.6.3
-- Godot 4.7
+## Complete smoke suite
 
-Each matrix job downloads the matching official Linux editor and runs:
+Run the complete suite with the default Godot executable:
 
 ```bash
 tools/linux/check_gdscript.sh
 ```
 
-`check_gdscript.sh` delegates to the complete compatibility-named `test_native.sh` suite, which
-runs:
+`check_gdscript.sh` delegates to the compatibility-named `test_native.sh` suite, which runs:
 
 1. `tests/test_gameplay_tags.gd` headlessly.
 2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.
 3. `tests/test_runtime_edge_cases.gd` headlessly for CSV, mutation, trigger, and overlap paths.
-4. A headless editor/plugin load check.
-5. A packaged-addon installation smoke test in a fresh temporary Godot project.
+4. `tests/test_editor_picker_interactions.gd` in a headless editor for Inspector picker interactions.
+5. A headless editor/plugin load check.
 
 Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
-with status 0. Each matrix job also runs the 10,000-tag performance regression smoke test. The Godot
-4.7 job builds, validates, and uploads the GDScript addon package. Failed Godot logs are uploaded as
-workflow artifacts when available.
+with status 0.
 
-## Local validation
+## Supported versions
 
-Run the same complete suite with the default Godot executable:
-
-```bash
-tools/linux/check_gdscript.sh
-```
-
-Run it against both configured local versions:
+Run the suite against both configured local Godot versions:
 
 ```bash
 tools/linux/test_all_godot_versions.sh
 ```
 
-Run the performance regression smoke test or build the addon package:
+The supported versions are Godot 4.6.3 and Godot 4.7.
+
+## Performance and packaging
+
+Run the performance regression smoke test, build the addon package, and test it in a clean project:
 
 ```bash
 tools/linux/benchmark.sh
@@ -51,15 +45,10 @@ tools/linux/test_package_install.sh
 ```
 
 The benchmark fails above a deliberately generous 5,000 ms regression ceiling. Override it for a
-known slower runner with `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
+known slower machine with `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
 
-Override an executable when needed:
+Override the Godot executable when needed:
 
 ```bash
 GODOT_BIN=/path/to/godot tools/linux/check_gdscript.sh
 ```
-
-## Hosted runner note
-
-If GitHub Actions reports `startup_failure` with no job logs, hosted runners may be blocked by
-account/billing state. Treat that as infrastructure blocked rather than a gameplay-tags failure.
