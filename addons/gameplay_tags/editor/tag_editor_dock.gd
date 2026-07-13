@@ -29,6 +29,7 @@ var _selected_tag_label: Label
 var _edit_description_input: LineEdit
 var _update_description_button: Button
 var _status_label: Label
+var _add_child_button: Button
 var _rename_button: Button
 var _remove_button: Button
 var _rename_dialog: ConfirmationDialog
@@ -119,32 +120,42 @@ func _build_ui() -> void:
 	_edit_description_input.text_submitted.connect(_on_description_submitted)
 	_details_container.add_child(_edit_description_input)
 
-	var details_buttons: HBoxContainer = HBoxContainer.new()
-	details_buttons.add_theme_constant_override("separation", 6)
-	_details_container.add_child(details_buttons)
-
 	_update_description_button = Button.new()
 	_update_description_button.text = "Update Description"
-	_update_description_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_update_description_button.tooltip_text = "Save the selected tag's description"
 	_update_description_button.pressed.connect(_on_update_description_pressed)
-	details_buttons.add_child(_update_description_button)
+	_details_container.add_child(_update_description_button)
+
+	var tag_action_buttons: HBoxContainer = HBoxContainer.new()
+	tag_action_buttons.add_theme_constant_override("separation", 6)
+	_details_container.add_child(tag_action_buttons)
+
+	_add_child_button = Button.new()
+	_add_child_button.text = "Add Child"
+	_add_child_button.disabled = true
+	_add_child_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_add_child_button.tooltip_text = "Add a child beneath the selected tag"
+	_apply_editor_icon(_add_child_button, &"Add")
+	_add_child_button.pressed.connect(_on_add_child_pressed)
+	tag_action_buttons.add_child(_add_child_button)
 
 	_rename_button = Button.new()
 	_rename_button.text = "Rename"
 	_rename_button.disabled = true
+	_rename_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_rename_button.tooltip_text = "Rename or move the selected tag and its child tags"
 	_apply_editor_icon(_rename_button, &"Rename")
 	_rename_button.pressed.connect(_on_rename_pressed)
-	details_buttons.add_child(_rename_button)
+	tag_action_buttons.add_child(_rename_button)
 
 	_remove_button = Button.new()
 	_remove_button.text = "Remove"
 	_remove_button.disabled = true
+	_remove_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_remove_button.tooltip_text = "Remove the selected tag and its child tags"
 	_apply_editor_icon(_remove_button, &"Remove")
 	_remove_button.pressed.connect(_on_remove_pressed)
-	details_buttons.add_child(_remove_button)
+	tag_action_buttons.add_child(_remove_button)
 
 	add_child(HSeparator.new())
 
@@ -279,6 +290,7 @@ func _refresh() -> void:
 	_selected_tag = &""
 	_details_container.visible = false
 	_update_description_button.disabled = true
+	_add_child_button.disabled = true
 	_rename_button.disabled = true
 	_remove_button.disabled = true
 
@@ -321,6 +333,17 @@ func _include_ancestor_tags(matched_tags: Array[StringName]) -> Array[StringName
 			if _database.has_tag(parent_tag) and not tree_tags.has(parent_tag):
 				tree_tags.append(parent_tag)
 	return GameplayTagDatabase.canonicalize_tag_array(tree_tags)
+
+
+func _on_add_child_pressed() -> void:
+	if _selected_tag.is_empty():
+		_set_status("Select a parent tag first.")
+		return
+
+	_tag_input.text = "%s." % String(_selected_tag)
+	_tag_input.caret_column = _tag_input.text.length()
+	_tag_input.grab_focus()
+	_set_status("Enter the child name after %s." % String(_selected_tag))
 
 
 func _on_add_pressed() -> void:
@@ -767,6 +790,7 @@ func _on_tree_item_selected() -> void:
 		_selected_tag = &""
 		_details_container.visible = false
 		_update_description_button.disabled = true
+		_add_child_button.disabled = true
 		_rename_button.disabled = true
 		_remove_button.disabled = true
 		return
@@ -776,6 +800,7 @@ func _on_tree_item_selected() -> void:
 	_edit_description_input.text = String(_database.tag_descriptions.get(String(_selected_tag), ""))
 	_details_container.visible = true
 	_update_description_button.disabled = true
+	_add_child_button.disabled = false
 	_rename_button.disabled = false
 	_remove_button.disabled = false
 

@@ -71,8 +71,16 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 
 	var dock: Control = TagEditorDock.new()
 	root.add_child(dock)
-	dock.call("_on_import_csv_selected", csv_path)
 	var status_label: Label = dock.get("_status_label")
+	var add_child_button: Button = dock.get("_add_child_button")
+	assert_true(add_child_button.disabled, "Add Child should require a selected parent")
+	dock.call("_on_add_child_pressed")
+	assert_true(
+		status_label.text.contains("Select a parent tag first"),
+		"Add Child should explain that a parent selection is required",
+	)
+
+	dock.call("_on_import_csv_selected", csv_path)
 	var status: String = status_label.text
 	assert_true(registry.get_database().has_tag(&"CSV.One"))
 	assert_true(registry.get_database().has_tag(&"CSV.Two"))
@@ -90,6 +98,38 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		"The generated-ID failure should be reported separately",
 	)
 
+	ProjectSettings.set_setting(TAG_IDS_SETTING, tag_ids_path)
+	csv_item.select(0)
+	dock.call("_on_tree_item_selected")
+	assert_false(add_child_button.disabled, "Selecting a tag should enable Add Child")
+	dock.call("_on_add_child_pressed")
+	var tag_input: LineEdit = dock.get("_tag_input")
+	assert_eq(
+		tag_input.text,
+		"CSV.",
+		"Add Child should prefill the selected parent's full path",
+	)
+	assert_eq(
+		tag_input.caret_column,
+		tag_input.text.length(),
+		"Add Child should place the caret after the parent prefix",
+	)
+	tag_input.text += "Three"
+	var description_input: LineEdit = dock.get("_description_input")
+	description_input.text = "Third CSV tag"
+	dock.call("_on_add_pressed")
+	assert_true(
+		registry.get_database().has_tag(&"CSV.Three"),
+		"Add Child should create a child beneath the selected parent",
+	)
+	assert_eq(
+		registry.get_database().tag_descriptions.get("CSV.Three", ""),
+		"Third CSV tag",
+		"Add Child should preserve the normal description workflow",
+	)
+	assert_true(add_child_button.disabled, "Refreshing after add should clear the parent selection")
+
+	csv_one_item = _find_tree_item(tag_tree.get_root(), &"CSV.One")
 	csv_one_item.select(0)
 	dock.call("_on_tree_item_selected")
 	var edit_description_input: LineEdit = dock.get("_edit_description_input")
@@ -105,7 +145,6 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		"The dock should report a successful description update",
 	)
 
-	ProjectSettings.set_setting(TAG_IDS_SETTING, tag_ids_path)
 	var paste_input: TextEdit = dock.get("_paste_input")
 	paste_input.text = "Ability.Jump\nAbility.Run\nCSV.One"
 	dock.call("_on_paste_tags_confirmed")

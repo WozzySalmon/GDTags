@@ -16,7 +16,7 @@ Owning `State.Stunned` also satisfies checks for `State` unless exact matching i
 ## Workflow
 
 1. Enable **Project > Project Settings > Plugins > Gameplay Tags**.
-2. Add global tags in the **Gameplay Tags** dock.
+2. Add global tags in the **Gameplay Tags** dock; select a parent and choose **Add Child** to extend its hierarchy.
 3. Add a `GameplayTagComponent` child to any gameplay node.
 4. Pick the component's `owned_tags` from the central database in the Inspector.
 5. Optionally import/export simple CSV tag lists from the dock.

@@ -134,7 +134,7 @@ It lets you:
 
 - Browse tags as a collapsible parent/child tree.
 - Search existing tags while preserving their parent hierarchy.
-- Add tags.
+- Add root tags or select an existing tag and choose **Add Child** to start a child path.
 - Edit or clear existing tag descriptions with editor undo/redo.
 - Rename or move a tag branch with editor undo/redo.
 - Remove tags and their children after confirming the affected count; removals support editor undo.
@@ -144,7 +144,10 @@ It lets you:
 - Save the central database.
 - Regenerate `GameplayTagIds` constants.
 
-When you add a child tag, missing parents are created automatically.
+To add a child without retyping its parent path, select the parent in the tree and choose
+**Add Child**. The tag input is prefilled with the selected path and a trailing dot, ready for the
+new child name. Missing parents are still created automatically when a full path is entered
+manually.
 
 Example: adding this tag:
 
