@@ -16,6 +16,7 @@ signal tags_changed
 		_notify_changed()
 
 var _tag_set: Dictionary[String, bool] = {}
+var _suppress_change_notifications: bool = false
 
 
 static func normalize_tag(raw_tag: StringName) -> StringName:
@@ -23,6 +24,9 @@ static func normalize_tag(raw_tag: StringName) -> StringName:
 		return &""
 
 	var text: String = String(raw_tag)
+	if _is_already_normalized(text):
+		return raw_tag
+
 	text = text.strip_edges()
 	text = text.replace("/", ".")
 	text = text.replace("\\", ".")
@@ -39,6 +43,36 @@ static func normalize_tag(raw_tag: StringName) -> StringName:
 	if clean_segments.is_empty():
 		return &""
 	return StringName(".".join(clean_segments))
+
+
+# Normalization allocates several intermediate strings, and it runs on every tag of
+# every container built during a target check. Tags are almost always already normal,
+# so detect that in one pass and hand the original StringName straight back.
+static func _is_already_normalized(text: String) -> bool:
+	if text.is_empty():
+		return false
+	if text.begins_with(".") or text.ends_with("."):
+		return false
+	if text.contains("..") or text.contains("/") or text.contains("\\"):
+		return false
+
+	for index in range(text.length()):
+		var code: int = text.unicode_at(index)
+		if code != 46 and not _is_allowed_tag_character(code):
+			return false
+	return true
+
+
+## Canonicalizes and drops tags whose characters no database could ever accept.
+## Use this wherever tags are authored; plain canonicalization only normalizes shape.
+static func canonicalize_valid_tag_array(raw_tags: Array[StringName]) -> Array[StringName]:
+	var valid_tags: Array[StringName] = []
+	for tag in canonicalize_tag_array(raw_tags):
+		if is_canonical_tag_name(tag):
+			valid_tags.append(tag)
+		else:
+			push_warning("Ignoring gameplay tag with unsupported characters: %s" % String(tag))
+	return valid_tags
 
 
 static func canonicalize_tag_array(raw_tags: Array[StringName]) -> Array[StringName]:
@@ -83,24 +117,44 @@ static func tag_matches(
 
 
 static func is_valid_tag_name(raw_tag: StringName) -> bool:
-	var tag: String = String(normalize_tag(raw_tag))
-	if tag.is_empty():
+	return is_canonical_tag_name(normalize_tag(raw_tag))
+
+
+## Same check as [method is_valid_tag_name] for a tag that is already normalized.
+## Skips the normalization pass, which allocates several intermediate strings.
+static func is_canonical_tag_name(tag: StringName) -> bool:
+	var tag_text: String = String(tag)
+	if tag_text.is_empty():
 		return false
 
-	var allowed: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-"
-	for segment in tag.split(".", false):
+	for segment in tag_text.split(".", false):
 		if segment.is_empty():
 			return false
 		for index in range(segment.length()):
-			var character: String = segment.substr(index, 1)
-			if not allowed.contains(character):
+			if not _is_allowed_tag_character(segment.unicode_at(index)):
 				return false
 
 	return true
 
 
+static func _is_allowed_tag_character(code: int) -> bool:
+	if code >= 48 and code <= 57:
+		return true
+	if code >= 65 and code <= 90:
+		return true
+	if code >= 97 and code <= 122:
+		return true
+	return code == 95 or code == 45
+
+
 static func get_parent_tags(raw_tag: StringName) -> Array[StringName]:
-	var tag: String = String(normalize_tag(raw_tag))
+	return get_canonical_parent_tags(normalize_tag(raw_tag))
+
+
+## Same result as [method get_parent_tags] for a tag that is already normalized.
+## Skips the normalization pass; used by the per-check container cache rebuild.
+static func get_canonical_parent_tags(tag_name: StringName) -> Array[StringName]:
+	var tag: String = String(tag_name)
 	var parents: Array[StringName] = []
 	if tag.is_empty():
 		return parents
@@ -225,7 +279,7 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 		if tag == &"" or not is_valid_tag_name(tag) or existing.has(key):
 			continue
 
-		for parent in get_parent_tags(tag):
+		for parent in get_canonical_parent_tags(tag):
 			var parent_key: String = String(parent)
 			if not existing.has(parent_key):
 				existing[parent_key] = parent
@@ -330,7 +384,7 @@ func ensure_parent_tags(raw_tag: StringName = &"") -> bool:
 	var changed: bool = false
 	if raw_tag == &"":
 		for tag in tags.duplicate():
-			for parent in get_parent_tags(tag):
+			for parent in get_canonical_parent_tags(tag):
 				changed = _add_tag_unchecked(parent) or changed
 	else:
 		for parent in get_parent_tags(raw_tag):
@@ -339,9 +393,33 @@ func ensure_parent_tags(raw_tag: StringName = &"") -> bool:
 	return changed
 
 
+## Replaces the whole database in a single pass, keeping parents and signals correct.
+## Prefer this over per-tag mutation when applying a known end state, such as an
+## editor undo/redo step: per-tag rebuilds recanonicalize the array once per tag.
+func set_state(raw_tags: Array[StringName], descriptions: Dictionary[String, String]) -> void:
+	var with_parents: Array[StringName] = []
+	for tag in canonicalize_valid_tag_array(raw_tags):
+		with_parents.append(tag)
+		with_parents.append_array(get_canonical_parent_tags(tag))
+
+	_suppress_change_notifications = true
+	tags = canonicalize_tag_array(with_parents)
+
+	var kept_descriptions: Dictionary[String, String] = {}
+	for description_key in descriptions:
+		var description: String = descriptions[description_key].strip_edges()
+		if description.is_empty():
+			continue
+		var tag_key: String = String(normalize_tag(StringName(description_key)))
+		if _tag_set.has(tag_key):
+			kept_descriptions[tag_key] = description
+	tag_descriptions = kept_descriptions
+
+	_suppress_change_notifications = false
+	_notify_changed()
+
+
 func has_tag(raw_tag: StringName) -> bool:
-	if _tag_set.size() != tags.size():
-		_rebuild_cache()
 	return _tag_set.has(String(normalize_tag(raw_tag)))
 
 
@@ -381,7 +459,9 @@ func find_tags(search_text: String = "") -> Array[StringName]:
 
 	var found: Array[StringName] = []
 	for tag in tags:
-		if String(tag).to_lower().contains(needle):
+		var tag_text: String = String(tag)
+		var description: String = String(tag_descriptions.get(tag_text, ""))
+		if tag_text.to_lower().contains(needle) or description.to_lower().contains(needle):
 			found.append(tag)
 	return found
 
@@ -398,7 +478,7 @@ func validate() -> Array[String]:
 			errors.append("Duplicate gameplay tag: %s" % text)
 		elif not is_valid_tag_name(tag):
 			errors.append("Invalid gameplay tag: %s" % text)
-		for parent in get_parent_tags(tag):
+		for parent in get_canonical_parent_tags(tag):
 			var parent_text: String = String(parent)
 			if not has_tag(parent) and not missing_parent_errors.has(parent_text):
 				errors.append("Missing parent gameplay tag: %s" % parent_text)
@@ -410,8 +490,9 @@ func validate() -> Array[String]:
 func _add_tag_unchecked(tag: StringName) -> bool:
 	if tag == &"" or has_tag(tag):
 		return false
-	tags.append(tag)
-	tags = canonicalize_tag_array(tags)
+	var updated_tags: Array[StringName] = tags.duplicate()
+	updated_tags.append(tag)
+	tags = canonicalize_tag_array(updated_tags)
 	return true
 
 
@@ -434,7 +515,7 @@ func _get_protected_parent_removals(
 		var existing_key: String = String(existing)
 		if remove_set.has(existing_key):
 			continue
-		for parent in get_parent_tags(existing):
+		for parent in get_canonical_parent_tags(existing):
 			var parent_key: String = String(parent)
 			if remove_set.has(parent_key):
 				protected_tags[parent_key] = true
@@ -448,5 +529,7 @@ func _rebuild_cache() -> void:
 
 
 func _notify_changed() -> void:
+	if _suppress_change_notifications:
+		return
 	emit_changed()
 	tags_changed.emit()

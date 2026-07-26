@@ -17,7 +17,7 @@ enum Mode {
 
 @export var tags: Array[StringName] = []:
 	set(value):
-		tags = GameplayTagDatabase.canonicalize_tag_array(value)
+		tags = GameplayTagDatabase.canonicalize_valid_tag_array(value)
 		emit_changed()
 
 @export var exact: bool = false:
@@ -61,11 +61,11 @@ func matches(target: Object) -> bool:
 
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or tags.has(tag):
+	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or tags.has(tag):
 		return false
-	tags.append(tag)
-	tags = GameplayTagDatabase.canonicalize_tag_array(tags)
-	emit_changed()
+	var updated_tags: Array[StringName] = tags.duplicate()
+	updated_tags.append(tag)
+	tags = updated_tags
 	return true
 
 
@@ -116,7 +116,7 @@ static func _make(
 	var query: GameplayTagQuery = GameplayTagQuery.new()
 	query.mode = query_mode
 	query.exact = require_exact
-	query.tags = GameplayTagDatabase.canonicalize_tag_array(tag_list)
+	query.tags = tag_list
 	return query
 
 

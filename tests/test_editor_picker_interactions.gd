@@ -4,6 +4,9 @@ const TagProperty: Script = preload("res://addons/gameplay_tags/editor/gameplay_
 const TagArrayProperty: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_array_property.gd"
 )
+const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
+const DATABASE_SETTING: String = "gameplay_tags/database_path"
+const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
 
 
 class TagSelectionTarget:
@@ -15,6 +18,10 @@ class TagSelectionTarget:
 
 var _assertion_count: int = 0
 var _failed: bool = false
+var _picker_change_count: int = 0
+var _picker_changed_property: StringName = &""
+# EditorProperty.property_changed carries different property value types.
+var _picker_changed_value: Variant
 
 
 func _init() -> void:
@@ -35,6 +42,7 @@ func _run_tests() -> void:
 	database.add_tag(&"State.Stunned")
 	registry.set_database(database)
 
+	_test_tag_creation_undo_redo(registry)
 	_test_single_picker_selection()
 	_test_array_picker_selection()
 
@@ -51,6 +59,8 @@ func _test_single_picker_selection() -> void:
 	var picker: EditorProperty = TagProperty.new()
 	root.add_child(picker)
 	picker.set_object_and_property(target, &"tag")
+	_reset_picker_change()
+	picker.property_changed.connect(_on_picker_property_changed)
 	picker.call("_update_property")
 
 	var tree: Tree = picker.get("_tag_tree")
@@ -62,6 +72,13 @@ func _test_single_picker_selection() -> void:
 		item.select(0)
 		tree.set_block_signals(false)
 		picker.call("_on_tree_item_selected")
+		assert_eq(_picker_change_count, 1, "Single-tag picker should emit one property change")
+		assert_eq(_picker_changed_property, &"tag")
+		assert_eq(
+			_picker_changed_value,
+			&"State.Stunned",
+			"Single-tag picker should emit the selected tag",
+		)
 		assert_true(
 			tree.get_root() == original_root,
 			"Single-tag selection must not rebuild its Tree during the selection signal",
@@ -74,6 +91,8 @@ func _test_array_picker_selection() -> void:
 	var picker: EditorProperty = TagArrayProperty.new()
 	root.add_child(picker)
 	picker.set_object_and_property(target, &"tags")
+	_reset_picker_change()
+	picker.property_changed.connect(_on_picker_property_changed)
 	picker.call("_update_property")
 
 	var tree: Tree = picker.get("_tag_tree")
@@ -82,11 +101,98 @@ func _test_array_picker_selection() -> void:
 	assert_true(item != null, "Array-tag picker should contain the test tag")
 	if item != null:
 		picker.call("_on_tag_multi_selected", item, 0, true)
+		assert_eq(_picker_change_count, 1, "Array picker should emit one selection change")
+		assert_eq(_picker_changed_property, &"tags")
+		assert_eq(
+			_picker_changed_value,
+			[&"State.Stunned"],
+			"Array picker should emit the selected tag array",
+		)
+		picker.call("_on_tag_multi_selected", item, 0, false)
+		assert_eq(_picker_change_count, 2, "Array picker should emit deselection changes")
+		assert_eq(
+			_picker_changed_value,
+			[],
+			"Array picker should emit an empty array after deselection",
+		)
 		assert_true(
 			tree.get_root() == original_root,
 			"Array-tag selection must not rebuild its Tree during the selection signal",
 		)
 	picker.free()
+
+
+func _reset_picker_change() -> void:
+	_picker_change_count = 0
+	_picker_changed_property = &""
+	_picker_changed_value = null
+
+
+func _on_picker_property_changed(
+	property: StringName,
+	value: Variant,
+	_field_name: StringName,
+	_changing: bool,
+) -> void:
+	_picker_change_count += 1
+	_picker_changed_property = property
+	_picker_changed_value = value
+
+
+func _test_tag_creation_undo_redo(registry: Node) -> void:
+	var original_database_path: Variant = ProjectSettings.get_setting(DATABASE_SETTING)
+	var original_tag_ids_path: Variant = ProjectSettings.get_setting(TAG_IDS_SETTING)
+	var original_database: GameplayTagDatabase = registry.get_database()
+	var database_path: String = "user://gameplay_tags_undo_test_database.tres"
+	var tag_ids_path: String = "user://gameplay_tags_undo_test_ids.gd"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tag_ids_path))
+	ProjectSettings.set_setting(DATABASE_SETTING, database_path)
+	ProjectSettings.set_setting(TAG_IDS_SETTING, tag_ids_path)
+
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	database.add_tag(&"State.Stunned")
+	registry.set_database(database)
+	var undo_redo_manager: EditorUndoRedoManager = EditorInterface.get_editor_undo_redo()
+	assert_true(undo_redo_manager != null, "Editor undo manager should be available")
+	if undo_redo_manager == null:
+		return
+	undo_redo_manager.clear_history()
+
+	var dock: Control = TagEditorDock.new()
+	dock.set("undo_redo_manager", undo_redo_manager)
+	root.add_child(dock)
+	var tag_input: LineEdit = dock.get("_tag_input")
+	var description_input: LineEdit = dock.get("_description_input")
+	tag_input.text = "Editor.Undoable"
+	description_input.text = "Undoable editor tag"
+	dock.call("_on_add_pressed")
+
+	assert_true(database.has_tag(&"Editor.Undoable"), "Dock add should apply its do action")
+	var history_id: int = undo_redo_manager.get_object_history_id(database)
+	var history: UndoRedo = undo_redo_manager.get_history_undo_redo(history_id)
+	assert_true(history != null and history.has_undo(), "Dock add should create an undo action")
+	if history != null:
+		assert_true(history.undo(), "Dock add action should be undoable")
+		assert_true(
+			not database.has_tag(&"Editor.Undoable"),
+			"Undo should remove the newly added tag and parent",
+		)
+		assert_true(history.redo(), "Dock add action should be redoable")
+		assert_true(database.has_tag(&"Editor.Undoable"), "Redo should restore the added tag")
+		assert_eq(
+			database.tag_descriptions.get("Editor.Undoable", ""),
+			"Undoable editor tag",
+			"Redo should restore the added tag description",
+		)
+
+	undo_redo_manager.clear_history(history_id)
+	dock.free()
+	registry.set_database(original_database)
+	ProjectSettings.set_setting(DATABASE_SETTING, original_database_path)
+	ProjectSettings.set_setting(TAG_IDS_SETTING, original_tag_ids_path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(tag_ids_path))
 
 
 func _find_tree_item(parent: TreeItem, tag: StringName) -> TreeItem:
@@ -99,6 +205,15 @@ func _find_tree_item(parent: TreeItem, tag: StringName) -> TreeItem:
 			return nested_item
 		item = item.get_next()
 	return null
+
+
+func assert_eq(actual: Variant, expected: Variant, message: String = "Values should match") -> void:
+	_assertion_count += 1
+	if actual == expected or _failed:
+		return
+	_failed = true
+	push_error("%s: expected %s, got %s" % [message, str(expected), str(actual)])
+	quit(1)
 
 
 func assert_true(condition: bool, message: String) -> void:

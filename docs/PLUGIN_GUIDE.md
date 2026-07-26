@@ -99,7 +99,9 @@ gameplay_tags/generated_tag_ids_path = res://gameplay_tag_ids.gd
 ```
 
 Most projects can leave these alone. The database path must either be unused or point to a
-`GameplayTagDatabase`; the addon refuses to replace another resource type at that path.
+`GameplayTagDatabase`; the addon refuses to replace another resource type at that path. The
+generated-ID path must likewise be unused or contain a `GameplayTagIds` script with the addon's
+generated-file marker. Generation refuses to alter any other existing script.
 
 ## Enabling the plugin
 
@@ -133,8 +135,8 @@ The dock is where you manage the global tag database.
 It lets you:
 
 - Browse tags as a collapsible parent/child tree.
-- Search existing tags while preserving their parent hierarchy.
-- Add root tags or select an existing tag and choose **Add Child** to start a child path.
+- Search tag names and descriptions while preserving the parent hierarchy.
+- Add root or child tags with editor undo/redo; **Add Child** prefills the selected parent path.
 - Edit or clear existing tag descriptions with editor undo/redo.
 - Rename or move a tag branch with editor undo/redo.
 - Remove tags and their children after confirming the affected count; removals support editor undo.
@@ -255,7 +257,8 @@ The array picker intentionally does not hijack every random `Array[StringName]` 
 
 ## GameplayTagComponent
 
-Add `GameplayTagComponent` as a child of any node that should own tags.
+Add `GameplayTagComponent` as a **direct child** of any node that should own tags. Components
+nested deeper do not contribute tags to that node.
 
 Common setup:
 
@@ -274,6 +277,12 @@ Important exported properties:
 ```
 
 When `validate_with_database` is true, the component rejects tags that are not in the central database.
+When it is false, explicitly accepted unregistered tags remain visible through both the component
+methods and the `GameplayTags.target_has_*()` helpers.
+
+`validate_with_database` controls *database membership* only. Tag names whose characters no database
+could ever accept are always rejected, so containers, components, queries, and triggers can never
+hold a tag that would fail `GameplayTagDatabase.is_valid_tag_name()`.
 
 Useful methods:
 
@@ -304,6 +313,9 @@ if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM):
 ```
 
 Direct tags are stored in node metadata named `gameplay_tags` and the node is added to the `gameplay_tagged_nodes` group. The API still validates against the central database by default.
+Pass `false` as the validation argument to `set_node_tags()`, `add_tag_to_node()`, or
+`add_tags_to_node()` to accept unregistered tags deliberately. Those tags remain visible through
+`get_owned_gameplay_tags()` and the `target_has_*()` helpers.
 
 Useful methods:
 
@@ -421,6 +433,18 @@ GameplayTags.export_tags_to_csv("res://tags_export.csv")
 `reload_database()` bypasses the ResourceLoader reuse cache and re-reads the configured database
 from disk. The dock's **Tools > Refresh** action uses the same reload path.
 
+`GameplayTagDatabase.set_state(tags, descriptions)` replaces the whole database in one pass and
+emits a single change signal. Prefer it over per-tag mutation when you already know the end state,
+such as applying an editor undo step; rebuilding tag by tag recanonicalizes the array once per tag.
+
+### Saving at runtime
+
+The `save_now` arguments default to `true`, which is right in the editor. In an **exported build**
+`res://` is packed and read-only, so those writes cannot succeed. The addon detects this, skips the
+write, and warns once instead of failing on every call; the in-memory database still updates
+normally. If a shipped game needs to persist tag changes, either pass `save_now = false` and manage
+persistence yourself, or point `gameplay_tags/database_path` at a `user://` location.
+
 ## How `GameplayTags` finds tags on a target
 
 You can pass a `Node`, `GameplayTagComponent`, `GameplayTagContainer`, `GameplayTag`, or array of tags.
@@ -435,9 +459,20 @@ For objects/nodes, `GameplayTags` collects tags from these sources:
    - `gameplay_tags`
    - `tags`
 5. The object has metadata named `gameplay_tags`, including tags set through the direct node tag API.
-6. The node has a child `GameplayTagComponent` somewhere under it.
+6. The node has one or more `GameplayTagComponent` **direct children**. Every direct child
+   component contributes its tags; deeper descendants do not.
 
-For nodes, direct node metadata and child `GameplayTagComponent` tags are merged before central database filtering. For plain objects, explicit `get_owned_gameplay_tags()` / `get_gameplay_tags()` methods take precedence over similarly named properties.
+For nodes, direct node metadata and direct child `GameplayTagComponent` tags are merged. Resolved
+tags are not filtered against the central database, so tags accepted through an explicit validation
+opt-out stay visible. For plain objects, explicit `get_owned_gameplay_tags()` / `get_gameplay_tags()`
+methods take precedence over similarly named properties.
+
+The child component search is deliberately one level deep. A recursive search would make every
+ancestor of a tagged entity report that entity's tags, so a level root or a spawner would match
+its own contents.
+
+`GameplayTagDatabase` and `GameplayTagQuery` are never treated as tag owners even though both
+expose a `tags` property: one is a catalog and the other is a filter.
 
 This means the recommended pattern is simple:
 

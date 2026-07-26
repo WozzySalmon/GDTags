@@ -29,6 +29,7 @@ var _assertion_count: int = 0
 var _failed: bool = false
 var _previous_database: GameplayTagDatabase
 var _query_change_count: int = 0
+var _database_change_count: int = 0
 var _registry: Node
 
 
@@ -48,6 +49,10 @@ func _run_all_tests() -> void:
 	_run_test("component_target_helpers", _test_component_target_helpers)
 	_run_test("direct_node_tags_and_csv", _test_direct_node_tags_and_csv)
 	_run_test("plain_object_target_helpers", _test_plain_object_target_helpers)
+	_run_test("component_lookup_is_bounded_to_children", _test_component_lookup_is_bounded)
+	_run_test("tag_names_are_validated_everywhere", _test_tag_name_validation)
+	_run_test("catalog_objects_are_not_tag_targets", _test_catalog_objects_are_not_targets)
+	_run_test("database_set_state_applies_whole_state", _test_database_set_state)
 	_run_test("query_modes", _test_query_modes)
 	_run_test("area3d_trigger_helper", _test_area3d_trigger_helper)
 
@@ -118,6 +123,11 @@ func _test_database() -> void:
 		database.tag_descriptions.get("State.Stunned", ""),
 		"Prevents movement",
 		"Existing tag descriptions should be editable",
+	)
+	assert_eq(
+		database.find_tags("PREVENTS MOVEMENT"),
+		[&"State.Stunned"],
+		"Search should find tags by description without case sensitivity",
 	)
 	assert_false(
 		database.set_tag_description(&"State.Stunned", "Prevents movement"),
@@ -248,6 +258,53 @@ func _test_generated_id_collisions() -> void:
 	assert_eq(collisions[0]["name"], "FOO_BAR")
 	assert_eq(collisions[0]["tags"].size(), 2)
 
+	var generated_path: String = "user://gameplay_tags_generated_ids_test.gd"
+	var unrelated_path: String = "user://gameplay_tags_unrelated_script_test.gd"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(generated_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(unrelated_path))
+
+	var generated_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	generated_database.add_tag(&"State.Stunned")
+	assert_eq(
+		TagCodeGenerator.save_tag_ids(generated_database, generated_path),
+		OK,
+		"Generated-ID output should be writable when the path is unused",
+	)
+	var first_generated_source: String = FileAccess.get_file_as_string(generated_path)
+	assert_true(
+		first_generated_source.contains(TagCodeGenerator.GENERATED_FILE_MARKER),
+		"Generated-ID output should include its ownership marker",
+	)
+	generated_database.add_tag(&"Team.Enemy")
+	assert_eq(
+		TagCodeGenerator.save_tag_ids(generated_database, generated_path),
+		OK,
+		"Recognizably generated output should be replaceable",
+	)
+	assert_true(
+		FileAccess.get_file_as_string(generated_path).contains("const TEAM_ENEMY"),
+		"Replacing generated output should write the latest tags",
+	)
+
+	var sentinel_source: String = 'extends Node\n\nconst SENTINEL: String = "keep me"\n'
+	var unrelated_file: FileAccess = FileAccess.open(unrelated_path, FileAccess.WRITE)
+	assert_true(unrelated_file != null, "Unrelated script fixture should be writable")
+	if unrelated_file != null:
+		unrelated_file.store_string(sentinel_source)
+		unrelated_file.close()
+	assert_eq(
+		TagCodeGenerator.save_tag_ids(generated_database, unrelated_path),
+		ERR_FILE_UNRECOGNIZED,
+		"Generated-ID output should refuse an unrelated existing script",
+	)
+	assert_eq(
+		FileAccess.get_file_as_string(unrelated_path),
+		sentinel_source,
+		"Refused generated-ID output must preserve unrelated bytes",
+	)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(generated_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(unrelated_path))
+
 
 func _test_container() -> void:
 	var container: GameplayTagContainer = GameplayTagContainer.new()
@@ -299,6 +356,12 @@ func _test_component_target_helpers() -> void:
 		"Actor child component should be found"
 	)
 	assert_true(_registry.target_has_tag(component, GameplayTagIds.TEAM_ENEMY, true))
+	component.validate_with_database = false
+	assert_true(component.add_tag(&"Custom.Unregistered"))
+	assert_true(
+		_registry.target_has_tag(component, &"Custom"),
+		"Target helpers should preserve component tags accepted with validation disabled",
+	)
 	assert_false(_registry.target_has_tag(actor, &"Team", true), "Exact parent should fail")
 
 	var owned: GameplayTagContainer = _registry.get_owned_gameplay_tags(actor)
@@ -341,6 +404,20 @@ func _test_direct_node_tags_and_csv() -> void:
 	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
 	actor.free()
 
+	var custom_actor: Node = Node.new()
+	root.add_child(custom_actor)
+	var custom_tags: Array[StringName] = [&"Custom.Unregistered"]
+	assert_true(_registry.set_node_tags(custom_actor, custom_tags, false))
+	assert_true(
+		_registry.get_owned_gameplay_tags(custom_actor).has_tag(&"Custom.Unregistered", true),
+		"Owned-tag reads should preserve direct node tags written without validation",
+	)
+	assert_true(
+		_registry.target_has_tag(custom_actor, &"Custom"),
+		"Target helpers should preserve direct node tags written without validation",
+	)
+	custom_actor.free()
+
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	assert_eq(database.add_tags_from_csv_text("Ability,Dash\nDamage/Ice\n"), 2)
 	assert_true(database.has_tag(&"Ability"), "CSV import should create parent tags")
@@ -374,6 +451,112 @@ func _test_plain_object_target_helpers() -> void:
 	)
 
 
+func _test_component_lookup_is_bounded() -> void:
+	var level: Node = Node.new()
+	root.add_child(level)
+	var actor: Node = Node.new()
+	level.add_child(actor)
+	var component: GameplayTagComponent = GameplayTagComponent.new()
+	actor.add_child(component)
+	component.add_tag(GameplayTagIds.TEAM_ENEMY)
+
+	assert_true(
+		_registry.target_has_tag(actor, GameplayTagIds.TEAM),
+		"A direct child component should still provide its parent's tags",
+	)
+	assert_false(
+		_registry.target_has_tag(level, GameplayTagIds.TEAM),
+		"An ancestor must not inherit tags from a deeper entity's component",
+	)
+	assert_false(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).has(level),
+		"Group lookups must not report ancestors as tag owners",
+	)
+
+	var second_component: GameplayTagComponent = GameplayTagComponent.new()
+	actor.add_child(second_component)
+	second_component.add_tag(GameplayTagIds.STATE_STUNNED)
+	var merged_tags: Array[StringName] = [
+		GameplayTagIds.TEAM_ENEMY,
+		GameplayTagIds.STATE_STUNNED,
+	]
+	assert_true(
+		_registry.target_has_all(actor, merged_tags),
+		"Every direct child component should contribute its tags",
+	)
+	level.free()
+
+
+func _test_tag_name_validation() -> void:
+	var invalid_tags: Array[StringName] = [&"Bad!Tag", &"Team.Enemy"]
+	var container: GameplayTagContainer = GameplayTagContainer.new(invalid_tags)
+	assert_eq(
+		container.get_tags(),
+		[GameplayTagIds.TEAM_ENEMY],
+		"Containers should drop tags no database could accept",
+	)
+	assert_false(container.add_tag(&"Also@Bad"), "Containers should reject invalid tag names")
+	assert_eq(container.add_tags(invalid_tags), 0, "Bulk container adds should skip invalid names")
+
+	var query: GameplayTagQuery = GameplayTagQuery.all(invalid_tags)
+	assert_eq(query.tags, [GameplayTagIds.TEAM_ENEMY], "Queries should drop invalid tag names")
+	assert_false(query.add_tag(&"Also@Bad"), "Queries should reject invalid tag names")
+
+	var component: GameplayTagComponent = GameplayTagComponent.new()
+	component.validate_with_database = false
+	root.add_child(component)
+	assert_false(
+		component.add_tag(&"Also@Bad"),
+		"Disabling database validation must not accept unusable tag names",
+	)
+	component.owned_tags = invalid_tags
+	assert_eq(component.owned_tags, [GameplayTagIds.TEAM_ENEMY])
+	component.free()
+
+
+func _test_catalog_objects_are_not_targets() -> void:
+	var database: GameplayTagDatabase = _registry.get_database()
+	assert_false(
+		_registry.target_has_tag(database, GameplayTagIds.TEAM_ENEMY),
+		"A database catalogs tags; it does not own them",
+	)
+
+	var query_tags: Array[StringName] = [GameplayTagIds.TEAM_ENEMY]
+	var query: GameplayTagQuery = GameplayTagQuery.all(query_tags)
+	assert_false(
+		_registry.target_has_tag(query, GameplayTagIds.TEAM_ENEMY),
+		"A query describes a filter; it does not own the tags it matches",
+	)
+
+
+func _test_database_set_state() -> void:
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	database.add_tag(&"Discarded.Tag", "Discarded description")
+
+	var state_tags: Array[StringName] = [&"State.Stunned.Heavy", &"Bad!Tag"]
+	var state_descriptions: Dictionary[String, String] = {
+		"State.Stunned": "Stunned state",
+		"Missing.Tag": "Description for a tag that is not in the new state",
+	}
+	_database_change_count = 0
+	database.tags_changed.connect(_on_database_changed)
+	database.set_state(state_tags, state_descriptions)
+
+	assert_true(database.has_tag(&"State"), "set_state should create missing parents")
+	assert_true(database.has_tag(&"State.Stunned.Heavy"))
+	assert_false(database.has_tag(&"Discarded.Tag"), "set_state should replace the previous state")
+	assert_false(database.has_tag(&"Bad!Tag"), "set_state should drop invalid tag names")
+	assert_eq(database.tag_descriptions.get("State.Stunned", ""), "Stunned state")
+	assert_false(
+		database.tag_descriptions.has("Missing.Tag"),
+		"Descriptions for tags outside the new state should be dropped",
+	)
+	assert_false(database.tag_descriptions.has("Discarded.Tag"))
+	assert_eq(
+		_database_change_count, 1, "set_state should apply the whole state in one change signal"
+	)
+
+
 func _test_query_modes() -> void:
 	var component: GameplayTagComponent = GameplayTagComponent.new()
 	root.add_child(component)
@@ -396,6 +579,21 @@ func _test_query_modes() -> void:
 	)
 	assert_false(
 		GameplayTagQuery.exact_all([&"State"]).matches(component.get_owned_gameplay_tags())
+	)
+
+	var populated_container: GameplayTagContainer = GameplayTagContainer.new([&"State.Stunned"])
+	var empty_query_tags: Array[StringName] = []
+	assert_true(
+		GameplayTagQuery.all(empty_query_tags).matches(populated_container),
+		"ALL with no required tags should match a valid target",
+	)
+	assert_false(
+		GameplayTagQuery.any(empty_query_tags).matches(populated_container),
+		"ANY with no required tags should not match",
+	)
+	assert_true(
+		GameplayTagQuery.none(empty_query_tags).matches(populated_container),
+		"NONE with no blocked tags should match",
 	)
 
 	var observed_query: GameplayTagQuery = GameplayTagQuery.new()
@@ -434,6 +632,10 @@ func _test_area3d_trigger_helper() -> void:
 
 func _on_query_changed() -> void:
 	_query_change_count += 1
+
+
+func _on_database_changed() -> void:
+	_database_change_count += 1
 
 
 func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:

@@ -57,7 +57,7 @@ func _init() -> void:
 
 
 func _run() -> void:
-	var registry := root.get_node_or_null("GameplayTags")
+	var registry: Node = root.get_node_or_null("GameplayTags")
 	if registry == null:
 		_fail("GameplayTags autoload was not registered by the packaged plugin")
 		return

@@ -28,13 +28,14 @@ func set_owned_gameplay_tags(raw_tags: Array[StringName]) -> void:
 
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or owned_tags.has(tag):
+	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or owned_tags.has(tag):
 		return false
 	if validate_with_database and not _is_registered_tag(tag):
 		push_warning("Gameplay tag is not in the central database: %s" % String(tag))
 		return false
-	owned_tags.append(tag)
-	owned_tags = GameplayTagDatabase.canonicalize_tag_array(owned_tags)
+	var updated_tags: Array[StringName] = owned_tags.duplicate()
+	updated_tags.append(tag)
+	owned_tags = updated_tags
 	return true
 
 
@@ -62,7 +63,9 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 
 
 func _filter_registered_tags(raw_tags: Array[StringName]) -> Array[StringName]:
-	var canonical_tags: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(raw_tags)
+	var canonical_tags: Array[StringName] = GameplayTagDatabase.canonicalize_valid_tag_array(
+		raw_tags
+	)
 	if not validate_with_database:
 		return canonical_tags
 

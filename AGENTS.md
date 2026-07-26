@@ -2,60 +2,25 @@
 
 When editing this project, follow these rules.
 
-## GDScript style
+## Always-on invariants
 
-- Follow `docs/GDSCRIPT_STYLE.md` and Godot's official GDScript style guide:
-  https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html
+- Follow `docs/GDSCRIPT_STYLE.md` and Godot's official GDScript style guide.
 - Write explicit types on every variable, constant, function parameter, and return value; do not use `:=`.
-- Use `Variant` only in narrow adapters for dynamic Godot engine values, then validate and convert immediately.
-- Keep code readable as simple gameplay-tag gates where possible: "has tag -> yes/no -> continue/stop".
-
-## Gameplay Tags conventions
-
 - Use the `GameplayTags` autoload for target checks, containers, queries, and database operations.
-- Do not directly mutate `GameplayTagDatabase.tags` from editor/runtime code. Use `add_tag()`, `remove_tag()`, and `ensure_parent_tags()`.
-- Editor plugin scripts are `@tool`; any Resource/RefCounted script whose methods are called by editor tool code must also be `@tool`.
+- Do not directly mutate `GameplayTagDatabase.tags`; use its mutation methods so hierarchy and signals stay correct.
+- Editor plugin scripts are `@tool`; Resources and RefCounted scripts called by editor tool code must also be `@tool`.
 - Keep the addon implementation pure GDScript.
 
-## Project layout
+## Context and workflow
 
-- `addons/gameplay_tags/` - addon files that users install.
-- `tests/` and `benchmarks/` - validation and performance scripts.
-- `docs/` - usage, style, and packaging notes.
-- `tools/linux/` - Linux build/test/lint commands.
-- `tools/windows/` - Windows test/lint/package commands.
-
-## Validation
-
-- After GDScript edits, run:
-
-```bash
-tools/linux/check_gdscript.sh
-```
-
-- To smoke-test the configured Godot versions, run:
-
-```bash
-tools/linux/test_all_godot_versions.sh
-```
-
-- To validate the packaged release ZIP in a clean temporary project, run:
-
-```bash
-tools/linux/test_package_install.sh
-```
-
-- Optional style tools if `gdtoolkit` is installed:
-
-```bash
-tools/linux/format_gdscript.sh
-tools/linux/lint_gdscript.sh
-```
-
-- Windows validation/packaging uses the Windows scripts:
-
-```bat
-tools\windows\check_gdscript.cmd
-tools\windows\test_addon.cmd
-tools\windows\package_addon.cmd
-```
+- For non-trivial work, start with `docs/PROJECT_MAP.md`. Select the smallest matching task route,
+  inspect its entry point and nearest tests, and expand only through relevant callers and dependencies.
+  The map is a navigation aid; current source and tests are authoritative.
+- Before editing, define the observable behavior, important boundaries, and invariant. For behavioral
+  bugs, reproduce the failure and add a focused regression test first when practical.
+- Implement the smallest coherent change. Validate from cheapest and narrowest to broadest, and let
+  every check finish against a stable source snapshot; never edit files while a check is running.
+- Load the matching project skill for detailed typing, editor, regression, or validation procedures.
+  Treat `docs/VALIDATION.md` and `docs/PACKAGING.md` as the canonical command references.
+- During cleanup, remove generated or ignored artifacts only. Preserve substantive untracked drafts
+  and backlogs unless the user explicitly names them for deletion.

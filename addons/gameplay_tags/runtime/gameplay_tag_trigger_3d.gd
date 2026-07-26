@@ -12,7 +12,7 @@ enum MatchMode {
 
 @export var required_tags: Array[StringName] = []:
 	set(value):
-		required_tags = GameplayTagDatabase.canonicalize_tag_array(value)
+		required_tags = GameplayTagDatabase.canonicalize_valid_tag_array(value)
 
 @export var match_mode: MatchMode = MatchMode.ALL
 @export var exact_match: bool = false

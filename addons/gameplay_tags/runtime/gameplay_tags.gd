@@ -9,6 +9,7 @@ const NODE_TAG_GROUP: StringName = &"gameplay_tagged_nodes"
 const TAG_PROPERTY_NAMES: Array[String] = ["owned_tags", "gameplay_tags", "tags"]
 
 var _database: GameplayTagDatabase
+var _warned_read_only_target: bool = false
 
 
 func _ready() -> void:
@@ -52,6 +53,9 @@ func reload_database() -> GameplayTagDatabase:
 func save_database() -> Error:
 	var database: GameplayTagDatabase = get_database()
 	var path: String = get_database_path()
+	if not _can_write_to_path(path):
+		_warn_read_only_target(path)
+		return ERR_UNAVAILABLE
 	if _database_path_has_incompatible_resource(path):
 		push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return ERR_INVALID_DATA
@@ -153,6 +157,9 @@ func import_tags_from_csv(path: String, save_now: bool = true) -> int:
 
 
 func export_tags_to_csv(path: String) -> Error:
+	if not _can_write_to_path(path):
+		_warn_read_only_target(path)
+		return ERR_UNAVAILABLE
 	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error != OK:
 		push_error(
@@ -189,12 +196,9 @@ func make_query_none(tags: Array[StringName], exact: bool = false) -> GameplayTa
 func get_node_tags(node: Node) -> GameplayTagContainer:
 	if node == null:
 		return GameplayTagContainer.new()
-	var node_tags: GameplayTagContainer = _container_from_dynamic_value(
-		node.get_meta(NODE_TAGS_META_NAME, [])
-	)
-	if node_tags == null:
-		return GameplayTagContainer.new()
-	return node_tags
+	var node_tags: Array[StringName] = []
+	_append_tags_from_dynamic_value(node.get_meta(NODE_TAGS_META_NAME, []), node_tags)
+	return GameplayTagContainer.new(node_tags)
 
 
 func set_node_tags(
@@ -266,14 +270,17 @@ func get_nodes_with_tag(
 
 # target is Object because it may be Node, Resource, or a custom RefCounted.
 func get_owned_gameplay_tags(target: Object) -> GameplayTagContainer:
-	var result: GameplayTagContainer = GameplayTagContainer.new()
 	if target is GameplayTagContainer:
-		result = target.duplicate_container()
-	elif target is GameplayTag:
-		result = GameplayTagContainer.new([target.tag_name])
-	elif target is Object:
-		result = _get_owned_gameplay_tags_from_object(target)
-	return _filter_container_to_database(result)
+		return target.duplicate_container()
+	if target is GameplayTag:
+		return GameplayTagContainer.new([target.tag_name])
+	if target is GameplayTagDatabase or target is GameplayTagQuery:
+		# Both expose a `tags` property, but it describes a catalog or a filter,
+		# not tags the object owns. Treat them as untagged rather than matching everything.
+		return GameplayTagContainer.new()
+	if target is Object:
+		return _get_owned_gameplay_tags_from_object(target)
+	return GameplayTagContainer.new()
 
 
 func target_has_tag(target: Object, tag: StringName, exact: bool = false) -> bool:
@@ -330,38 +337,29 @@ func get_first_overlapping_target_with_tag(
 	return null
 
 
+# Collects into one plain array and builds a single container at the end. Merging
+# container into container re-canonicalized and re-emitted change signals per source,
+# which is wasted work on a throwaway result.
 func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContainer:
-	var result: GameplayTagContainer = GameplayTagContainer.new()
+	var collected: Array[StringName] = []
 	var used_explicit_method: bool = false
 	if object is GameplayTagComponent:
-		_add_container_tags(result, object.get_owned_gameplay_tags())
+		collected.append_array(object.owned_tags)
 		used_explicit_method = true
 	elif object.has_method("get_owned_gameplay_tags") and object != self:
-		var method_container: GameplayTagContainer = _container_from_dynamic_value(
-			object.call("get_owned_gameplay_tags")
+		used_explicit_method = _append_tags_from_dynamic_value(
+			object.call("get_owned_gameplay_tags"), collected
 		)
-		if method_container != null:
-			_add_container_tags(result, method_container)
-			used_explicit_method = true
 	elif object.has_method("get_gameplay_tags"):
-		var tags_container: GameplayTagContainer = _container_from_dynamic_value(
-			object.call("get_gameplay_tags")
+		used_explicit_method = _append_tags_from_dynamic_value(
+			object.call("get_gameplay_tags"), collected
 		)
-		if tags_container != null:
-			_add_container_tags(result, tags_container)
-			used_explicit_method = true
 
 	if not used_explicit_method or object is Node:
-		_add_container_tags(result, _container_from_known_properties(object))
+		_append_known_property_tags(object, collected)
 	if object is Node:
-		var component: GameplayTagComponent = _find_tag_component(object)
-		if component != null:
-			_add_container_tags(result, component.get_owned_gameplay_tags())
-	return result
-
-
-func _filter_container_to_database(container: GameplayTagContainer) -> GameplayTagContainer:
-	return _filter_tags_to_database(container.get_tags())
+		_append_child_component_tags(object, collected)
+	return GameplayTagContainer.new(collected)
 
 
 func _filter_tags_to_database(
@@ -375,11 +373,6 @@ func _filter_tags_to_database(
 		elif warn_on_invalid:
 			push_warning("Gameplay tag is not in the central database: %s" % String(tag))
 	return GameplayTagContainer.new(registered_tags)
-
-
-func _add_container_tags(target: GameplayTagContainer, source: GameplayTagContainer) -> void:
-	if source != null:
-		target.add_tags(source.get_tags())
 
 
 func _update_node_tag_group(node: Node, node_tags: Array[StringName]) -> void:
@@ -434,6 +427,29 @@ func _is_node_under_root(node: Node, root: Node) -> bool:
 	return root == null or node == root or root.is_ancestor_of(node)
 
 
+# res:// is packed and read-only in an exported build, so the save_now defaults on the
+# mutation helpers would fail on every call. Report it once instead of per-call error spam.
+func _can_write_to_path(path: String) -> bool:
+	if not path.begins_with("res://"):
+		return true
+	return OS.has_feature("editor")
+
+
+func _warn_read_only_target(path: String) -> void:
+	if _warned_read_only_target:
+		return
+	_warned_read_only_target = true
+	push_warning(
+		(
+			(
+				"Gameplay tag writes to %s are skipped because res:// is read-only in exported builds. "
+				+ "Pass save_now = false at runtime, or write to user:// instead."
+			)
+			% path
+		)
+	)
+
+
 func _ensure_database_directory(path: String) -> Error:
 	var directory: String = path.get_base_dir()
 	if directory.is_empty() or directory == "res://" or directory == "user://":
@@ -454,6 +470,9 @@ func _load_or_create_database(
 
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	database.resource_path = path
+	if not _can_write_to_path(path):
+		_warn_read_only_target(path)
+		return database
 	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error == OK:
 		var save_error: Error = ResourceSaver.save(database, path)
@@ -477,54 +496,44 @@ func _database_path_has_incompatible_resource(path: String) -> bool:
 
 # Accepts Variant because Object.call/get/metadata returns dynamic values.
 # Safely validates each element as StringName/String/GameplayTag/GameplayTagContainer;
-# rejects unsupported types instead of falling back to generic str().
-func _container_from_dynamic_value(value: Variant) -> GameplayTagContainer:
+# rejects unsupported types instead of falling back to generic str(). Returns whether
+# the value was a tag source at all, so callers can tell "no such property" apart from
+# "an empty tag list".
+func _append_tags_from_dynamic_value(value: Variant, out_tags: Array[StringName]) -> bool:
 	if value == null:
-		return null
+		return false
 	if value is GameplayTagContainer:
-		return value.duplicate_container()
+		out_tags.append_array(value.get_tags())
+		return true
 	if value is Array:
-		var tags: Array[StringName] = []
 		for element in value:
 			if element is StringName or element is String:
-				tags.append(GameplayTagDatabase.normalize_tag(StringName(element)))
+				out_tags.append(GameplayTagDatabase.normalize_tag(StringName(element)))
 			elif element is GameplayTag:
-				tags.append(element.tag_name)
-		return GameplayTagContainer.new(tags)
+				out_tags.append(element.tag_name)
+		return true
 	if value is GameplayTag:
-		return GameplayTagContainer.new([value.tag_name])
+		out_tags.append(value.tag_name)
+		return true
 	if value is StringName or value is String:
-		return GameplayTagContainer.new([GameplayTagDatabase.normalize_tag(StringName(value))])
-	return null
-
-
-func _container_from_known_properties(object: Object) -> GameplayTagContainer:
-	for property_name in TAG_PROPERTY_NAMES:
-		if not _object_has_property(object, property_name):
-			continue
-		var container: GameplayTagContainer = _container_from_dynamic_value(
-			object.get(property_name)
-		)
-		if container != null:
-			return container
-	if object.has_meta(NODE_TAGS_META_NAME):
-		return _container_from_dynamic_value(object.get_meta(NODE_TAGS_META_NAME))
-	return null
-
-
-func _object_has_property(object: Object, property_name: String) -> bool:
-	for property in object.get_property_list():
-		if String(property.get("name", "")) == property_name:
-			return true
+		out_tags.append(GameplayTagDatabase.normalize_tag(StringName(value)))
+		return true
 	return false
 
 
-func _find_tag_component(node: Node) -> GameplayTagComponent:
+func _append_known_property_tags(object: Object, out_tags: Array[StringName]) -> void:
+	for property_name in TAG_PROPERTY_NAMES:
+		# Object.get() yields null for properties the object does not declare, so this
+		# needs no property-list scan. Scanning cost dominated every target check.
+		if _append_tags_from_dynamic_value(object.get(property_name), out_tags):
+			return
+	if object.has_meta(NODE_TAGS_META_NAME):
+		_append_tags_from_dynamic_value(object.get_meta(NODE_TAGS_META_NAME), out_tags)
+
+
+# Only direct children count. A recursive search made every ancestor of a tagged
+# entity report that entity's tags, so container nodes matched their contents.
+func _append_child_component_tags(node: Node, out_tags: Array[StringName]) -> void:
 	for child in node.get_children():
 		if child is GameplayTagComponent:
-			return child
-	for child in node.get_children():
-		var found: GameplayTagComponent = _find_tag_component(child)
-		if found != null:
-			return found
-	return null
+			out_tags.append_array(child.owned_tags)

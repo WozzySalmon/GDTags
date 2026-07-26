@@ -6,7 +6,7 @@ signal tags_changed
 
 @export var tags: Array[StringName] = []:
 	set(value):
-		tags = GameplayTagDatabase.canonicalize_tag_array(value)
+		tags = GameplayTagDatabase.canonicalize_valid_tag_array(value)
 		_rebuild_cache()
 		_notify_changed()
 
@@ -16,19 +16,20 @@ var _match_tag_set: Dictionary[String, bool] = {}
 
 func _init(initial_tags: Array[StringName] = []) -> void:
 	if not initial_tags.is_empty():
-		tags = GameplayTagDatabase.canonicalize_tag_array(initial_tags)
+		tags = initial_tags
 
 
 func set_tags(raw_tags: Array[StringName]) -> void:
-	tags = GameplayTagDatabase.canonicalize_tag_array(raw_tags)
+	tags = raw_tags
 
 
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or tags.has(tag):
+	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or tags.has(tag):
 		return false
-	tags.append(tag)
-	tags = GameplayTagDatabase.canonicalize_tag_array(tags)
+	var updated_tags: Array[StringName] = tags.duplicate()
+	updated_tags.append(tag)
+	tags = updated_tags
 	return true
 
 
@@ -45,13 +46,13 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 	for raw_tag in raw_tags:
 		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
 		var key: String = String(tag)
-		if tag == &"" or existing.has(key):
+		if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or existing.has(key):
 			continue
 		existing[key] = tag
 		added += 1
 
 	if added > 0:
-		tags = GameplayTagDatabase.canonicalize_tag_array(existing.values())
+		tags = existing.values()
 	return added
 
 
@@ -176,7 +177,7 @@ func _rebuild_cache() -> void:
 		var key: String = String(tag)
 		_exact_tag_set[key] = true
 		_match_tag_set[key] = true
-		for parent in GameplayTagDatabase.get_parent_tags(tag):
+		for parent in GameplayTagDatabase.get_canonical_parent_tags(tag):
 			_match_tag_set[String(parent)] = true
 
 

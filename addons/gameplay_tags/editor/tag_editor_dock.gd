@@ -355,26 +355,55 @@ func _on_add_pressed() -> void:
 		_set_status("Enter a tag name first.")
 		return
 
-	var added: bool = false
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("add_tag"):
-		added = bool(registry.add_tag(StringName(tag_text), _description_input.text.strip_edges()))
-		_database = registry.get_database()
-		if added and not _save_tag_ids_script():
-			return
-	else:
-		added = _database.add_tag(StringName(tag_text), _description_input.text.strip_edges())
-		if added and not _save_database():
-			return
-
-	if not added:
+	var tag: StringName = GameplayTagDatabase.normalize_tag(StringName(tag_text))
+	var before_tags: Array[StringName] = _database.get_all_tags()
+	var before_descriptions: Dictionary[String, String] = _database.tag_descriptions.duplicate(true)
+	var preview: GameplayTagDatabase = GameplayTagDatabase.new()
+	preview.set_state(before_tags, before_descriptions)
+	if not preview.add_tag(tag, _description_input.text.strip_edges()):
 		_set_status("Tag already exists or is invalid: %s" % tag_text)
 		return
 
+	var status_message: String = "Added %s" % String(tag)
+	if undo_redo_manager == null:
+		_apply_database_state(
+			preview.get_all_tags(),
+			preview.tag_descriptions.duplicate(true),
+			status_message,
+		)
+	else:
+		(
+			undo_redo_manager
+			. create_action(
+				"Add Gameplay Tag %s" % String(tag),
+				UndoRedo.MERGE_DISABLE,
+				_database,
+			)
+		)
+		(
+			undo_redo_manager
+			. add_do_method(
+				self,
+				"_apply_database_state",
+				preview.get_all_tags(),
+				preview.tag_descriptions.duplicate(true),
+				status_message,
+			)
+		)
+		(
+			undo_redo_manager
+			. add_undo_method(
+				self,
+				"_apply_database_state",
+				before_tags,
+				before_descriptions,
+				"Removed newly added %s." % String(tag),
+			)
+		)
+		undo_redo_manager.commit_action()
+
 	_tag_input.clear()
 	_description_input.clear()
-	_refresh()
-	_set_status("Added %s" % String(GameplayTagDatabase.normalize_tag(StringName(tag_text))))
 
 
 func _on_update_description_pressed() -> void:
@@ -482,8 +511,7 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 	var before_tags: Array[StringName] = _database.get_all_tags()
 	var before_descriptions: Dictionary[String, String] = _database.tag_descriptions.duplicate(true)
 	var preview: GameplayTagDatabase = GameplayTagDatabase.new()
-	preview.tags = before_tags
-	preview.tag_descriptions = before_descriptions
+	preview.set_state(before_tags, before_descriptions)
 	if not preview.rename_tag(tag, new_tag):
 		_set_status(
 			(
@@ -576,8 +604,7 @@ func _remove_tag_with_undo(tag: StringName) -> void:
 	var before_tags: Array[StringName] = _database.get_all_tags()
 	var before_descriptions: Dictionary[String, String] = _database.tag_descriptions.duplicate(true)
 	var preview: GameplayTagDatabase = GameplayTagDatabase.new()
-	preview.tags = before_tags
-	preview.tag_descriptions = before_descriptions
+	preview.set_state(before_tags, before_descriptions)
 	if not preview.remove_tag(tag, true):
 		return
 
@@ -641,8 +668,7 @@ func _apply_database_state(
 	if _database == null:
 		return
 
-	_database.tags = GameplayTagDatabase.canonicalize_tag_array(raw_tags)
-	_database.tag_descriptions = descriptions.duplicate(true)
+	_database.set_state(raw_tags, descriptions)
 	var registry: Node = _get_registry()
 	if registry != null and registry.has_method("set_database"):
 		registry.set_database(_database)

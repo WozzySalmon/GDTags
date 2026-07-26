@@ -1,6 +1,7 @@
 extends SceneTree
 
 const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
+const MAX_OVERLAP_WAIT_FRAMES: int = 10
 
 var _assertion_count: int = 0
 var _failed: bool = false
@@ -217,11 +218,25 @@ func _test_overlap_helpers_and_trigger_once() -> void:
 	root.add_child(area)
 	area_component.add_tag(&"Team.Player")
 
-	await physics_frame
-	await physics_frame
+	for _frame_index in range(MAX_OVERLAP_WAIT_FRAMES):
+		await physics_frame
+		if trigger.get_overlapping_bodies().has(body) and trigger.get_overlapping_areas().has(area):
+			break
 
-	assert_true(_registry.get_overlapping_bodies_with_tag(trigger, &"Team.Enemy").has(body))
-	assert_true(_registry.get_overlapping_areas_with_tag(trigger, &"Team.Player").has(area))
+	assert_true(
+		_registry.get_overlapping_bodies_with_tag(trigger, &"Team.Enemy").has(body),
+		(
+			"Tagged body did not overlap the trigger within %d physics frames"
+			% MAX_OVERLAP_WAIT_FRAMES
+		),
+	)
+	assert_true(
+		_registry.get_overlapping_areas_with_tag(trigger, &"Team.Player").has(area),
+		(
+			"Tagged area did not overlap the trigger within %d physics frames"
+			% MAX_OVERLAP_WAIT_FRAMES
+		),
+	)
 	assert_eq(_registry.get_first_overlapping_target_with_tag(trigger, &"Team.Enemy"), body)
 
 	trigger.required_tags = [&"Team.Enemy"]
