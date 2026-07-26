@@ -1,6 +1,10 @@
 @tool
 class_name GameplayTagDatabase
 extends Resource
+## The project's central catalog of every valid gameplay tag.
+## Owns tag names, their parent hierarchy, and optional descriptions. Adding a child
+## creates its missing parents automatically. Mutate it through its methods so the
+## hierarchy and change signals stay correct.
 
 signal tags_changed
 
@@ -19,6 +23,8 @@ var _tag_set: Dictionary[String, bool] = {}
 var _suppress_change_notifications: bool = false
 
 
+## Returns [param raw_tag] in canonical form: trimmed, slash-separated paths
+## converted to dots, spaces removed, and empty segments dropped.
 static func normalize_tag(raw_tag: StringName) -> StringName:
 	if raw_tag == &"":
 		return &""
@@ -75,6 +81,7 @@ static func canonicalize_valid_tag_array(raw_tags: Array[StringName]) -> Array[S
 	return valid_tags
 
 
+## Returns [param raw_tags] normalized, de-duplicated, and alphabetically sorted.
 static func canonicalize_tag_array(raw_tags: Array[StringName]) -> Array[StringName]:
 	var unique: Dictionary[String, StringName] = {}
 	for raw_tag in raw_tags:
@@ -94,6 +101,7 @@ static func canonicalize_tag_array(raw_tags: Array[StringName]) -> Array[StringN
 	return canonical
 
 
+## Parses one tag per line, treating commas and slashes as hierarchy separators.
 static func tags_from_csv_text(csv_text: String) -> Array[StringName]:
 	var parsed_tags: Array[StringName] = []
 	for line in csv_text.split("\n", false):
@@ -104,6 +112,8 @@ static func tags_from_csv_text(csv_text: String) -> Array[StringName]:
 	return canonicalize_tag_array(parsed_tags)
 
 
+## Returns whether [param owned_tag] satisfies [param requested_tag].
+## A parent request matches an owned child unless [param exact] is true.
 static func tag_matches(
 	owned_tag: StringName, requested_tag: StringName, exact: bool = false
 ) -> bool:
@@ -116,6 +126,8 @@ static func tag_matches(
 	return owned == requested or owned.begins_with(requested + ".")
 
 
+## Returns whether [param raw_tag] normalizes to a usable tag name.
+## Segments may contain only ASCII letters, digits, underscores, and hyphens.
 static func is_valid_tag_name(raw_tag: StringName) -> bool:
 	return is_canonical_tag_name(normalize_tag(raw_tag))
 
@@ -147,6 +159,7 @@ static func _is_allowed_tag_character(code: int) -> bool:
 	return code == 95 or code == 45
 
 
+## Returns every ancestor of [param raw_tag], from the root down to the immediate parent.
 static func get_parent_tags(raw_tag: StringName) -> Array[StringName]:
 	return get_canonical_parent_tags(normalize_tag(raw_tag))
 
@@ -167,6 +180,7 @@ static func get_canonical_parent_tags(tag_name: StringName) -> Array[StringName]
 	return parents
 
 
+## Adds one tag plus any missing parents. Returns whether it was added.
 func add_tag(raw_tag: StringName, description: String = "") -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
 	if tag == &"" or not is_valid_tag_name(tag) or has_tag(tag):
@@ -179,6 +193,7 @@ func add_tag(raw_tag: StringName, description: String = "") -> bool:
 	return added
 
 
+## Sets or clears a registered tag's description. Returns whether anything changed.
 func set_tag_description(raw_tag: StringName, description: String) -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
 	if not has_tag(tag):
@@ -198,6 +213,8 @@ func set_tag_description(raw_tag: StringName, description: String) -> bool:
 	return true
 
 
+## Renames or moves a tag and its whole branch, migrating descriptions.
+## Rejects collisions with existing tags and moves of a branch beneath itself.
 func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
 	var new_tag: StringName = normalize_tag(raw_new_tag)
@@ -266,6 +283,7 @@ func _prune_empty_old_parents(
 			updated_tags.erase(old_parent)
 
 
+## Adds several tags plus any missing parents. Returns how many were new.
 func add_tags(raw_tags: Array[StringName]) -> int:
 	var existing: Dictionary[String, StringName] = {}
 	for tag in tags:
@@ -294,10 +312,12 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 	return added
 
 
+## Imports tags from CSV text and returns how many were new.
 func add_tags_from_csv_text(csv_text: String) -> int:
 	return add_tags(tags_from_csv_text(csv_text))
 
 
+## Serializes every tag to newline-separated CSV text.
 func to_csv_text() -> String:
 	var lines: Array[String] = []
 	for tag in tags:
@@ -307,6 +327,7 @@ func to_csv_text() -> String:
 	return "\n".join(lines) + "\n"
 
 
+## Removes a tag. Fails when it still has children unless [param remove_children] is true.
 func remove_tag(raw_tag: StringName, remove_children: bool = false) -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
 	if tag == &"":
@@ -343,6 +364,7 @@ func remove_tag(raw_tag: StringName, remove_children: bool = false) -> bool:
 	return true
 
 
+## Removes several tags, keeping any parent that still has children. Returns the count removed.
 func remove_tags(raw_tags: Array[StringName]) -> int:
 	var remove_set: Dictionary[String, bool] = {}
 	for raw_tag in raw_tags:
@@ -380,6 +402,7 @@ func remove_tags(raw_tags: Array[StringName]) -> int:
 	return removed
 
 
+## Creates missing parents for one tag, or for every tag when [param raw_tag] is empty.
 func ensure_parent_tags(raw_tag: StringName = &"") -> bool:
 	var changed: bool = false
 	if raw_tag == &"":
@@ -419,10 +442,12 @@ func set_state(raw_tags: Array[StringName], descriptions: Dictionary[String, Str
 	_notify_changed()
 
 
+## Returns whether [param raw_tag] is registered.
 func has_tag(raw_tag: StringName) -> bool:
 	return _tag_set.has(String(normalize_tag(raw_tag)))
 
 
+## Returns a GameplayTag for a registered tag, or null when it is unknown.
 func get_tag(raw_tag: StringName) -> GameplayTag:
 	var tag: StringName = normalize_tag(raw_tag)
 	if not has_tag(tag):
@@ -430,10 +455,12 @@ func get_tag(raw_tag: StringName) -> GameplayTag:
 	return GameplayTag.new(tag)
 
 
+## Returns a copy of every registered tag.
 func get_all_tags() -> Array[StringName]:
 	return tags.duplicate()
 
 
+## Returns the children of [param raw_parent_tag], recursively when [param recursive] is true.
 func get_children(raw_parent_tag: StringName, recursive: bool = false) -> Array[GameplayTag]:
 	var parent: String = String(normalize_tag(raw_parent_tag))
 	var children: Array[GameplayTag] = []
@@ -452,6 +479,7 @@ func get_children(raw_parent_tag: StringName, recursive: bool = false) -> Array[
 	return children
 
 
+## Returns tags whose name or description contains [param search_text], case-insensitively.
 func find_tags(search_text: String = "") -> Array[StringName]:
 	var needle: String = search_text.strip_edges().to_lower()
 	if needle.is_empty():
@@ -466,6 +494,7 @@ func find_tags(search_text: String = "") -> Array[StringName]:
 	return found
 
 
+## Returns a list of problems: empty, duplicate, malformed, or orphaned tags.
 func validate() -> Array[String]:
 	var errors: Array[String] = []
 	var seen: Dictionary[String, bool] = {}

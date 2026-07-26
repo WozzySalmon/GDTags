@@ -20,6 +20,19 @@ class MethodTaggedObject:
 		return method_tags
 
 
+class UnrelatedTagsObject:
+	extends RefCounted
+
+	# A plain string list that has nothing to do with gameplay tags.
+	var tags: Array[String] = []
+
+
+class StringNameTagsObject:
+	extends RefCounted
+
+	var tags: Array[StringName] = []
+
+
 const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 const TagCodeGenerator: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
@@ -53,6 +66,10 @@ func _run_all_tests() -> void:
 	_run_test("tag_names_are_validated_everywhere", _test_tag_name_validation)
 	_run_test("catalog_objects_are_not_tag_targets", _test_catalog_objects_are_not_targets)
 	_run_test("database_set_state_applies_whole_state", _test_database_set_state)
+	_run_test("container_tag_stacking", _test_container_tag_stacking)
+	_run_test("query_composition", _test_query_composition)
+	_run_test("tag_index_finds_nodes", _test_tag_index)
+	_run_test("ambiguous_tags_property_is_ignored", _test_ambiguous_tags_property)
 	_run_test("query_modes", _test_query_modes)
 	_run_test("area3d_trigger_helper", _test_area3d_trigger_helper)
 
@@ -554,6 +571,166 @@ func _test_database_set_state() -> void:
 	assert_false(database.tag_descriptions.has("Discarded.Tag"))
 	assert_eq(
 		_database_change_count, 1, "set_state should apply the whole state in one change signal"
+	)
+
+
+func _test_container_tag_stacking() -> void:
+	var container: GameplayTagContainer = GameplayTagContainer.new()
+	assert_eq(container.add_tag_stack(GameplayTagIds.STATE_STUNNED), 1, "First stack applies")
+	assert_eq(container.add_tag_stack(GameplayTagIds.STATE_STUNNED), 2, "Second stack accumulates")
+	assert_true(container.has_tag(GameplayTagIds.STATE), "A stacked tag is owned normally")
+	assert_eq(container.get_tag_count(GameplayTagIds.STATE_STUNNED), 2)
+	assert_eq(
+		container.get_tag_count(GameplayTagIds.STATE),
+		0,
+		"Stacks are tracked per exact tag, not inherited by parents",
+	)
+
+	assert_eq(container.remove_tag_stack(GameplayTagIds.STATE_STUNNED), 1)
+	assert_true(
+		container.has_tag(GameplayTagIds.STATE_STUNNED, true),
+		"A tag survives while other stacks remain",
+	)
+	assert_eq(container.remove_tag_stack(GameplayTagIds.STATE_STUNNED), 0)
+	assert_false(
+		container.has_tag(GameplayTagIds.STATE_STUNNED, true),
+		"Removing the last stack releases the tag",
+	)
+	assert_eq(container.remove_tag_stack(GameplayTagIds.STATE_STUNNED), 0, "Unowned tags stay at 0")
+
+	container.add_tag_stack(GameplayTagIds.TEAM_ENEMY)
+	container.add_tag_stack(GameplayTagIds.TEAM_ENEMY)
+	assert_true(container.set_tag_count(GameplayTagIds.TEAM_ENEMY, 5))
+	assert_eq(container.get_tag_count(GameplayTagIds.TEAM_ENEMY), 5)
+	assert_false(
+		container.set_tag_count(GameplayTagIds.TEAM_ENEMY, 5), "Unchanged counts report no mutation"
+	)
+	assert_eq(
+		container.duplicate_container().get_tag_count(GameplayTagIds.TEAM_ENEMY),
+		5,
+		"Copies should carry stack depth",
+	)
+	assert_true(container.set_tag_count(GameplayTagIds.TEAM_ENEMY, 0), "Zero releases the tag")
+	assert_false(container.has_tag(GameplayTagIds.TEAM_ENEMY, true))
+
+	container.add_tag_stack(GameplayTagIds.DAMAGE_FIRE)
+	container.add_tag_stack(GameplayTagIds.DAMAGE_FIRE)
+	assert_true(container.remove_tag(GameplayTagIds.DAMAGE_FIRE), "remove_tag drops every stack")
+	assert_eq(container.get_tag_count(GameplayTagIds.DAMAGE_FIRE), 0)
+	assert_eq(container.add_tag_stack(&"Bad!Tag"), 0, "Unusable tag names cannot be stacked")
+
+
+func _test_query_composition() -> void:
+	var fire_or_stunned: Array[StringName] = [
+		GameplayTagIds.DAMAGE_FIRE,
+		GameplayTagIds.STATE_STUNNED,
+	]
+	var blocked: Array[StringName] = [GameplayTagIds.STATE_INVULNERABLE]
+	var nested: Array[GameplayTagQuery] = [
+		GameplayTagQuery.any(fire_or_stunned),
+		GameplayTagQuery.none(blocked),
+	]
+	var composed: GameplayTagQuery = GameplayTagQuery.compose(GameplayTagQuery.Mode.ALL, nested)
+
+	var stunned_tags: Array[StringName] = [GameplayTagIds.STATE_STUNNED]
+	assert_true(
+		composed.matches(GameplayTagContainer.new(stunned_tags)),
+		"(Fire or Stunned) and not Invulnerable should match a stunned target",
+	)
+	var immune_tags: Array[StringName] = [
+		GameplayTagIds.STATE_STUNNED,
+		GameplayTagIds.STATE_INVULNERABLE,
+	]
+	assert_false(
+		composed.matches(GameplayTagContainer.new(immune_tags)),
+		"A blocked tag in a nested NONE should reject the target",
+	)
+	var team_tags: Array[StringName] = [GameplayTagIds.TEAM_ENEMY]
+	assert_false(
+		composed.matches(GameplayTagContainer.new(team_tags)),
+		"Neither branch of the nested ANY should match an unrelated target",
+	)
+
+	var outer: GameplayTagQuery = GameplayTagQuery.all(team_tags)
+	assert_true(outer.add_sub_query(GameplayTagQuery.any(fire_or_stunned)))
+	assert_false(outer.add_sub_query(outer), "A query must not contain itself")
+	assert_false(outer.add_sub_query(null))
+	var enemy_and_stunned: Array[StringName] = [
+		GameplayTagIds.TEAM_ENEMY,
+		GameplayTagIds.STATE_STUNNED,
+	]
+	assert_true(
+		outer.matches(GameplayTagContainer.new(enemy_and_stunned)),
+		"Own tags and nested queries should both be required in ALL mode",
+	)
+	assert_false(
+		outer.matches(GameplayTagContainer.new(team_tags)),
+		"A failing nested query should reject an otherwise matching target",
+	)
+	assert_true(outer.remove_sub_query(outer.sub_queries[0]))
+	assert_true(outer.matches(GameplayTagContainer.new(team_tags)))
+
+
+func _test_tag_index() -> void:
+	var level: Node = Node.new()
+	root.add_child(level)
+	var direct_actor: Node = Node.new()
+	level.add_child(direct_actor)
+	var component_actor: Node = Node.new()
+	level.add_child(component_actor)
+	var component: GameplayTagComponent = GameplayTagComponent.new()
+	component_actor.add_child(component)
+
+	var player_tags: Array[StringName] = [GameplayTagIds.TEAM_PLAYER]
+	_registry.set_node_tags(direct_actor, player_tags)
+	component.add_tag(GameplayTagIds.TEAM_ENEMY)
+
+	assert_true(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
+		"The index should find metadata-tagged nodes",
+	)
+	assert_true(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
+		"The index should find component owners",
+	)
+	assert_eq(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).size(),
+		2,
+		"A parent tag should match every node owning one of its children",
+	)
+	assert_eq(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM, true).size(),
+		0,
+		"Exact lookups should not match nodes owning only child tags",
+	)
+
+	_registry.clear_node_tags(direct_actor)
+	assert_false(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
+		"Clearing node tags should drop the node from the index",
+	)
+
+	component.remove_tag(GameplayTagIds.TEAM_ENEMY)
+	assert_false(
+		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
+		"Removing a component tag should drop its owner from results",
+	)
+	level.free()
+
+
+func _test_ambiguous_tags_property() -> void:
+	var unrelated: UnrelatedTagsObject = UnrelatedTagsObject.new()
+	unrelated.tags = ["State.Stunned"]
+	assert_false(
+		_registry.target_has_tag(unrelated, GameplayTagIds.STATE),
+		"An Array[String] named tags belongs to the owning class, not this addon",
+	)
+
+	var tag_holder: StringNameTagsObject = StringNameTagsObject.new()
+	tag_holder.tags = [GameplayTagIds.STATE_STUNNED]
+	assert_true(
+		_registry.target_has_tag(tag_holder, GameplayTagIds.STATE),
+		"An Array[StringName] named tags is still an accepted tag payload",
 	)
 
 

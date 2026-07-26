@@ -334,6 +334,13 @@ GameplayTags.get_nodes_with_tag(
 
 `get_tagged_nodes()` and `get_nodes_with_tag()` use Godot groups to quickly find direct metadata-tagged nodes and `GameplayTagComponent` owners under the optional `root`.
 
+`get_nodes_with_tag()` is backed by a per-tag group index (`gameplay_tag:<tag>`, covering each owned
+tag and its ancestors), so it looks up matching nodes instead of resolving every tagged node in the
+scene. The index is maintained by the direct node tag API and by `GameplayTagComponent`; results are
+still verified, so a momentarily stale entry can never produce a false positive. If you write the
+`gameplay_tags` metadata yourself instead of using `set_node_tags()`, call
+`GameplayTags.refresh_node_tag_index(node)` afterwards.
+
 `GameplayTagComponent` remains the recommended reusable scene setup. Direct node tags are best when you want OctoD-style metadata/group integration while keeping this addon's central validation and hierarchy matching.
 
 ## GameplayTags autoload
@@ -433,6 +440,44 @@ GameplayTags.export_tags_to_csv("res://tags_export.csv")
 `reload_database()` bypasses the ResourceLoader reuse cache and re-reads the configured database
 from disk. The dock's **Tools > Refresh** action uses the same reload path.
 
+### Stacking tags
+
+Several independent effects often grant the same tag. `GameplayTagContainer` tracks a stack depth
+per exact tag so the tag survives until the last source releases it:
+
+```gdscript
+container.add_tag_stack(GameplayTagIds.STATE_STUNNED)     # -> 1
+container.add_tag_stack(GameplayTagIds.STATE_STUNNED)     # -> 2
+container.remove_tag_stack(GameplayTagIds.STATE_STUNNED)  # -> 1, still stunned
+container.remove_tag_stack(GameplayTagIds.STATE_STUNNED)  # -> 0, no longer stunned
+container.get_tag_count(GameplayTagIds.STATE_STUNNED)
+container.set_tag_count(GameplayTagIds.STATE_STUNNED, 3)
+```
+
+`add_tag()` applies a single stack and `remove_tag()` drops every stack, so existing set-style code
+behaves exactly as before. Counts are tracked per **exact** tag: a parent never reports a child's
+stacks. Stack depth is runtime state and is **not** serialized, so a saved container restores every
+tag at a depth of one.
+
+### Composing queries
+
+A query combines its own tags under its mode, and can nest other queries through `sub_queries`:
+
+```gdscript
+var can_burn: GameplayTagQuery = GameplayTagQuery.compose(
+    GameplayTagQuery.Mode.ALL,
+    [
+        GameplayTagQuery.any([GameplayTagIds.DAMAGE_FIRE, GameplayTagIds.DAMAGE_ICE]),
+        GameplayTagQuery.none([GameplayTagIds.STATE_INVULNERABLE]),
+    ],
+)
+can_burn.matches(target)  # (Fire or Ice) and not Invulnerable
+```
+
+`add_sub_query()` and `remove_sub_query()` edit the nesting at runtime. Nesting is capped at
+`MAX_SUB_QUERY_DEPTH` levels; a query cannot contain itself directly, but as with any Resource
+graph you should avoid building indirect cycles.
+
 `GameplayTagDatabase.set_state(tags, descriptions)` replaces the whole database in one pass and
 emits a single change signal. Prefer it over per-tag mutation when you already know the end state,
 such as applying an editor undo step; rebuilding tag by tag recanonicalizes the array once per tag.
@@ -457,7 +502,9 @@ For objects/nodes, `GameplayTags` collects tags from these sources:
 4. If no explicit method returned tags, the object has a known property:
    - `owned_tags`
    - `gameplay_tags`
-   - `tags`
+   - `tags`, but only when its value is unmistakably a tag payload: a `GameplayTagContainer`,
+     a `GameplayTag`, or an `Array[StringName]`. `tags` is a common field name on unrelated
+     classes, so a plain `Array[String]` named `tags` is left alone.
 5. The object has metadata named `gameplay_tags`, including tags set through the direct node tag API.
 6. The node has one or more `GameplayTagComponent` **direct children**. Every direct child
    component contributes its tags; deeper descendants do not.

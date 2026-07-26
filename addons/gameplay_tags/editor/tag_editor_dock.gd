@@ -16,6 +16,9 @@ const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
 const TagCodeGenerator: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
 )
+const StatusStyle: Script = preload("res://addons/gameplay_tags/editor/tag_dock_status_style.gd")
+
+const SEARCH_DEBOUNCE_SECONDS: float = 0.2
 
 var undo_redo_manager: EditorUndoRedoManager
 
@@ -41,6 +44,7 @@ var _export_dialog: FileDialog
 var _remove_confirmation: ConfirmationDialog
 var _selected_tag: StringName = &""
 var _pending_remove_tag: StringName = &""
+var _search_debounce_timer: Timer
 var _tree_items_by_tag: Dictionary[StringName, TreeItem] = {}
 
 
@@ -87,6 +91,14 @@ func _build_ui() -> void:
 	_search_input.tooltip_text = "Filter tags by name or description"
 	_search_input.text_changed.connect(_on_search_changed)
 	add_child(_search_input)
+
+	# Rebuilding the whole Tree on every keystroke is visibly slow once a project has
+	# a few thousand tags, so coalesce bursts of typing into one refresh.
+	_search_debounce_timer = Timer.new()
+	_search_debounce_timer.one_shot = true
+	_search_debounce_timer.wait_time = SEARCH_DEBOUNCE_SECONDS
+	_search_debounce_timer.timeout.connect(_refresh)
+	add_child(_search_debounce_timer)
 
 	_tag_tree = Tree.new()
 	_tag_tree.hide_root = true
@@ -285,14 +297,12 @@ func _refresh() -> void:
 	if _tag_tree == null:
 		return
 
+	# Keep the current selection across rebuilds. Losing it on every refresh fights the
+	# documented "select a parent, then Add Child" workflow.
+	var previously_selected: StringName = _selected_tag
 	_tag_tree.clear()
 	_tree_items_by_tag.clear()
-	_selected_tag = &""
-	_details_container.visible = false
-	_update_description_button.disabled = true
-	_add_child_button.disabled = true
-	_rename_button.disabled = true
-	_remove_button.disabled = true
+	_clear_selection_state()
 
 	if _database == null:
 		_set_status("No gameplay tag database loaded.")
@@ -319,6 +329,9 @@ func _refresh() -> void:
 			tooltip += "\n%s" % description
 		item.set_tooltip_text(0, tooltip)
 		_tree_items_by_tag[tag] = item
+
+	if previously_selected != &"" and _tree_items_by_tag.has(previously_selected):
+		_select_tag_in_tree(previously_selected)
 
 	_set_status("%d visible / %d total tags." % [matched_tags.size(), _database.tags.size()])
 
@@ -370,6 +383,7 @@ func _on_add_pressed() -> void:
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
 			status_message,
+			tag,
 		)
 	else:
 		(
@@ -388,6 +402,7 @@ func _on_add_pressed() -> void:
 				preview.get_all_tags(),
 				preview.tag_descriptions.duplicate(true),
 				status_message,
+				tag,
 			)
 		)
 		(
@@ -788,7 +803,10 @@ func _on_export_csv_selected(path: String) -> void:
 
 
 func _on_search_changed(_text: String) -> void:
-	_refresh()
+	if _search_debounce_timer == null:
+		_refresh()
+		return
+	_search_debounce_timer.start(SEARCH_DEBOUNCE_SECONDS)
 
 
 func _on_tag_submitted(_text: String) -> void:
@@ -810,15 +828,19 @@ func _on_edit_description_changed(text: String) -> void:
 	_update_description_button.disabled = text.strip_edges() == current_description
 
 
+func _clear_selection_state() -> void:
+	_selected_tag = &""
+	_details_container.visible = false
+	_update_description_button.disabled = true
+	_add_child_button.disabled = true
+	_rename_button.disabled = true
+	_remove_button.disabled = true
+
+
 func _on_tree_item_selected() -> void:
 	var item: TreeItem = _tag_tree.get_selected()
 	if item == null or _database == null:
-		_selected_tag = &""
-		_details_container.visible = false
-		_update_description_button.disabled = true
-		_add_child_button.disabled = true
-		_rename_button.disabled = true
-		_remove_button.disabled = true
+		_clear_selection_state()
 		return
 
 	_selected_tag = StringName(item.get_metadata(0))
@@ -955,31 +977,7 @@ func _set_status(message: String) -> void:
 
 	_status_label.text = message
 	_status_label.remove_theme_color_override("font_color")
-	var color_name: StringName = &""
-	if message.contains("could not be regenerated"):
-		color_name = &"warning_color"
-	elif (
-		message.begins_with("Added")
-		or message.begins_with("Cleared")
-		or message.begins_with("Removed")
-		or message.begins_with("Updated")
-		or message.begins_with("Restored")
-		or message.begins_with("Imported")
-		or message.begins_with("Exported")
-		or message.begins_with("Regenerated")
-		or message.begins_with("Renamed")
-	):
-		color_name = &"success_color"
-	elif (
-		message.begins_with("Could not")
-		or message.begins_with("Refusing")
-		or message.begins_with("Database path")
-		or message.begins_with("Tag already")
-	):
-		color_name = &"error_color"
-	elif message.begins_with("Enter") or message.begins_with("No "):
-		color_name = &"warning_color"
-
+	var color_name: StringName = StatusStyle.get_status_color_name(message)
 	if color_name != &"" and has_theme_color(color_name, "Editor"):
 		(
 			_status_label

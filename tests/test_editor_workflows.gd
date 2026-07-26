@@ -127,7 +127,15 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		"Third CSV tag",
 		"Add Child should preserve the normal description workflow",
 	)
-	assert_true(add_child_button.disabled, "Refreshing after add should clear the parent selection")
+	assert_false(
+		add_child_button.disabled,
+		"Adding a tag should leave it selected so the next action needs no reselection",
+	)
+	assert_eq(
+		String(dock.get("_selected_tag")),
+		"CSV.Three",
+		"Adding a tag should select the tag that was just created",
+	)
 
 	csv_one_item = _find_tree_item(tag_tree.get_root(), &"CSV.One")
 	csv_one_item.select(0)

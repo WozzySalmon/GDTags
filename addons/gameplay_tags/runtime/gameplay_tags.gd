@@ -6,7 +6,12 @@ const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
 const COMPONENT_GROUP: StringName = &"gameplay_tag_components"
 const NODE_TAGS_META_NAME: String = "gameplay_tags"
 const NODE_TAG_GROUP: StringName = &"gameplay_tagged_nodes"
-const TAG_PROPERTY_NAMES: Array[String] = ["owned_tags", "gameplay_tags", "tags"]
+const TAG_PROPERTY_NAMES: Array[String] = ["owned_tags", "gameplay_tags"]
+# `tags` is a common field name on unrelated classes, so it is accepted only when the
+# value is unmistakably a gameplay tag payload. The two names above are specific enough
+# to trust on their own.
+const AMBIGUOUS_TAG_PROPERTY_NAME: String = "tags"
+const TAG_INDEX_GROUP_PREFIX: String = "gameplay_tag:"
 
 var _database: GameplayTagDatabase
 var _warned_read_only_target: bool = false
@@ -16,12 +21,14 @@ func _ready() -> void:
 	get_database()
 
 
+## Returns the central tag database, loading or creating it on first use.
 func get_database() -> GameplayTagDatabase:
 	if _database == null:
 		_database = _load_or_create_database()
 	return _database
 
 
+## Swaps in a different database. Pass [param save_now] to persist it immediately.
 func set_database(database: GameplayTagDatabase, save_now: bool = false) -> void:
 	_database = database
 	if _database == null:
@@ -30,10 +37,12 @@ func set_database(database: GameplayTagDatabase, save_now: bool = false) -> void
 		save_database()
 
 
+## Returns the configured database path from ProjectSettings.
 func get_database_path() -> String:
 	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
 
 
+## Points the addon at a different database path and drops the cached database.
 func set_database_path(path: String, save_project_settings: bool = false) -> void:
 	var clean_path: String = path.strip_edges()
 	if clean_path.is_empty():
@@ -45,11 +54,14 @@ func set_database_path(path: String, save_project_settings: bool = false) -> voi
 	_database = null
 
 
+## Re-reads the database from disk, bypassing the ResourceLoader reuse cache.
 func reload_database() -> GameplayTagDatabase:
 	_database = _load_or_create_database(ResourceLoader.CACHE_MODE_REPLACE)
 	return _database
 
 
+## Writes the database to its configured path.
+## Returns ERR_UNAVAILABLE in an exported build, where res:// is read-only.
 func save_database() -> Error:
 	var database: GameplayTagDatabase = get_database()
 	var path: String = get_database_path()
@@ -73,22 +85,27 @@ func save_database() -> Error:
 	return save_error
 
 
+## Returns [param raw_tag] in canonical form.
 func normalize_tag(raw_tag: StringName) -> StringName:
 	return GameplayTagDatabase.normalize_tag(raw_tag)
 
 
+## Returns whether [param raw_tag] is registered in the central database.
 func is_valid_tag(raw_tag: StringName) -> bool:
 	return get_database().has_tag(raw_tag)
 
 
+## Alias for [method is_valid_tag].
 func has_tag(raw_tag: StringName) -> bool:
 	return is_valid_tag(raw_tag)
 
 
+## Returns a GameplayTag for a registered tag, or null when it is unknown.
 func request_tag(raw_tag: StringName) -> GameplayTag:
 	return get_database().get_tag(raw_tag)
 
 
+## Registers a tag plus any missing parents. Returns whether it was added.
 func add_tag(raw_tag: StringName, description: String = "", save_now: bool = true) -> bool:
 	var added: bool = get_database().add_tag(raw_tag, description)
 	if added and save_now:
@@ -96,6 +113,7 @@ func add_tag(raw_tag: StringName, description: String = "", save_now: bool = tru
 	return added
 
 
+## Registers several tags in one batch. Returns how many were new.
 func add_tags(raw_tags: Array[StringName], save_now: bool = true) -> int:
 	var added: int = get_database().add_tags(raw_tags)
 	if added > 0 and save_now:
@@ -103,6 +121,7 @@ func add_tags(raw_tags: Array[StringName], save_now: bool = true) -> int:
 	return added
 
 
+## Sets or clears a registered tag's description.
 func set_tag_description(
 	raw_tag: StringName,
 	description: String,
@@ -114,6 +133,7 @@ func set_tag_description(
 	return changed
 
 
+## Renames or moves a tag and its whole branch.
 func rename_tag(raw_tag: StringName, new_tag: StringName, save_now: bool = true) -> bool:
 	var renamed: bool = get_database().rename_tag(raw_tag, new_tag)
 	if renamed and save_now:
@@ -121,6 +141,7 @@ func rename_tag(raw_tag: StringName, new_tag: StringName, save_now: bool = true)
 	return renamed
 
 
+## Unregisters a tag, optionally with its children.
 func remove_tag(raw_tag: StringName, remove_children: bool = false, save_now: bool = true) -> bool:
 	var removed: bool = get_database().remove_tag(raw_tag, remove_children)
 	if removed and save_now:
@@ -128,6 +149,7 @@ func remove_tag(raw_tag: StringName, remove_children: bool = false, save_now: bo
 	return removed
 
 
+## Creates missing parents for one tag, or for every tag when [param raw_tag] is empty.
 func ensure_parent_tags(raw_tag: StringName = &"", save_now: bool = true) -> bool:
 	var changed: bool = get_database().ensure_parent_tags(raw_tag)
 	if changed and save_now:
@@ -135,14 +157,17 @@ func ensure_parent_tags(raw_tag: StringName = &"", save_now: bool = true) -> boo
 	return changed
 
 
+## Returns every registered tag.
 func get_all_tags() -> Array[StringName]:
 	return get_database().get_all_tags()
 
 
+## Returns tags whose name or description contains [param search_text].
 func find_tags(search_text: String = "") -> Array[StringName]:
 	return get_database().find_tags(search_text)
 
 
+## Imports tags from a CSV file and returns how many were new.
 func import_tags_from_csv(path: String, save_now: bool = true) -> int:
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
 	if file == null:
@@ -156,6 +181,7 @@ func import_tags_from_csv(path: String, save_now: bool = true) -> int:
 	return added
 
 
+## Writes every registered tag to a CSV file.
 func export_tags_to_csv(path: String) -> Error:
 	if not _can_write_to_path(path):
 		_warn_read_only_target(path)
@@ -177,22 +203,27 @@ func export_tags_to_csv(path: String) -> Error:
 	return OK
 
 
+## Creates a tag container, optionally seeded with [param initial_tags].
 func make_container(initial_tags: Array[StringName] = []) -> GameplayTagContainer:
 	return GameplayTagContainer.new(initial_tags)
 
 
+## Creates a query requiring every tag in [param tags].
 func make_query_all(tags: Array[StringName], exact: bool = false) -> GameplayTagQuery:
 	return GameplayTagQuery.all(tags, exact)
 
 
+## Creates a query requiring at least one tag in [param tags].
 func make_query_any(tags: Array[StringName], exact: bool = false) -> GameplayTagQuery:
 	return GameplayTagQuery.any(tags, exact)
 
 
+## Creates a query rejecting any target owning one of [param tags].
 func make_query_none(tags: Array[StringName], exact: bool = false) -> GameplayTagQuery:
 	return GameplayTagQuery.none(tags, exact)
 
 
+## Returns the tags written directly to [param node]'s metadata.
 func get_node_tags(node: Node) -> GameplayTagContainer:
 	if node == null:
 		return GameplayTagContainer.new()
@@ -201,6 +232,8 @@ func get_node_tags(node: Node) -> GameplayTagContainer:
 	return GameplayTagContainer.new(node_tags)
 
 
+## Replaces [param node]'s direct metadata tags.
+## Pass false for [param validate_with_database] to accept unregistered tags.
 func set_node_tags(
 	node: Node, raw_tags: Array[StringName], validate_with_database: bool = true
 ) -> bool:
@@ -212,13 +245,16 @@ func set_node_tags(
 		node_tags = _filter_tags_to_database(node_tags, true).get_tags()
 	node.set_meta(NODE_TAGS_META_NAME, node_tags)
 	_update_node_tag_group(node, node_tags)
+	refresh_node_tag_index(node)
 	return true
 
 
+## Adds one direct metadata tag to [param node].
 func add_tag_to_node(node: Node, raw_tag: StringName, validate_with_database: bool = true) -> bool:
 	return add_tags_to_node(node, [raw_tag], validate_with_database) == 1
 
 
+## Adds several direct metadata tags and returns how many were new.
 func add_tags_to_node(
 	node: Node, raw_tags: Array[StringName], validate_with_database: bool = true
 ) -> int:
@@ -235,6 +271,7 @@ func add_tags_to_node(
 	return added
 
 
+## Removes one direct metadata tag from [param node].
 func remove_tag_from_node(node: Node, raw_tag: StringName) -> bool:
 	if node == null:
 		return false
@@ -246,29 +283,92 @@ func remove_tag_from_node(node: Node, raw_tag: StringName) -> bool:
 	return removed
 
 
+## Removes every direct metadata tag from [param node].
 func clear_node_tags(node: Node) -> void:
 	if node == null:
 		return
 	node.remove_meta(NODE_TAGS_META_NAME)
 	if node.is_in_group(NODE_TAG_GROUP):
 		node.remove_from_group(NODE_TAG_GROUP)
+	refresh_node_tag_index(node)
 
 
+## Returns every node under [param root] carrying direct tags or a tag component.
 func get_tagged_nodes(root: Node = null) -> Array[Node]:
 	return _get_tagged_node_candidates(root)
 
 
+## Returns tagged nodes under [param root] that own [param tag].
+## Backed by a per-tag group index, so this is a group lookup over the matching nodes
+## rather than a resolve-every-tagged-node scan.
 func get_nodes_with_tag(
 	root: Node = null, tag: StringName = &"", exact: bool = false
 ) -> Array[Node]:
 	var matches: Array[Node] = []
-	for node in get_tagged_nodes(root):
-		if target_has_tag(node, tag, exact):
-			matches.append(node)
+	var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(tag)
+	if normalized_tag == &"":
+		return matches
+
+	var tree: SceneTree = _get_tree_for_tag_search(root)
+	if tree == null:
+		return matches
+
+	for candidate in tree.get_nodes_in_group(_tag_index_group_name(normalized_tag)):
+		if not candidate is Node or not _is_node_under_root(candidate, root):
+			continue
+		# The index narrows the candidate set; it is not the source of truth. Verifying
+		# each candidate keeps a stale entry from producing a false positive, which is
+		# what lets component removal refresh the index on the next idle frame.
+		if not target_has_tag(candidate, normalized_tag, exact):
+			continue
+		matches.append(candidate)
 	return matches
 
 
+## Rebuilds the per-tag index entries for [param node] from its current tags.
+## Called by the direct node tag API and by GameplayTagComponent when its tags change;
+## call it yourself only if you bypass both and write node metadata directly.
+func refresh_node_tag_index(node: Node) -> void:
+	if node == null:
+		return
+
+	var indexed_tags: Dictionary[String, bool] = {}
+	for tag in get_owned_gameplay_tags(node).get_tags():
+		indexed_tags[String(tag)] = true
+		for parent in GameplayTagDatabase.get_canonical_parent_tags(tag):
+			indexed_tags[String(parent)] = true
+
+	for group in node.get_groups():
+		var group_text: String = String(group)
+		if not group_text.begins_with(TAG_INDEX_GROUP_PREFIX):
+			continue
+		if not indexed_tags.has(group_text.substr(TAG_INDEX_GROUP_PREFIX.length())):
+			node.remove_from_group(group)
+
+	for tag_key in indexed_tags:
+		var group_name: StringName = StringName(TAG_INDEX_GROUP_PREFIX + tag_key)
+		if not node.is_in_group(group_name):
+			node.add_to_group(group_name)
+
+
+# Deferred-safe form of refresh_node_tag_index(). Takes an instance ID rather than a
+# reference because the node may be freed before a deferred call runs.
+func _refresh_node_tag_index_by_id(node_instance_id: int) -> void:
+	if not is_instance_id_valid(node_instance_id):
+		return
+	var node: Node = instance_from_id(node_instance_id) as Node
+	if node == null:
+		return
+	refresh_node_tag_index(node)
+
+
+func _tag_index_group_name(tag: StringName) -> StringName:
+	return StringName(TAG_INDEX_GROUP_PREFIX + String(tag))
+
+
 # target is Object because it may be Node, Resource, or a custom RefCounted.
+## Resolves every tag [param target] owns into a container.
+## Accepts nodes, components, containers, tags, and adapter objects.
 func get_owned_gameplay_tags(target: Object) -> GameplayTagContainer:
 	if target is GameplayTagContainer:
 		return target.duplicate_container()
@@ -283,22 +383,26 @@ func get_owned_gameplay_tags(target: Object) -> GameplayTagContainer:
 	return GameplayTagContainer.new()
 
 
+## Returns whether [param target] owns [param tag], matching parents unless [param exact].
 func target_has_tag(target: Object, tag: StringName, exact: bool = false) -> bool:
 	return get_owned_gameplay_tags(target).has_tag(tag, exact)
 
 
+## Returns whether [param target] owns at least one of [param tags].
 func target_has_any(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
 	return get_owned_gameplay_tags(target).has_any(
 		GameplayTagDatabase.canonicalize_tag_array(tags), exact
 	)
 
 
+## Returns whether [param target] owns every one of [param tags].
 func target_has_all(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
 	return get_owned_gameplay_tags(target).has_all(
 		GameplayTagDatabase.canonicalize_tag_array(tags), exact
 	)
 
 
+## Returns bodies overlapping [param area] that own [param tag].
 func get_overlapping_bodies_with_tag(
 	area: Area3D, tag: StringName, exact: bool = false
 ) -> Array[Node]:
@@ -311,6 +415,7 @@ func get_overlapping_bodies_with_tag(
 	return matches
 
 
+## Returns areas overlapping [param area] that own [param tag].
 func get_overlapping_areas_with_tag(
 	area: Area3D, tag: StringName, exact: bool = false
 ) -> Array[Area3D]:
@@ -323,6 +428,7 @@ func get_overlapping_areas_with_tag(
 	return matches
 
 
+## Returns the first overlapping body or area owning [param tag], or null.
 func get_first_overlapping_target_with_tag(
 	area: Area3D, tag: StringName, exact: bool = false
 ) -> Node:
@@ -521,11 +627,26 @@ func _append_tags_from_dynamic_value(value: Variant, out_tags: Array[StringName]
 	return false
 
 
+# A bare `tags` property is only a gameplay tag payload when its type says so.
+# An unrelated class holding `var tags: Array[String]` must not be mistaken for a target.
+func _is_unambiguous_tag_payload(value: Variant) -> bool:
+	if value is GameplayTagContainer or value is GameplayTag:
+		return true
+	if value is Array:
+		return value.get_typed_builtin() == TYPE_STRING_NAME
+	return false
+
+
 func _append_known_property_tags(object: Object, out_tags: Array[StringName]) -> void:
 	for property_name in TAG_PROPERTY_NAMES:
 		# Object.get() yields null for properties the object does not declare, so this
 		# needs no property-list scan. Scanning cost dominated every target check.
 		if _append_tags_from_dynamic_value(object.get(property_name), out_tags):
+			return
+
+	var ambiguous_value: Variant = object.get(AMBIGUOUS_TAG_PROPERTY_NAME)
+	if _is_unambiguous_tag_payload(ambiguous_value):
+		if _append_tags_from_dynamic_value(ambiguous_value, out_tags):
 			return
 	if object.has_meta(NODE_TAGS_META_NAME):
 		_append_tags_from_dynamic_value(object.get_meta(NODE_TAGS_META_NAME), out_tags)

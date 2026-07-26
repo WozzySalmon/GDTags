@@ -1,6 +1,8 @@
 @tool
 class_name GameplayTagTrigger3D
 extends Area3D
+## An Area3D that only reports overlaps from targets carrying the required tags.
+## Use it for tag-gated volumes such as damage zones, pickups, and checkpoints.
 
 signal tagged_body_entered(body: Node)
 signal tagged_area_entered(area: Area3D)
@@ -30,6 +32,8 @@ func _ready() -> void:
 		area_entered.connect(_on_area_entered)
 
 
+## Returns whether [param target] satisfies [member required_tags] under [member match_mode].
+## Always false once a [member trigger_once] trigger has fired.
 func can_trigger(target: Node) -> bool:
 	var allowed: bool = false
 	if target != null and not (trigger_once and _has_triggered):
@@ -46,6 +50,7 @@ func can_trigger(target: Node) -> bool:
 	return allowed
 
 
+## Returns currently overlapping bodies that satisfy this trigger's tag requirements.
 func get_matching_overlapping_bodies() -> Array[Node]:
 	var matches: Array[Node] = []
 	for body in get_overlapping_bodies():
@@ -54,6 +59,7 @@ func get_matching_overlapping_bodies() -> Array[Node]:
 	return matches
 
 
+## Returns currently overlapping areas that satisfy this trigger's tag requirements.
 func get_matching_overlapping_areas() -> Array[Area3D]:
 	var matches: Array[Area3D] = []
 	for area in get_overlapping_areas():
