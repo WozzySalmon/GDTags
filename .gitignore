@@ -5,9 +5,15 @@
 # Generated package output
 dist/
 
+# Generated Godot class reference (tools/linux/dump_godot_api.sh)
+.godot-api/
+
 # Editor and temporary files
 .pi-subagents/
 ~*/
 ~*
 *.tmp
 *.TMP
+
+# Python bytecode from tools/
+__pycache__/

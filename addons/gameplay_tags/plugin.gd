@@ -3,10 +3,6 @@ extends EditorPlugin
 
 const AUTOLOAD_NAME: String = "GameplayTags"
 const AUTOLOAD_PATH: String = "res://addons/gameplay_tags/runtime/gameplay_tags.gd"
-const DATABASE_SETTING: String = "gameplay_tags/database_path"
-const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
-const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
-const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
 # Keep the tag manager out of Godot's Inspector tab stack. DOCK_SLOT_RIGHT_UL
 # is where Inspector/Node/History live by default, and adding a plugin dock there
 # can steal focus/collapse the visible Inspector area when the addon loads.
@@ -64,13 +60,21 @@ func _disable_plugin() -> void:
 
 
 func _ensure_project_settings() -> void:
-	if not ProjectSettings.has_setting(DATABASE_SETTING):
-		ProjectSettings.set_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
-	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+	if not ProjectSettings.has_setting(GameplayTagUtils.DATABASE_SETTING):
+		ProjectSettings.set_setting(
+			GameplayTagUtils.DATABASE_SETTING, GameplayTagUtils.DEFAULT_DATABASE_PATH
+		)
+	ProjectSettings.set_initial_value(
+		GameplayTagUtils.DATABASE_SETTING, GameplayTagUtils.DEFAULT_DATABASE_PATH
+	)
 
-	if not ProjectSettings.has_setting(TAG_IDS_SETTING):
-		ProjectSettings.set_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
-	ProjectSettings.set_initial_value(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
+	if not ProjectSettings.has_setting(GameplayTagUtils.TAG_IDS_SETTING):
+		ProjectSettings.set_setting(
+			GameplayTagUtils.TAG_IDS_SETTING, GameplayTagUtils.DEFAULT_TAG_IDS_PATH
+		)
+	ProjectSettings.set_initial_value(
+		GameplayTagUtils.TAG_IDS_SETTING, GameplayTagUtils.DEFAULT_TAG_IDS_PATH
+	)
 
 
 func _ensure_autoload() -> bool:
@@ -102,7 +106,7 @@ static func _get_autoload_conflict() -> String:
 
 
 func _ensure_database_resource() -> void:
-	var path: String = String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	var path: String = GameplayTagUtils.get_database_path()
 	if ResourceLoader.exists(path):
 		var existing_resource: Resource = (
 			ResourceLoader
@@ -132,18 +136,14 @@ func _ensure_tag_ids_script() -> void:
 	var database: GameplayTagDatabase = _load_database_for_generation()
 	if database == null:
 		return
-	var output_path: String = String(
-		ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
-	)
+	var output_path: String = GameplayTagUtils.get_tag_ids_path()
 	var save_error: Error = TagCodeGenerator.save_tag_ids(database, output_path)
 	if save_error != OK:
 		push_error("Could not generate gameplay tag IDs: %s" % error_string(save_error))
 
 
 func _load_database_for_generation() -> GameplayTagDatabase:
-	var database_path: String = String(
-		ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
-	)
+	var database_path: String = GameplayTagUtils.get_database_path()
 	if ResourceLoader.exists(database_path):
 		var existing_resource: Resource = (
 			ResourceLoader

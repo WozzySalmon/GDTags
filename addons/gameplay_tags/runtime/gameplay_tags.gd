@@ -37,11 +37,7 @@ func set_database(database: GameplayTagDatabase, save_now: bool = false) -> void
 
 ## Returns the configured database path from ProjectSettings.
 func get_database_path() -> String:
-	return String(
-		ProjectSettings.get_setting(
-			GameplayTagUtils.DATABASE_SETTING, GameplayTagUtils.DEFAULT_DATABASE_PATH
-		)
-	)
+	return GameplayTagUtils.get_database_path()
 
 
 ## Points the addon at a different database path and drops the cached database.

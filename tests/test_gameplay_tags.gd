@@ -64,6 +64,7 @@ func _run_all_tests() -> void:
 	_run_test("plain_object_target_helpers", _test_plain_object_target_helpers)
 	_run_test("component_lookup_is_bounded_to_children", _test_component_lookup_is_bounded)
 	_run_test("tag_names_are_validated_everywhere", _test_tag_name_validation)
+	_run_test("setting_paths_honour_overrides", _test_setting_path_resolution)
 	_run_test("catalog_objects_are_not_tag_targets", _test_catalog_objects_are_not_targets)
 	_run_test("database_set_state_applies_whole_state", _test_database_set_state)
 	_run_test("container_tag_stacking", _test_container_tag_stacking)
@@ -502,6 +503,35 @@ func _test_component_lookup_is_bounded() -> void:
 		"Every direct child component should contribute its tags",
 	)
 	level.free()
+
+
+func _test_setting_path_resolution() -> void:
+	var setting: String = "gameplay_tags/test_only_path_setting"
+	var fallback: String = "res://fallback.tres"
+
+	assert_eq(
+		GameplayTagUtils.resolve_setting_path(setting, fallback),
+		fallback,
+		"A missing setting should fall back to the default",
+	)
+
+	ProjectSettings.set_setting(setting, "res://configured.tres")
+	assert_eq(
+		GameplayTagUtils.resolve_setting_path(setting, fallback),
+		"res://configured.tres",
+		"A configured setting should win over the default",
+	)
+
+	# The dock relies on an explicitly blank path staying blank so it can report the
+	# failure, rather than silently writing to the default location.
+	ProjectSettings.set_setting(setting, "")
+	assert_eq(
+		GameplayTagUtils.resolve_setting_path(setting, fallback),
+		"",
+		"An explicitly empty setting should not fall back",
+	)
+
+	ProjectSettings.set_setting(setting, null)
 
 
 func _test_tag_name_validation() -> void:

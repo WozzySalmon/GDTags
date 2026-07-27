@@ -13,12 +13,22 @@ const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
 
 ## Returns the configured gameplay tag database path.
 static func get_database_path() -> String:
-	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	return resolve_setting_path(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
 
 
 ## Returns the configured path for the generated GameplayTagIds script.
 static func get_tag_ids_path() -> String:
-	return String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
+	return resolve_setting_path(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
+
+
+## Reads a project setting, honouring per-platform feature tag overrides such as
+## [code]gameplay_tags/database_path.mobile[/code]. [method ProjectSettings.get_setting]
+## ignores those overrides, so it is deliberately not used here.
+## An explicitly empty value is returned as-is; only a missing setting falls back.
+static func resolve_setting_path(setting_name: String, fallback: String) -> String:
+	if not ProjectSettings.has_setting(setting_name):
+		return fallback
+	return String(ProjectSettings.get_setting_with_override(setting_name))
 
 
 ## Convenience alias for [method GameplayTagDatabase.normalize_tag].

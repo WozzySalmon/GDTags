@@ -1,7 +1,6 @@
 extends SceneTree
 
 const AUTOLOAD_SETTING: String = "autoload/GameplayTags"
-const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
 const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 const PluginScript: Script = preload("res://addons/gameplay_tags/plugin.gd")
 const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
@@ -49,7 +48,7 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 
 	var original_database_path: String = registry.get_database_path()
 	var original_tag_ids_path: String = str(
-		ProjectSettings.get_setting(TAG_IDS_SETTING, "res://gameplay_tag_ids.gd")
+		ProjectSettings.get_setting(GameplayTagUtils.TAG_IDS_SETTING, "res://gameplay_tag_ids.gd")
 	)
 	var original_database: GameplayTagDatabase = registry.get_database()
 	var database_path: String = "user://gameplay_tags_editor_test_database.tres"
@@ -61,7 +60,7 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 
 	registry.set_database_path(database_path)
 	registry.set_database(GameplayTagDatabase.new())
-	ProjectSettings.set_setting(TAG_IDS_SETTING, "")
+	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, "")
 
 	var csv_file: FileAccess = FileAccess.open(csv_path, FileAccess.WRITE)
 	assert_true(csv_file != null, "Editor CSV fixture should be writable")
@@ -98,7 +97,7 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		"The generated-ID failure should be reported separately",
 	)
 
-	ProjectSettings.set_setting(TAG_IDS_SETTING, tag_ids_path)
+	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, tag_ids_path)
 	csv_item.select(0)
 	dock.call("_on_tree_item_selected")
 	assert_false(add_child_button.disabled, "Selecting a tag should enable Add Child")
@@ -188,7 +187,7 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 	dock.free()
 	registry.set_database_path(original_database_path)
 	registry.set_database(original_database)
-	ProjectSettings.set_setting(TAG_IDS_SETTING, original_tag_ids_path)
+	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, original_tag_ids_path)
 	if owns_registry:
 		registry.free()
 	_remove_test_file(database_path)

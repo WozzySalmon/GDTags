@@ -5,8 +5,6 @@ const TagArrayProperty: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_array_property.gd"
 )
 const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
-const DATABASE_SETTING: String = "gameplay_tags/database_path"
-const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
 
 
 class TagSelectionTarget:
@@ -140,15 +138,19 @@ func _on_picker_property_changed(
 
 
 func _test_tag_creation_undo_redo(registry: Node) -> void:
-	var original_database_path: Variant = ProjectSettings.get_setting(DATABASE_SETTING)
-	var original_tag_ids_path: Variant = ProjectSettings.get_setting(TAG_IDS_SETTING)
+	var original_database_path: Variant = ProjectSettings.get_setting(
+		GameplayTagUtils.DATABASE_SETTING
+	)
+	var original_tag_ids_path: Variant = ProjectSettings.get_setting(
+		GameplayTagUtils.TAG_IDS_SETTING
+	)
 	var original_database: GameplayTagDatabase = registry.get_database()
 	var database_path: String = "user://gameplay_tags_undo_test_database.tres"
 	var tag_ids_path: String = "user://gameplay_tags_undo_test_ids.gd"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(tag_ids_path))
-	ProjectSettings.set_setting(DATABASE_SETTING, database_path)
-	ProjectSettings.set_setting(TAG_IDS_SETTING, tag_ids_path)
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, database_path)
+	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, tag_ids_path)
 
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	database.add_tag(&"State.Stunned")
@@ -189,8 +191,8 @@ func _test_tag_creation_undo_redo(registry: Node) -> void:
 	undo_redo_manager.clear_history(history_id)
 	dock.free()
 	registry.set_database(original_database)
-	ProjectSettings.set_setting(DATABASE_SETTING, original_database_path)
-	ProjectSettings.set_setting(TAG_IDS_SETTING, original_tag_ids_path)
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, original_database_path)
+	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, original_tag_ids_path)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(tag_ids_path))
 
