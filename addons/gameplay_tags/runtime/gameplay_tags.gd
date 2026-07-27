@@ -103,11 +103,6 @@ func is_valid_tag(raw_tag: StringName) -> bool:
 	return database.has_tag(database.resolve_tag(raw_tag))
 
 
-## Alias for [method is_valid_tag].
-func has_tag(raw_tag: StringName) -> bool:
-	return is_valid_tag(raw_tag)
-
-
 ## Returns a GameplayTag for a registered tag, or null when it is unknown.
 func request_tag(raw_tag: StringName) -> GameplayTag:
 	return get_database().get_tag(raw_tag)

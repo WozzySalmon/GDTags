@@ -1,48 +1,21 @@
-extends SceneTree
+extends "res://tests/tag_test_case.gd"
 ## Covers the capabilities added on top of the original tag core: owner-level stack
 ## depths, query diagnostics, tag redirects, and the editor reference index.
 
-const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 
-var _assertion_count: int = 0
-var _failed: bool = false
-var _previous_database: GameplayTagDatabase
-var _registry: Node
+func _suite_name() -> String:
+	return "GDSCRIPT_GAMEPLAY_TAGS_LIFECYCLE_TEST"
 
 
-func _init() -> void:
-	call_deferred("_run_all_tests")
-
-
-func _run_all_tests() -> void:
-	_registry = _get_or_create_registry()
-	_previous_database = _registry.get_database()
-	_registry.set_database(_make_test_database())
-
-	_run_test("owner_level_stacking_survives_resolution", _test_owner_level_stacking)
-	_run_test("query_explain_agrees_with_matches", _test_query_explain)
-	_run_test("query_validation_reports_issues", _test_query_validation)
-	_run_test("rename_records_followable_redirects", _test_rename_redirects)
-	_run_test("redirects_keep_authored_data_resolving", _test_redirect_resolution)
-	_run_test("reference_index_finds_uses_and_dead_tags", _test_reference_index)
-	_run_test("migration_rewrites_only_whole_references", _test_reference_migration)
-	_run_test("renaming_then_migrating_retires_the_redirect", _test_redirect_driven_migration)
-
-	_registry.set_database(_previous_database)
-	if not _failed:
-		print("GDSCRIPT_GAMEPLAY_TAGS_LIFECYCLE_TEST passed (%d assertions)" % _assertion_count)
-		quit(0)
-
-
-func _get_or_create_registry() -> Node:
-	var existing: Node = root.get_node_or_null("GameplayTags")
-	if existing != null:
-		return existing
-
-	var registry: Node = GameplayTagsScript.new()
-	registry.name = "GameplayTags"
-	root.add_child(registry)
-	return registry
+func _run_tests() -> void:
+	run_test("owner_level_stacking_survives_resolution", _test_owner_level_stacking)
+	run_test("query_explain_agrees_with_matches", _test_query_explain)
+	run_test("query_validation_reports_issues", _test_query_validation)
+	run_test("rename_records_followable_redirects", _test_rename_redirects)
+	run_test("redirects_keep_authored_data_resolving", _test_redirect_resolution)
+	run_test("reference_index_finds_uses_and_dead_tags", _test_reference_index)
+	run_test("migration_rewrites_only_whole_references", _test_reference_migration)
+	run_test("renaming_then_migrating_retires_the_redirect", _test_redirect_driven_migration)
 
 
 func _make_test_database() -> GameplayTagDatabase:
@@ -60,19 +33,6 @@ func _make_test_database() -> GameplayTagDatabase:
 		)
 	)
 	return database
-
-
-func _run_test(test_name: String, test_callable: Callable) -> void:
-	if _failed:
-		return
-	# A runtime error inside a test aborts the call without raising anything the harness
-	# can see, so a broken test would otherwise report PASS having asserted nothing.
-	var assertions_before: int = _assertion_count
-	test_callable.call()
-	if _assertion_count == assertions_before:
-		_fail("%s ran no assertions, which means it aborted early" % test_name)
-	if not _failed:
-		print("PASS %s" % test_name)
 
 
 func _test_owner_level_stacking() -> void:
@@ -102,14 +62,14 @@ func _test_owner_level_stacking() -> void:
 
 	# The point of owner-level stacking: depth survives the autoload's resolution,
 	# which previously rebuilt a container and dropped every count.
-	var resolved: GameplayTagContainer = _registry.get_owned_gameplay_tags(actor)
+	var resolved: GameplayTagContainer = registry.get_owned_gameplay_tags(actor)
 	assert_eq(
 		resolved.get_tag_count(GameplayTagIds.STATE_STUNNED),
 		3,
 		"Resolving a target should carry component stack depth through",
 	)
 	assert_true(
-		_registry.target_has_tag(actor, GameplayTagIds.STATE_STUNNED),
+		registry.target_has_tag(actor, GameplayTagIds.STATE_STUNNED),
 		"A stacked tag should still satisfy an ordinary tag check",
 	)
 
@@ -204,7 +164,7 @@ func _test_query_explain() -> void:
 
 func _test_query_validation() -> void:
 	var known_tags: Array[StringName] = [GameplayTagIds.STATE_STUNNED]
-	var database: GameplayTagDatabase = _registry.get_database()
+	var database: GameplayTagDatabase = registry.get_database()
 
 	assert_true(
 		GameplayTagQuery.all(known_tags).validate(database).is_empty(),
@@ -312,11 +272,11 @@ func _test_rename_redirects() -> void:
 
 
 func _test_redirect_resolution() -> void:
-	var database: GameplayTagDatabase = _registry.get_database()
+	var database: GameplayTagDatabase = registry.get_database()
 	assert_true(database.rename_tag(&"State.Stunned", &"State.Incapacitated"))
 
 	assert_true(
-		_registry.is_valid_tag(&"State.Stunned"),
+		registry.is_valid_tag(&"State.Stunned"),
 		"A retired tag name should still validate through its redirect",
 	)
 
@@ -335,20 +295,20 @@ func _test_redirect_resolution() -> void:
 		"Authored tags naming a retired branch should be stored as the replacement",
 	)
 	assert_true(
-		_registry.target_has_tag(actor, &"State.Incapacitated"),
+		registry.target_has_tag(actor, &"State.Incapacitated"),
 		"A target authored with the retired name should match the replacement",
 	)
 
 	var node_tags: Array[StringName] = [&"State.Stunned"]
-	_registry.set_node_tags(actor, node_tags)
+	registry.set_node_tags(actor, node_tags)
 	assert_true(
-		_registry.get_node_tags(actor).has_exact(&"State.Incapacitated"),
+		registry.get_node_tags(actor).has_exact(&"State.Incapacitated"),
 		"Direct node tags should resolve a retired name to its replacement",
 	)
 
 	root.remove_child(actor)
 	actor.free()
-	_registry.set_database(_make_test_database())
+	registry.set_database(_make_test_database())
 
 
 func _test_reference_index() -> void:
@@ -521,32 +481,3 @@ func _remove_directory(path: String) -> void:
 		entry = directory.get_next()
 	directory.list_dir_end()
 	DirAccess.remove_absolute(path)
-
-
-func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:
-	_assertion_count += 1
-	if not condition:
-		_fail(message)
-
-
-func assert_false(condition: bool, message: String = "Expected condition to be false") -> void:
-	_assertion_count += 1
-	if condition:
-		_fail(message)
-
-
-func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void:
-	_assertion_count += 1
-	if actual != expected:
-		var prefix: String = "%s: " % message if not message.is_empty() else ""
-		_fail("%sexpected %s, got %s" % [prefix, str(expected), str(actual)])
-
-
-func _fail(message: String) -> void:
-	if _failed:
-		return
-	_failed = true
-	push_error(message)
-	if _registry != null:
-		_registry.set_database(_previous_database)
-	quit(1)

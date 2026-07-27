@@ -37,6 +37,7 @@ navigation guidance; current source and tests are authoritative.
 
 ## Validation routes
 
+- `tests/tag_test_case.gd`: shared harness every test script extends — assertions, registry setup, runner.
 - `tests/test_gameplay_tags.gd`: primary runtime API, database, containers, queries, targets, and IDs.
 - `tests/test_runtime_edge_cases.gd`: mutation, reload, autoload, and physics edge cases.
 - `tests/test_editor_workflows.gd`: dock/plugin workflows and editor-facing state changes.

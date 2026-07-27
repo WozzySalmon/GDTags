@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/tag_test_case.gd"
 
 const TagProperty: Script = preload("res://addons/gameplay_tags/editor/gameplay_tag_property.gd")
 const TagArrayProperty: Script = preload(
@@ -14,42 +14,26 @@ class TagSelectionTarget:
 	var tags: Array[StringName] = []
 
 
-var _assertion_count: int = 0
-var _failed: bool = false
 var _picker_change_count: int = 0
 var _picker_changed_property: StringName = &""
 # EditorProperty.property_changed carries different property value types.
 var _picker_changed_value: Variant
 
 
-func _init() -> void:
-	call_deferred("_run_tests")
+func _suite_name() -> String:
+	return "GDSCRIPT_GAMEPLAY_TAGS_PICKER_TEST"
+
+
+func _make_test_database() -> GameplayTagDatabase:
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	database.add_tag(&"State.Stunned")
+	return database
 
 
 func _run_tests() -> void:
-	var registry: Node = root.get_node_or_null("GameplayTags")
-	var owns_registry: bool = false
-	if registry == null:
-		registry = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd").new()
-		registry.name = "GameplayTags"
-		root.add_child(registry)
-		owns_registry = true
-
-	var original_database: GameplayTagDatabase = registry.get_database()
-	var database: GameplayTagDatabase = GameplayTagDatabase.new()
-	database.add_tag(&"State.Stunned")
-	registry.set_database(database)
-
-	_test_tag_creation_undo_redo(registry)
-	_test_single_picker_selection()
-	_test_array_picker_selection()
-
-	registry.set_database(original_database)
-	if owns_registry:
-		registry.free()
-	if not _failed:
-		print("GDSCRIPT_GAMEPLAY_TAGS_PICKER_TEST passed (%d assertions)" % _assertion_count)
-		quit(0)
+	run_test("tag_creation_undo_redo", _test_tag_creation_undo_redo)
+	run_test("single_picker_selection", _test_single_picker_selection)
+	run_test("array_picker_selection", _test_array_picker_selection)
 
 
 func _test_single_picker_selection() -> void:
@@ -137,7 +121,7 @@ func _on_picker_property_changed(
 	_picker_changed_value = value
 
 
-func _test_tag_creation_undo_redo(registry: Node) -> void:
+func _test_tag_creation_undo_redo() -> void:
 	var original_database_path: Variant = ProjectSettings.get_setting(
 		GameplayTagUtils.DATABASE_SETTING
 	)
@@ -207,21 +191,3 @@ func _find_tree_item(parent: TreeItem, tag: StringName) -> TreeItem:
 			return nested_item
 		item = item.get_next()
 	return null
-
-
-func assert_eq(actual: Variant, expected: Variant, message: String = "Values should match") -> void:
-	_assertion_count += 1
-	if actual == expected or _failed:
-		return
-	_failed = true
-	push_error("%s: expected %s, got %s" % [message, str(expected), str(actual)])
-	quit(1)
-
-
-func assert_true(condition: bool, message: String) -> void:
-	_assertion_count += 1
-	if condition or _failed:
-		return
-	_failed = true
-	push_error(message)
-	quit(1)

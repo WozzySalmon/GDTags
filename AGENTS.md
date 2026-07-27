@@ -1,26 +1,60 @@
 # Gameplay Tags Project Instructions
 
-When editing this project, follow these rules.
+## Authority
 
-## Always-on invariants
+`docs/GDSCRIPT_STYLE.md` is Godot's official style guide and is not negotiable.
+`gdlint` and `gdformat` enforce it — a lint failure is a defect in your code, not in
+the config. Do not edit `gdlintrc` to make your change pass.
 
-- Follow `docs/GDSCRIPT_STYLE.md` and Godot's official GDScript style guide.
-- Write explicit types on every variable, constant, function parameter, and return value; do not use `:=`.
-- Use the `GameplayTags` autoload for target checks, containers, queries, and database operations.
-- Do not directly mutate `GameplayTagDatabase.tags`; use its mutation methods so hierarchy and signals stay correct.
-- Editor plugin scripts are `@tool`; Resources and RefCounted scripts called by editor tool code must also be `@tool`.
-- Keep the addon implementation pure GDScript.
+Current source and tests outrank every document here.
 
-## Context and workflow
+## Use this, not that
 
-- For non-trivial work, start with `docs/PROJECT_MAP.md`. Select the smallest matching task route,
-  inspect its entry point and nearest tests, and expand only through relevant callers and dependencies.
-  The map is a navigation aid; current source and tests are authoritative.
-- Before editing, define the observable behavior, important boundaries, and invariant. For behavioral
-  bugs, reproduce the failure and add a focused regression test first when practical.
-- Implement the smallest coherent change. Validate from cheapest and narrowest to broadest, and let
-  every check finish against a stable source snapshot; never edit files while a check is running.
-- Load the matching project skill for detailed typing, editor, regression, or validation procedures.
-  Treat `docs/VALIDATION.md` and `docs/PACKAGING.md` as the canonical command references.
-- During cleanup, remove generated or ignored artifacts only. Preserve substantive untracked drafts
-  and backlogs unless the user explicitly names them for deletion.
+| Use | Not | Why |
+|---|---|---|
+| `var x: int = 1` | `var x := 1` | Explicit types everywhere: variables, constants, parameters, returns. |
+| `GameplayTags` autoload | `GameplayTagDatabase` directly | The autoload is the public facade for target checks, containers, queries, and database operations. |
+| `add_tag()`, `remove_tag()`, `rename_tag()`, `ensure_parent_tags()` | assigning `GameplayTagDatabase.tags` | Direct assignment skips hierarchy maintenance and change signals. |
+| `GameplayTagIds.TEAM_ENEMY` | `&"Team.Enemy"` | Generated constants survive renames and are found by the reference index. |
+| `GameplayTagComponent` | node groups | Groups are the tag index's private business, not an authoring surface. |
+| `GameplayTagUtils.DATABASE_SETTING` and friends | repeating `"gameplay_tags/database_path"` | Setting names and default paths live in one place. |
+| `GameplayTagUtils.resolve_setting_path()` | `ProjectSettings.get_setting()` | The latter silently ignores per-platform feature-tag overrides. |
+| `resolve_tag()` on authored tag names | assuming the name is current | A tag renamed earlier resolves through its redirect instead of being dropped. |
+| stack methods on `GameplayTagComponent` | stack methods on a resolved container | `get_owned_gameplay_tags()` returns a fresh copy; stacking it changes nothing. |
+| `FileAccess.file_exists()` | `ResourceLoader.exists()` as proof of a file | `exists()` also returns true for a cache-only resource with no file behind it. |
+| `tools/linux/query_godot_api.py` | the online class reference | The project targets Godot 4.6; the web docs show whatever is current. |
+
+`Variant` is for engine boundaries only — `EditorProperty` values, `Object.call`
+returns, undo/redo parameters. Convert to a concrete type at the boundary and never
+propagate it into helper signatures.
+
+`@tool` is required on editor plugin scripts *and* on every Resource or RefCounted
+they call. Missing it fails silently in the editor.
+
+The addon implementation stays pure GDScript.
+
+## Working method
+
+1. Start from `docs/PROJECT_MAP.md`, take the smallest matching route, and expand only
+   through relevant callers.
+2. State the observable behaviour and the invariant before editing. For a behavioural
+   bug, reproduce it first, then write the regression test, then fix.
+3. Make the smallest coherent change.
+4. Validate narrow to broad against a stable snapshot. Never edit files while a check
+   is running.
+
+`docs/VALIDATION.md` and `docs/PACKAGING.md` are the canonical command references.
+
+## Tests
+
+Every test file extends `tests/tag_test_case.gd`. Do not hand-roll assertion helpers
+or a runner — a test that asserts nothing must fail, and that guard lives in the base
+class so it cannot be forgotten.
+
+Add a test to the file matching its subject; add a new file only for a genuinely new
+subject, and register it in `tools/linux/test_addon.sh` and `docs/VALIDATION.md`.
+
+## Cleanup
+
+Remove generated or ignored artifacts only. Preserve untracked drafts and backlogs
+unless explicitly told to delete them.

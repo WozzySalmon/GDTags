@@ -24,6 +24,11 @@ tools/linux/check_gdscript.sh
 Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
 with status 0.
 
+Every test script extends `tests/tag_test_case.gd`, which owns the assertion helpers, the registry
+and database setup, and the runner. A case that records no assertions fails: a runtime error aborts
+the test callable without raising anything the harness can see, so without that check a broken test
+would report `PASS` having verified nothing.
+
 ## Supported versions
 
 Run the suite against both configured local Godot versions:

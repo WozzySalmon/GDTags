@@ -1,27 +1,26 @@
-extends SceneTree
+extends "res://tests/tag_test_case.gd"
 
 const AUTOLOAD_SETTING: String = "autoload/GameplayTags"
-const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
+const LocalGameplayTagsScript: Script = preload(
+	"res://addons/gameplay_tags/runtime/gameplay_tags.gd"
+)
 const PluginScript: Script = preload("res://addons/gameplay_tags/plugin.gd")
 const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
 const TagDockIo: Script = preload("res://addons/gameplay_tags/editor/tag_dock_io.gd")
 
-var _assertion_count: int = 0
-var _failed: bool = false
+
+func _suite_name() -> String:
+	return "GDSCRIPT_GAMEPLAY_TAGS_EDITOR_TEST"
 
 
-func _init() -> void:
-	call_deferred("_run_all_tests")
-
-
-func _run_all_tests() -> void:
-	_test_autoload_collision_is_rejected()
-	_test_csv_import_reports_id_generation_failure()
-	_test_cache_only_resource_is_not_a_conflict()
-	_test_undo_targets_its_own_database()
-	if not _failed:
-		print("GDSCRIPT_GAMEPLAY_TAGS_EDITOR_TEST passed (%d assertions)" % _assertion_count)
-		quit(0)
+func _run_tests() -> void:
+	run_test("autoload_collision_is_rejected", _test_autoload_collision_is_rejected)
+	run_test(
+		"csv_import_reports_id_generation_failure",
+		_test_csv_import_reports_id_generation_failure,
+	)
+	run_test("cache_only_resource_is_not_a_conflict", _test_cache_only_resource_is_not_a_conflict)
+	run_test("undo_targets_its_own_database", _test_undo_targets_its_own_database)
 
 
 func _test_autoload_collision_is_rejected() -> void:
@@ -90,12 +89,12 @@ func _test_undo_targets_its_own_database() -> void:
 
 func _test_csv_import_reports_id_generation_failure() -> void:
 	var registry: Node = root.get_node_or_null("GameplayTags")
-	var owns_registry: bool = false
+	var ownsregistry: bool = false
 	if registry == null:
-		registry = GameplayTagsScript.new()
+		registry = LocalGameplayTagsScript.new()
 		registry.name = "GameplayTags"
 		root.add_child(registry)
-		owns_registry = true
+		ownsregistry = true
 
 	var original_database_path: String = registry.get_database_path()
 	var original_tag_ids_path: String = str(
@@ -239,7 +238,7 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 	registry.set_database_path(original_database_path)
 	registry.set_database(original_database)
 	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, original_tag_ids_path)
-	if owns_registry:
+	if ownsregistry:
 		registry.free()
 	_remove_test_file(database_path)
 	_remove_test_file(csv_path)
@@ -260,27 +259,3 @@ func _find_tree_item(parent: TreeItem, tag: StringName) -> TreeItem:
 			return nested_item
 		item = item.get_next()
 	return null
-
-
-func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:
-	_assertion_count += 1
-	if not condition:
-		_fail(message)
-
-
-func assert_false(condition: bool, message: String = "Expected condition to be false") -> void:
-	assert_true(not condition, message)
-
-
-func assert_eq(actual: Variant, expected: Variant, message: String = "Values should match") -> void:
-	_assertion_count += 1
-	if actual != expected:
-		_fail("%s: expected %s, got %s" % [message, str(expected), str(actual)])
-
-
-func _fail(message: String) -> void:
-	if _failed:
-		return
-	_failed = true
-	push_error(message)
-	quit(1)

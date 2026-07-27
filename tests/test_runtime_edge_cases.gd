@@ -1,49 +1,21 @@
-extends SceneTree
+extends "res://tests/tag_test_case.gd"
 
-const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 const MAX_OVERLAP_WAIT_FRAMES: int = 10
 
-var _assertion_count: int = 0
-var _failed: bool = false
-var _previous_database: GameplayTagDatabase
 var _query_change_count: int = 0
 var _body_emission_count: int = 0
 var _area_emission_count: int = 0
-var _registry: Node
 
 
-func _init() -> void:
-	call_deferred("_run_all_tests")
+func _suite_name() -> String:
+	return "GDSCRIPT_GAMEPLAY_TAGS_EDGE_TEST"
 
 
-func _run_all_tests() -> void:
-	_registry = _get_or_create_registry()
-	_previous_database = _registry.get_database()
-	_registry.set_database(_make_test_database())
-
-	_run_test("database_recursive_removal_and_csv_round_trip", _test_database_edges)
-	_run_test("container_component_and_query_mutations", _test_runtime_mutations)
-	_run_test("autoload_csv_and_node_helpers", _test_autoload_helpers)
-	if not _failed:
-		await _test_overlap_helpers_and_trigger_once()
-	if not _failed:
-		print("PASS overlap_helpers_and_trigger_once")
-
-	_registry.set_database(_previous_database)
-	if not _failed:
-		print("GDSCRIPT_GAMEPLAY_TAGS_EDGE_TEST passed (%d assertions)" % _assertion_count)
-		quit(0)
-
-
-func _get_or_create_registry() -> Node:
-	var existing: Node = root.get_node_or_null("GameplayTags")
-	if existing != null:
-		return existing
-
-	var registry: Node = GameplayTagsScript.new()
-	registry.name = "GameplayTags"
-	root.add_child(registry)
-	return registry
+func _run_tests() -> void:
+	run_test("database_recursive_removal_and_csv_round_trip", _test_database_edges)
+	run_test("container_component_and_query_mutations", _test_runtime_mutations)
+	run_test("autoload_csv_and_node_helpers", _test_autoload_helpers)
+	await run_async_test("overlap_helpers_and_trigger_once", _test_overlap_helpers_and_trigger_once)
 
 
 func _make_test_database() -> GameplayTagDatabase:
@@ -61,14 +33,6 @@ func _make_test_database() -> GameplayTagDatabase:
 		)
 	)
 	return database
-
-
-func _run_test(test_name: String, test_callable: Callable) -> void:
-	if _failed:
-		return
-	test_callable.call()
-	if not _failed:
-		print("PASS %s" % test_name)
 
 
 func _test_database_edges() -> void:
@@ -150,47 +114,47 @@ func _test_autoload_helpers() -> void:
 
 	var source_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	source_database.add_tags([&"Ability.Dash", &"Damage.Fire", &"Team.Enemy"])
-	_registry.set_database(source_database)
-	assert_eq(_registry.export_tags_to_csv(csv_path), OK)
+	registry.set_database(source_database)
+	assert_eq(registry.export_tags_to_csv(csv_path), OK)
 
 	var imported_database: GameplayTagDatabase = GameplayTagDatabase.new()
-	_registry.set_database(imported_database)
-	assert_true(_registry.import_tags_from_csv(csv_path, false) > 0)
+	registry.set_database(imported_database)
+	assert_true(registry.import_tags_from_csv(csv_path, false) > 0)
 	assert_eq(imported_database.get_all_tags(), source_database.get_all_tags())
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(csv_path))
 
-	_registry.set_database(_make_test_database())
+	registry.set_database(_make_test_database())
 	var actor: Node = Node.new()
 	root.add_child(actor)
 	var custom_tags: Array[StringName] = [&"Custom.Unregistered"]
-	assert_true(_registry.set_node_tags(actor, custom_tags, false))
-	assert_true(_registry.get_node_tags(actor).has_tag(&"Custom"))
+	assert_true(registry.set_node_tags(actor, custom_tags, false))
+	assert_true(registry.get_node_tags(actor).has_tag(&"Custom"))
 	assert_true(actor.is_in_group("gameplay_tagged_nodes"))
-	_registry.clear_node_tags(actor)
-	assert_true(_registry.get_node_tags(actor).is_empty())
+	registry.clear_node_tags(actor)
+	assert_true(registry.get_node_tags(actor).is_empty())
 	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
 
 	var team_enemy_tags: Array[StringName] = [&"Team.Enemy"]
 	var team_tags: Array[StringName] = [&"Team"]
 	var damage_or_team_tags: Array[StringName] = [&"Damage", &"Team"]
 	var damage_tags: Array[StringName] = [&"Damage"]
-	assert_true(_registry.make_container(team_enemy_tags).has_tag(&"Team"))
+	assert_true(registry.make_container(team_enemy_tags).has_tag(&"Team"))
 	assert_true(
-		_registry.make_query_all(team_tags).matches(GameplayTagContainer.new(team_enemy_tags))
+		registry.make_query_all(team_tags).matches(GameplayTagContainer.new(team_enemy_tags))
 	)
 	assert_true(
-		_registry.make_query_any(damage_or_team_tags).matches(
+		registry.make_query_any(damage_or_team_tags).matches(
 			GameplayTagContainer.new(team_enemy_tags)
 		)
 	)
 	assert_true(
-		_registry.make_query_none(damage_tags).matches(GameplayTagContainer.new(team_enemy_tags))
+		registry.make_query_none(damage_tags).matches(GameplayTagContainer.new(team_enemy_tags))
 	)
 	actor.free()
 
 
 func _test_overlap_helpers_and_trigger_once() -> void:
-	_registry.set_database(_make_test_database())
+	registry.set_database(_make_test_database())
 
 	var trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
 	trigger.collision_layer = 0
@@ -224,20 +188,20 @@ func _test_overlap_helpers_and_trigger_once() -> void:
 			break
 
 	assert_true(
-		_registry.get_overlapping_bodies_with_tag(trigger, &"Team.Enemy").has(body),
+		registry.get_overlapping_bodies_with_tag(trigger, &"Team.Enemy").has(body),
 		(
 			"Tagged body did not overlap the trigger within %d physics frames"
 			% MAX_OVERLAP_WAIT_FRAMES
 		),
 	)
 	assert_true(
-		_registry.get_overlapping_areas_with_tag(trigger, &"Team.Player").has(area),
+		registry.get_overlapping_areas_with_tag(trigger, &"Team.Player").has(area),
 		(
 			"Tagged area did not overlap the trigger within %d physics frames"
 			% MAX_OVERLAP_WAIT_FRAMES
 		),
 	)
-	assert_eq(_registry.get_first_overlapping_target_with_tag(trigger, &"Team.Enemy"), body)
+	assert_eq(registry.get_first_overlapping_target_with_tag(trigger, &"Team.Enemy"), body)
 
 	trigger.required_tags = [&"Team.Enemy"]
 	assert_true(trigger.get_matching_overlapping_bodies().has(body))
@@ -298,32 +262,3 @@ func _on_tagged_body_entered(_body: Node) -> void:
 
 func _on_tagged_area_entered(_area: Area3D) -> void:
 	_area_emission_count += 1
-
-
-func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:
-	_assertion_count += 1
-	if not condition:
-		_fail(message)
-
-
-func assert_false(condition: bool, message: String = "Expected condition to be false") -> void:
-	_assertion_count += 1
-	if condition:
-		_fail(message)
-
-
-func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void:
-	_assertion_count += 1
-	if actual != expected:
-		var prefix: String = "%s: " % message if not message.is_empty() else ""
-		_fail("%sexpected %s, got %s" % [prefix, str(expected), str(actual)])
-
-
-func _fail(message: String) -> void:
-	if _failed:
-		return
-	_failed = true
-	push_error(message)
-	if _registry != null:
-		_registry.set_database(_previous_database)
-	quit(1)

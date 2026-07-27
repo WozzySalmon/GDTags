@@ -1,4 +1,4 @@
-extends SceneTree
+extends "res://tests/tag_test_case.gd"
 
 
 class TaggedObject:
@@ -33,62 +33,37 @@ class StringNameTagsObject:
 	var tags: Array[StringName] = []
 
 
-const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 const TagCodeGenerator: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
 )
 
-var _assertion_count: int = 0
-var _failed: bool = false
-var _previous_database: GameplayTagDatabase
 var _query_change_count: int = 0
 var _database_change_count: int = 0
-var _registry: Node
 
 
-func _init() -> void:
-	call_deferred("_run_all_tests")
+func _suite_name() -> String:
+	return "GDSCRIPT_GAMEPLAY_TAGS_TEST"
 
 
-func _run_all_tests() -> void:
-	_registry = _get_or_create_registry()
-	_previous_database = _registry.get_database()
-	_registry.set_database(_make_test_database())
-
-	_run_test("database_normalizes_parents_and_searches", _test_database)
-	_run_test("database_reload_reads_disk", _test_database_reload)
-	_run_test("generated_id_collisions_are_rejected", _test_generated_id_collisions)
-	_run_test("container_hierarchical_matching", _test_container)
-	_run_test("component_target_helpers", _test_component_target_helpers)
-	_run_test("direct_node_tags_and_csv", _test_direct_node_tags_and_csv)
-	_run_test("plain_object_target_helpers", _test_plain_object_target_helpers)
-	_run_test("component_lookup_is_bounded_to_children", _test_component_lookup_is_bounded)
-	_run_test("tag_names_are_validated_everywhere", _test_tag_name_validation)
-	_run_test("setting_paths_honour_overrides", _test_setting_path_resolution)
-	_run_test("catalog_objects_are_not_tag_targets", _test_catalog_objects_are_not_targets)
-	_run_test("database_set_state_applies_whole_state", _test_database_set_state)
-	_run_test("container_tag_stacking", _test_container_tag_stacking)
-	_run_test("query_composition", _test_query_composition)
-	_run_test("tag_index_finds_nodes", _test_tag_index)
-	_run_test("ambiguous_tags_property_is_ignored", _test_ambiguous_tags_property)
-	_run_test("query_modes", _test_query_modes)
-	_run_test("area3d_trigger_helper", _test_area3d_trigger_helper)
-
-	_registry.set_database(_previous_database)
-	if not _failed:
-		print("GDSCRIPT_GAMEPLAY_TAGS_TEST passed (%d assertions)" % _assertion_count)
-		quit(0)
-
-
-func _get_or_create_registry() -> Node:
-	var existing: Node = root.get_node_or_null("GameplayTags")
-	if existing != null:
-		return existing
-
-	var registry: Node = GameplayTagsScript.new()
-	registry.name = "GameplayTags"
-	root.add_child(registry)
-	return registry
+func _run_tests() -> void:
+	run_test("database_normalizes_parents_and_searches", _test_database)
+	run_test("database_reload_reads_disk", _test_database_reload)
+	run_test("generated_id_collisions_are_rejected", _test_generated_id_collisions)
+	run_test("container_hierarchical_matching", _test_container)
+	run_test("component_target_helpers", _test_component_target_helpers)
+	run_test("direct_node_tags_and_csv", _test_direct_node_tags_and_csv)
+	run_test("plain_object_target_helpers", _test_plain_object_target_helpers)
+	run_test("component_lookup_is_bounded_to_children", _test_component_lookup_is_bounded)
+	run_test("tag_names_are_validated_everywhere", _test_tag_name_validation)
+	run_test("setting_paths_honour_overrides", _test_setting_path_resolution)
+	run_test("catalog_objects_are_not_tag_targets", _test_catalog_objects_are_not_targets)
+	run_test("database_set_state_applies_whole_state", _test_database_set_state)
+	run_test("container_tag_stacking", _test_container_tag_stacking)
+	run_test("query_composition", _test_query_composition)
+	run_test("tag_index_finds_nodes", _test_tag_index)
+	run_test("ambiguous_tags_property_is_ignored", _test_ambiguous_tags_property)
+	run_test("query_modes", _test_query_modes)
+	run_test("area3d_trigger_helper", _test_area3d_trigger_helper)
 
 
 func _make_test_database() -> GameplayTagDatabase:
@@ -107,14 +82,6 @@ func _make_test_database() -> GameplayTagDatabase:
 		)
 	)
 	return database
-
-
-func _run_test(test_name: String, test_callable: Callable) -> void:
-	if _failed:
-		return
-	test_callable.call()
-	if not _failed:
-		print("PASS %s" % test_name)
 
 
 func _test_database() -> void:
@@ -238,16 +205,16 @@ func _test_database() -> void:
 
 
 func _test_database_reload() -> void:
-	var previous_path: String = _registry.get_database_path()
-	var previous_database: GameplayTagDatabase = _registry.get_database()
+	var previous_path: String = registry.get_database_path()
+	var previous_database: GameplayTagDatabase = registry.get_database()
 	var test_path: String = "user://gameplay_tags_reload_test.tres"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
 
 	var initial_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	initial_database.add_tag(&"Reload.Before")
 	assert_eq(ResourceSaver.save(initial_database, test_path), OK)
-	_registry.set_database_path(test_path)
-	var cached_database: GameplayTagDatabase = _registry.reload_database()
+	registry.set_database_path(test_path)
+	var cached_database: GameplayTagDatabase = registry.reload_database()
 	assert_true(cached_database.has_tag(&"Reload.Before"))
 
 	var disk_database: GameplayTagDatabase = GameplayTagDatabase.new()
@@ -255,14 +222,14 @@ func _test_database_reload() -> void:
 	assert_eq(ResourceSaver.save(disk_database, test_path), OK)
 	assert_false(cached_database.has_tag(&"Reload.After"), "Cached database should still be stale")
 
-	var reloaded_database: GameplayTagDatabase = _registry.reload_database()
+	var reloaded_database: GameplayTagDatabase = registry.reload_database()
 	assert_true(
 		reloaded_database.has_tag(&"Reload.After"), "Reload should re-read the disk resource"
 	)
 	assert_false(reloaded_database.has_tag(&"Reload.Before"))
 
-	_registry.set_database_path(previous_path)
-	_registry.set_database(previous_database)
+	registry.set_database_path(previous_path)
+	registry.set_database(previous_database)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(test_path))
 
 
@@ -361,28 +328,27 @@ func _test_component_target_helpers() -> void:
 	assert_false(component.add_tag(&"Missing.Tag"), "Component rejects tags outside central DB")
 	component.owned_tags = [&"Missing.Tag"]
 	assert_false(
-		_registry.target_has_tag(component, &"Missing"),
+		registry.target_has_tag(component, &"Missing"),
 		"Direct property assignment should reject unregistered tags"
 	)
 	component.set_owned_gameplay_tags([GameplayTagIds.TEAM_ENEMY, &"Missing.Tag"])
 	assert_false(
-		_registry.target_has_tag(component, &"Missing"),
+		registry.target_has_tag(component, &"Missing"),
 		"Direct component assignment should reject unregistered tags"
 	)
 	assert_true(
-		_registry.target_has_tag(actor, GameplayTagIds.TEAM),
-		"Actor child component should be found"
+		registry.target_has_tag(actor, GameplayTagIds.TEAM), "Actor child component should be found"
 	)
-	assert_true(_registry.target_has_tag(component, GameplayTagIds.TEAM_ENEMY, true))
+	assert_true(registry.target_has_tag(component, GameplayTagIds.TEAM_ENEMY, true))
 	component.validate_with_database = false
 	assert_true(component.add_tag(&"Custom.Unregistered"))
 	assert_true(
-		_registry.target_has_tag(component, &"Custom"),
+		registry.target_has_tag(component, &"Custom"),
 		"Target helpers should preserve component tags accepted with validation disabled",
 	)
-	assert_false(_registry.target_has_tag(actor, &"Team", true), "Exact parent should fail")
+	assert_false(registry.target_has_tag(actor, &"Team", true), "Exact parent should fail")
 
-	var owned: GameplayTagContainer = _registry.get_owned_gameplay_tags(actor)
+	var owned: GameplayTagContainer = registry.get_owned_gameplay_tags(actor)
 	assert_true(owned.has_tag(&"Team.Enemy", true), "Owned tags should come back as a container")
 	actor.free()
 
@@ -393,12 +359,12 @@ func _test_direct_node_tags_and_csv() -> void:
 	var direct_tags: Array[StringName] = [GameplayTagIds.TEAM_PLAYER, &"Missing.Tag"]
 
 	assert_eq(
-		_registry.add_tags_to_node(actor, direct_tags),
+		registry.add_tags_to_node(actor, direct_tags),
 		1,
 		"Direct node tags should validate against the central DB"
 	)
 	assert_true(actor.is_in_group("gameplay_tagged_nodes"))
-	assert_true(_registry.target_has_tag(actor, GameplayTagIds.TEAM))
+	assert_true(registry.target_has_tag(actor, GameplayTagIds.TEAM))
 
 	var component: GameplayTagComponent = GameplayTagComponent.new()
 	actor.add_child(component)
@@ -408,30 +374,30 @@ func _test_direct_node_tags_and_csv() -> void:
 		GameplayTagIds.STATE_STUNNED,
 	]
 	assert_true(
-		_registry.target_has_all(actor, combined_tags),
+		registry.target_has_all(actor, combined_tags),
 		"Direct node tags and child component tags should combine"
 	)
 
-	var tagged_nodes: Array[Node] = _registry.get_nodes_with_tag(root, GameplayTagIds.TEAM_PLAYER)
+	var tagged_nodes: Array[Node] = registry.get_nodes_with_tag(root, GameplayTagIds.TEAM_PLAYER)
 	assert_true(tagged_nodes.has(actor), "Node tag group lookup should find direct tags")
-	var component_nodes: Array[Node] = _registry.get_nodes_with_tag(
+	var component_nodes: Array[Node] = registry.get_nodes_with_tag(
 		root, GameplayTagIds.STATE_STUNNED
 	)
 	assert_true(component_nodes.has(actor), "Node tag group lookup should find component owners")
-	assert_true(_registry.remove_tag_from_node(actor, GameplayTagIds.TEAM_PLAYER))
+	assert_true(registry.remove_tag_from_node(actor, GameplayTagIds.TEAM_PLAYER))
 	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
 	actor.free()
 
 	var custom_actor: Node = Node.new()
 	root.add_child(custom_actor)
 	var custom_tags: Array[StringName] = [&"Custom.Unregistered"]
-	assert_true(_registry.set_node_tags(custom_actor, custom_tags, false))
+	assert_true(registry.set_node_tags(custom_actor, custom_tags, false))
 	assert_true(
-		_registry.get_owned_gameplay_tags(custom_actor).has_tag(&"Custom.Unregistered", true),
+		registry.get_owned_gameplay_tags(custom_actor).has_tag(&"Custom.Unregistered", true),
 		"Owned-tag reads should preserve direct node tags written without validation",
 	)
 	assert_true(
-		_registry.target_has_tag(custom_actor, &"Custom"),
+		registry.target_has_tag(custom_actor, &"Custom"),
 		"Target helpers should preserve direct node tags written without validation",
 	)
 	custom_actor.free()
@@ -447,24 +413,24 @@ func _test_plain_object_target_helpers() -> void:
 	var tagged_object: TaggedObject = TaggedObject.new()
 	tagged_object.owned_tags = [GameplayTagIds.STATE_STUNNED]
 
-	assert_true(_registry.target_has_tag(tagged_object, GameplayTagIds.STATE))
+	assert_true(registry.target_has_tag(tagged_object, GameplayTagIds.STATE))
 	var required_tags: Array[StringName] = [GameplayTagIds.STATE_STUNNED]
 	var blocked_tags: Array[StringName] = [
 		GameplayTagIds.TEAM_ENEMY,
 		GameplayTagIds.DAMAGE_FIRE,
 	]
-	assert_true(_registry.target_has_all(tagged_object, required_tags))
-	assert_false(_registry.target_has_any(tagged_object, blocked_tags))
+	assert_true(registry.target_has_all(tagged_object, required_tags))
+	assert_false(registry.target_has_any(tagged_object, blocked_tags))
 
 	var method_tagged_object: MethodTaggedObject = MethodTaggedObject.new()
 	method_tagged_object.owned_tags = [GameplayTagIds.TEAM_ENEMY]
 	method_tagged_object.method_tags = [GameplayTagIds.STATE_STUNNED]
 	assert_true(
-		_registry.target_has_tag(method_tagged_object, GameplayTagIds.STATE),
+		registry.target_has_tag(method_tagged_object, GameplayTagIds.STATE),
 		"Explicit get_owned_gameplay_tags() method should provide plain-object tags"
 	)
 	assert_false(
-		_registry.target_has_tag(method_tagged_object, GameplayTagIds.TEAM_ENEMY, true),
+		registry.target_has_tag(method_tagged_object, GameplayTagIds.TEAM_ENEMY, true),
 		"Explicit tag method should take precedence over duplicate plain-object properties"
 	)
 
@@ -479,15 +445,15 @@ func _test_component_lookup_is_bounded() -> void:
 	component.add_tag(GameplayTagIds.TEAM_ENEMY)
 
 	assert_true(
-		_registry.target_has_tag(actor, GameplayTagIds.TEAM),
+		registry.target_has_tag(actor, GameplayTagIds.TEAM),
 		"A direct child component should still provide its parent's tags",
 	)
 	assert_false(
-		_registry.target_has_tag(level, GameplayTagIds.TEAM),
+		registry.target_has_tag(level, GameplayTagIds.TEAM),
 		"An ancestor must not inherit tags from a deeper entity's component",
 	)
 	assert_false(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).has(level),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).has(level),
 		"Group lookups must not report ancestors as tag owners",
 	)
 
@@ -499,7 +465,7 @@ func _test_component_lookup_is_bounded() -> void:
 		GameplayTagIds.STATE_STUNNED,
 	]
 	assert_true(
-		_registry.target_has_all(actor, merged_tags),
+		registry.target_has_all(actor, merged_tags),
 		"Every direct child component should contribute its tags",
 	)
 	level.free()
@@ -562,16 +528,16 @@ func _test_tag_name_validation() -> void:
 
 
 func _test_catalog_objects_are_not_targets() -> void:
-	var database: GameplayTagDatabase = _registry.get_database()
+	var database: GameplayTagDatabase = registry.get_database()
 	assert_false(
-		_registry.target_has_tag(database, GameplayTagIds.TEAM_ENEMY),
+		registry.target_has_tag(database, GameplayTagIds.TEAM_ENEMY),
 		"A database catalogs tags; it does not own them",
 	)
 
 	var query_tags: Array[StringName] = [GameplayTagIds.TEAM_ENEMY]
 	var query: GameplayTagQuery = GameplayTagQuery.all(query_tags)
 	assert_false(
-		_registry.target_has_tag(query, GameplayTagIds.TEAM_ENEMY),
+		registry.target_has_tag(query, GameplayTagIds.TEAM_ENEMY),
 		"A query describes a filter; it does not own the tags it matches",
 	)
 
@@ -712,37 +678,37 @@ func _test_tag_index() -> void:
 	component_actor.add_child(component)
 
 	var player_tags: Array[StringName] = [GameplayTagIds.TEAM_PLAYER]
-	_registry.set_node_tags(direct_actor, player_tags)
+	registry.set_node_tags(direct_actor, player_tags)
 	component.add_tag(GameplayTagIds.TEAM_ENEMY)
 
 	assert_true(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
 		"The index should find metadata-tagged nodes",
 	)
 	assert_true(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
 		"The index should find component owners",
 	)
 	assert_eq(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).size(),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).size(),
 		2,
 		"A parent tag should match every node owning one of its children",
 	)
 	assert_eq(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM, true).size(),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM, true).size(),
 		0,
 		"Exact lookups should not match nodes owning only child tags",
 	)
 
-	_registry.clear_node_tags(direct_actor)
+	registry.clear_node_tags(direct_actor)
 	assert_false(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
 		"Clearing node tags should drop the node from the index",
 	)
 
 	component.remove_tag(GameplayTagIds.TEAM_ENEMY)
 	assert_false(
-		_registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
 		"Removing a component tag should drop its owner from results",
 	)
 	level.free()
@@ -752,14 +718,14 @@ func _test_ambiguous_tags_property() -> void:
 	var unrelated: UnrelatedTagsObject = UnrelatedTagsObject.new()
 	unrelated.tags = ["State.Stunned"]
 	assert_false(
-		_registry.target_has_tag(unrelated, GameplayTagIds.STATE),
+		registry.target_has_tag(unrelated, GameplayTagIds.STATE),
 		"An Array[String] named tags belongs to the owning class, not this addon",
 	)
 
 	var tag_holder: StringNameTagsObject = StringNameTagsObject.new()
 	tag_holder.tags = [GameplayTagIds.STATE_STUNNED]
 	assert_true(
-		_registry.target_has_tag(tag_holder, GameplayTagIds.STATE),
+		registry.target_has_tag(tag_holder, GameplayTagIds.STATE),
 		"An Array[StringName] named tags is still an accepted tag payload",
 	)
 
@@ -843,32 +809,3 @@ func _on_query_changed() -> void:
 
 func _on_database_changed() -> void:
 	_database_change_count += 1
-
-
-func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:
-	_assertion_count += 1
-	if not condition:
-		_fail(message)
-
-
-func assert_false(condition: bool, message: String = "Expected condition to be false") -> void:
-	_assertion_count += 1
-	if condition:
-		_fail(message)
-
-
-func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void:
-	_assertion_count += 1
-	if actual != expected:
-		var prefix: String = "%s: " % message if not message.is_empty() else ""
-		_fail("%sexpected %s, got %s" % [prefix, str(expected), str(actual)])
-
-
-func _fail(message: String) -> void:
-	if _failed:
-		return
-	_failed = true
-	push_error(message)
-	if _registry != null:
-		_registry.set_database(_previous_database)
-	quit(1)
