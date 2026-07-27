@@ -12,10 +12,16 @@ const GROUP_NAME: StringName = &"gameplay_tag_components"
 @export var owned_tags: Array[StringName] = []:
 	set(value):
 		owned_tags = _filter_registered_tags(value)
+		_prune_stack_counts()
 		_refresh_owner_tag_index()
 		owned_tags_changed.emit(owned_tags)
 
 @export var validate_with_database: bool = true
+
+# Stack depth per exact tag, for tags applied more than once. Tags at depth one are
+# absent rather than stored as 1, so this stays empty for the common case. Runtime
+# state only: stacks are applied by gameplay, not authored in the Inspector.
+var _stack_counts: Dictionary[String, int] = {}
 
 
 func _enter_tree() -> void:
@@ -29,9 +35,12 @@ func _exit_tree() -> void:
 	_refresh_owner_tag_index(true)
 
 
-## Returns this component's tags as a container.
+## Returns this component's tags as a container, carrying any stack depths with them.
 func get_owned_gameplay_tags() -> GameplayTagContainer:
-	return GameplayTagContainer.new(owned_tags)
+	var container: GameplayTagContainer = GameplayTagContainer.new(owned_tags)
+	for tag_key in _stack_counts:
+		container.set_tag_count(StringName(tag_key), _stack_counts[tag_key])
+	return container
 
 
 ## Replaces every owned tag, applying the same validation as the exported property.
@@ -55,7 +64,7 @@ func add_tag(raw_tag: StringName) -> bool:
 	return true
 
 
-## Removes one owned tag and returns whether it was present.
+## Removes one owned tag and every stack of it. Returns whether it was present.
 func remove_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
 	var index: int = owned_tags.find(tag)
@@ -64,6 +73,71 @@ func remove_tag(raw_tag: StringName) -> bool:
 	var updated_tags: Array[StringName] = owned_tags.duplicate()
 	updated_tags.remove_at(index)
 	owned_tags = updated_tags
+	return true
+
+
+## Applies one more stack of [param raw_tag], adding the tag when it is not yet owned.
+## Returns the resulting depth, or 0 when the tag could not be added.
+func add_tag_stack(raw_tag: StringName) -> int:
+	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag):
+		return 0
+	if not owned_tags.has(tag):
+		return 1 if add_tag(tag) else 0
+
+	var key: String = String(tag)
+	_stack_counts[key] = _stack_counts.get(key, 1) + 1
+	owned_tags_changed.emit(owned_tags)
+	return _stack_counts[key]
+
+
+## Releases one stack of [param raw_tag], removing the tag when the last stack goes.
+## Returns the remaining depth.
+func remove_tag_stack(raw_tag: StringName) -> int:
+	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	if not owned_tags.has(tag):
+		return 0
+
+	var key: String = String(tag)
+	var remaining: int = _stack_counts.get(key, 1) - 1
+	if remaining <= 0:
+		remove_tag(tag)
+		return 0
+
+	_stack_counts[key] = remaining
+	owned_tags_changed.emit(owned_tags)
+	return remaining
+
+
+## Returns how many stacks of [param raw_tag] are applied, or 0 when it is not owned.
+## Stacks are tracked per exact tag, so a parent tag never reports a child's stacks.
+func get_tag_count(raw_tag: StringName) -> int:
+	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	if not owned_tags.has(tag):
+		return 0
+	return _stack_counts.get(String(tag), 1)
+
+
+## Sets the absolute stack depth for [param raw_tag]. A count of 0 or less releases it.
+## Returns whether anything changed.
+func set_tag_count(raw_tag: StringName, count: int) -> bool:
+	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag):
+		return false
+	if count <= 0:
+		return remove_tag(tag)
+
+	if not owned_tags.has(tag) and not add_tag(tag):
+		return false
+
+	var key: String = String(tag)
+	if _stack_counts.get(key, 1) == count:
+		return false
+	if count == 1:
+		_stack_counts.erase(key)
+	else:
+		_stack_counts[key] = count
+	owned_tags_changed.emit(owned_tags)
 	return true
 
 
@@ -82,6 +156,16 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	return get_owned_gameplay_tags().has_all(required_tags, exact)
 
 
+# Stack depths only mean something while the tag is owned, so drop the rest whenever
+# the owned set is replaced.
+func _prune_stack_counts() -> void:
+	if _stack_counts.is_empty():
+		return
+	for tag_key in _stack_counts.keys():
+		if not owned_tags.has(StringName(tag_key)):
+			_stack_counts.erase(tag_key)
+
+
 func _filter_registered_tags(raw_tags: Array[StringName]) -> Array[StringName]:
 	var canonical_tags: Array[StringName] = GameplayTagDatabase.canonicalize_valid_tag_array(
 		raw_tags
@@ -93,10 +177,14 @@ func _filter_registered_tags(raw_tags: Array[StringName]) -> Array[StringName]:
 	if registry == null or not registry.has_method("is_valid_tag"):
 		return canonical_tags
 
+	var can_resolve: bool = registry.has_method("resolve_tag")
 	var filtered_tags: Array[StringName] = []
 	for tag in canonical_tags:
-		if bool(registry.is_valid_tag(tag)):
-			filtered_tags.append(tag)
+		# A tag authored before a rename resolves to its replacement rather than being
+		# dropped, so existing scenes survive a renamed branch.
+		var resolved_tag: StringName = registry.resolve_tag(tag) if can_resolve else tag
+		if bool(registry.is_valid_tag(resolved_tag)):
+			filtered_tags.append(resolved_tag)
 		else:
 			push_warning("Gameplay tag is not in the central database: %s" % String(tag))
 	return filtered_tags

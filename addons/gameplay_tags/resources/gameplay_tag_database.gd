@@ -8,6 +8,8 @@ extends Resource
 
 signal tags_changed
 
+const MAX_REDIRECT_DEPTH: int = 16
+
 @export var tags: Array[StringName] = []:
 	set(value):
 		tags = canonicalize_tag_array(value)
@@ -17,6 +19,17 @@ signal tags_changed
 @export var tag_descriptions: Dictionary[String, String] = {}:
 	set(value):
 		tag_descriptions = value.duplicate()
+		_notify_changed()
+
+## Maps a retired tag name to the tag that replaced it. Recorded automatically by
+## [method rename_tag] so data still referring to the old name keeps resolving.
+## Chains are followed, so renaming A to B and then B to C leaves A resolving to C.
+@export var tag_redirects: Dictionary[StringName, StringName] = {}:
+	set(value):
+		tag_redirects = value.duplicate()
+		# Load order between this and `tags` is not guaranteed, so enforce the
+		# "a live tag is never a redirect source" invariant from both sides.
+		_drop_redirects_for_live_tags()
 		_notify_changed()
 
 var _tag_set: Dictionary[String, bool] = {}
@@ -261,7 +274,28 @@ func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 	_prune_empty_old_parents(updated_tags, updated_descriptions, get_parent_tags(tag))
 	tags = canonicalize_tag_array(updated_tags)
 	tag_descriptions = updated_descriptions
+	# Must follow the tag assignment: while the retired names are still registered, the
+	# "a live tag is never a redirect source" guard would drop each new entry on sight.
+	_record_rename_redirects(renamed_tags)
 	return true
+
+
+# Every tag the rename retired gets a redirect to its replacement, so authored data
+# still naming the old branch keeps resolving. Existing redirects that pointed at a
+# retired name are re-pointed at the replacement rather than left dangling.
+func _record_rename_redirects(renamed_tags: Dictionary[StringName, StringName]) -> void:
+	var updated_redirects: Dictionary[StringName, StringName] = tag_redirects.duplicate()
+	for retired_tag in renamed_tags:
+		var replacement: StringName = renamed_tags[retired_tag]
+		for existing_key in updated_redirects.keys():
+			if normalize_tag(updated_redirects[existing_key]) == retired_tag:
+				updated_redirects[existing_key] = replacement
+		updated_redirects[retired_tag] = replacement
+	# A tag can be renamed back to a name that used to redirect elsewhere; the live
+	# tag must win over the stale entry.
+	for renamed_tag in renamed_tags.values():
+		updated_redirects.erase(renamed_tag)
+	tag_redirects = updated_redirects
 
 
 func _prune_empty_old_parents(
@@ -443,6 +477,64 @@ func set_state(raw_tags: Array[StringName], descriptions: Dictionary[String, Str
 
 
 ## Returns whether [param raw_tag] is registered.
+## Resolves [param raw_tag] to the tag that replaced it, following redirect chains.
+## Returns the normalized input unchanged when no redirect applies. A redirect to a
+## tag that is not registered is still followed, so a broken chain stays visible to
+## [method validate] rather than silently resolving to the retired name.
+func resolve_tag(raw_tag: StringName) -> StringName:
+	var tag: StringName = normalize_tag(raw_tag)
+	if tag == &"" or tag_redirects.is_empty():
+		return tag
+
+	var seen: Dictionary[StringName, bool] = {}
+	var depth: int = 0
+	while tag_redirects.has(tag):
+		if seen.has(tag) or depth >= MAX_REDIRECT_DEPTH:
+			push_error("Gameplay tag redirect cycle starting at %s" % String(raw_tag))
+			return normalize_tag(raw_tag)
+		seen[tag] = true
+		depth += 1
+		tag = normalize_tag(tag_redirects[tag])
+	return tag
+
+
+## Records that [param raw_tag] has been replaced by [param raw_new_tag].
+## Refuses self-redirects and any entry that would close a cycle.
+func add_redirect(raw_tag: StringName, raw_new_tag: StringName) -> bool:
+	var from_tag: StringName = normalize_tag(raw_tag)
+	var to_tag: StringName = normalize_tag(raw_new_tag)
+	if from_tag == &"" or to_tag == &"" or from_tag == to_tag:
+		return false
+	if not is_valid_tag_name(from_tag) or not is_valid_tag_name(to_tag):
+		return false
+	if tag_redirects.get(from_tag, &"") == to_tag:
+		return false
+	if _redirect_would_cycle(from_tag, to_tag):
+		return false
+
+	tag_redirects[from_tag] = to_tag
+	_notify_changed()
+	return true
+
+
+## Drops a redirect. Returns whether one was present.
+func remove_redirect(raw_tag: StringName) -> bool:
+	var from_tag: StringName = normalize_tag(raw_tag)
+	if not tag_redirects.has(from_tag):
+		return false
+	tag_redirects.erase(from_tag)
+	_notify_changed()
+	return true
+
+
+## Returns every retired tag name that currently redirects somewhere.
+func get_redirected_tags() -> Array[StringName]:
+	var retired: Array[StringName] = []
+	retired.assign(tag_redirects.keys())
+	retired.sort()
+	return retired
+
+
 func has_tag(raw_tag: StringName) -> bool:
 	return _tag_set.has(String(normalize_tag(raw_tag)))
 
@@ -513,6 +605,22 @@ func validate() -> Array[String]:
 				errors.append("Missing parent gameplay tag: %s" % parent_text)
 				missing_parent_errors[parent_text] = true
 		seen[text] = true
+
+	for retired_tag in tag_redirects:
+		var retired_text: String = String(retired_tag)
+		if has_tag(retired_tag):
+			errors.append("Redirected gameplay tag is still registered: %s" % retired_text)
+			continue
+		var destination: StringName = resolve_tag(retired_tag)
+		if destination == retired_tag:
+			errors.append("Gameplay tag redirect cycle: %s" % retired_text)
+		elif not has_tag(destination):
+			errors.append(
+				(
+					"Gameplay tag redirect points at an unknown tag: %s -> %s"
+					% [retired_text, String(destination)]
+				)
+			)
 	return errors
 
 
@@ -551,10 +659,38 @@ func _get_protected_parent_removals(
 	return protected_tags
 
 
+# Walks the chain forward from the proposed destination; if it leads back to the tag
+# being retired, the new entry would close a loop.
+func _redirect_would_cycle(from_tag: StringName, to_tag: StringName) -> bool:
+	var cursor: StringName = to_tag
+	var depth: int = 0
+	while tag_redirects.has(cursor):
+		if depth >= MAX_REDIRECT_DEPTH:
+			return true
+		cursor = normalize_tag(tag_redirects[cursor])
+		if cursor == from_tag:
+			return true
+		depth += 1
+	return false
+
+
 func _rebuild_cache() -> void:
 	_tag_set.clear()
 	for tag in tags:
 		_tag_set[String(tag)] = true
+	_drop_redirects_for_live_tags()
+
+
+# A registered tag must never also be a redirect source, or it would resolve away from
+# itself. Enforced here rather than at each call site so restoring a renamed tag —
+# through undo, set_state(), or a plain add — cleans up the redirect the rename left.
+# Mutates the backing dictionary directly: the caller's change notification covers it.
+func _drop_redirects_for_live_tags() -> void:
+	if tag_redirects.is_empty():
+		return
+	for retired_tag in tag_redirects.keys():
+		if _tag_set.has(String(retired_tag)):
+			tag_redirects.erase(retired_tag)
 
 
 func _notify_changed() -> void:

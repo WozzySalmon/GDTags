@@ -168,8 +168,12 @@ The database prevents duplicate tags and invalid tag names.
 
 Renaming a branch also renames all child tags, migrates their descriptions, creates any missing new
 parents, removes empty old parents unless they have their own description, and regenerates
-`GameplayTagIds`. Existing scene/resource values and script constant names are not rewritten
-automatically, so update references after a rename.
+`GameplayTagIds`.
+
+Existing scene, resource, and script references are not rewritten as part of the rename itself, but
+they do not break either: the rename records a redirect so the retired name keeps resolving. Rewrite
+them when you are ready with **Tools > Migrate Renamed Tags**. See
+[Renaming tags safely](#renaming-tags-safely).
 
 ### CSV import/export
 
@@ -459,6 +463,21 @@ behaves exactly as before. Counts are tracked per **exact** tag: a parent never 
 stacks. Stack depth is runtime state and is **not** serialized, so a saved container restores every
 tag at a depth of one.
 
+`GameplayTagComponent` exposes the same four methods, which is usually where you want them: the
+component is what actually owns an actor's tags, so a depth applied there survives resolution.
+
+```gdscript
+component.add_tag_stack(GameplayTagIds.STATE_STUNNED)
+GameplayTags.get_owned_gameplay_tags(actor).get_tag_count(GameplayTagIds.STATE_STUNNED)  # -> 2
+```
+
+When an actor has more than one component granting the same tag, the resolved depth is the
+**highest** any single component reports rather than their sum, so a tag granted once by two
+components still reads as depth one.
+
+Note that `get_owned_gameplay_tags()` builds a fresh container on every call. Stacking on the
+container it returns changes nothing; stack on the component instead.
+
 ### Composing queries
 
 A query combines its own tags under its mode, and can nest other queries through `sub_queries`:
@@ -716,12 +735,94 @@ func clear_stun() -> void:
 	tags.remove_tag(GameplayTagIds.STATE_STUNNED)
 ```
 
+## Renaming tags safely
+
+Renaming a tag in the dock records a **redirect** from the retired name to its
+replacement, for the renamed tag and every child it moved. Data that still names the
+old tag keeps working: the retired name resolves through the redirect wherever tags are
+validated, so a scene authored before the rename loads as the new tag rather than
+losing the value.
+
+```gdscript
+GameplayTags.resolve_tag(&"State.Stunned")  # -> &"Condition.Disabled"
+GameplayTags.is_valid_tag(&"State.Stunned") # -> true, through the redirect
+```
+
+Chains are followed, so renaming twice still resolves the oldest name to the newest
+tag. Re-adding a retired name drops its redirect, because a registered tag must never
+redirect away from itself.
+
+Redirects keep old data working, but they accumulate. To finish the job, use
+**Tools > Migrate Renamed Tags** in the dock: it scans the project for anything still
+naming a retired tag and rewrites those references to the new name, covering both
+quoted literals and generated `GameplayTagIds` constants. Only whole tokens are
+replaced, so renaming `State` never corrupts `StateMachine` or `"State.Other"`.
+
+Migration rewrites files on disk. Reload any affected scenes before editing them, and
+commit beforehand so the change is reviewable.
+
+## Finding where a tag is used
+
+**Tools > Scan Tag References** indexes every `.gd`, `.tscn`, and `.tres` file under
+`res://` and reports, per tag, the file and line of each use. Scripts are matched
+through both generated constants and quoted literals; scenes and resources through
+their saved tag arrays. The generated ID script and the database itself are excluded,
+since they name every tag by construction.
+
+The scan also reports **unused tags**. A tag that only exists to parent a referenced
+child is not counted as unused, so the report stays short enough to act on.
+
+```gdscript
+var index: Dictionary[StringName, PackedStringArray] = GameplayTagReferenceIndex.scan(
+	GameplayTags.get_database()
+)
+var dead: Array[StringName] = GameplayTagReferenceIndex.find_unused_tags(index)
+```
+
+The scan reads file text and never loads a scene, so it cannot run project code.
+
+## Debugging a query
+
+When a `GameplayTagQuery` returns an answer you did not expect, ask it why:
+
+```gdscript
+print(vulnerable.explain(target))
+```
+
+```text
+owned: State.Stunned, State.Invulnerable
+ALL
+  ANY
+    tags [Damage.Fire, State.Stunned] -> pass (owns State.Stunned)
+  -> pass
+  NONE
+    tags [State.Invulnerable] -> fail (owns State.Invulnerable)
+  -> fail
+-> fail
+result: NO MATCH
+```
+
+`validate()` catches problems without needing a target at all — tags missing from the
+database, an `ANY` query with nothing to match, a tag both required and forbidden, and
+queries nested inside themselves:
+
+```gdscript
+for issue in vulnerable.validate():
+	push_warning(issue)
+```
+
+A tag forbidden *exactly* does not contradict a non-exact requirement, since a child
+tag can still satisfy it; that pair is deliberately not reported.
+
 ## What the plugin does not do yet
 
 Current intentional limits:
 
 - No visual graph/query builder beyond simple `GameplayTagQuery` resources/code.
-- Inspector picker is limited to known gameplay tag classes/properties.
+- Inspector picker is limited to known gameplay tag classes/properties, and cannot be
+  restricted to one branch of the hierarchy.
+- Reference scanning covers `.gd`, `.tscn`, and `.tres`. Tags built at runtime from
+  string concatenation cannot be found by any static scan.
 - No multiplayer replication layer; replicate your gameplay state using your project's networking approach.
 - No automatic migration from Godot groups; tags are their own central database.
 

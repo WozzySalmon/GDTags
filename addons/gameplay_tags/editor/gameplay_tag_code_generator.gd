@@ -150,6 +150,12 @@ static func _get_constant_entries(database: GameplayTagDatabase) -> Array[Dictio
 	return entries
 
 
+## Returns the generated constant name for [param raw_tag], before any collision
+## suffixing. Lets the reference index map a `GameplayTagIds.` use back to its tag.
+static func get_constant_name_for_tag(raw_tag: StringName) -> String:
+	return _constant_base_name_for_tag(raw_tag)
+
+
 static func _constant_base_name_for_tag(raw_tag: StringName) -> String:
 	var tag_text: String = String(raw_tag)
 	var constant_name: String = ""

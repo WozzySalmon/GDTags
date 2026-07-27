@@ -609,8 +609,78 @@ func _on_tools_menu_id_pressed(id: int) -> void:
 			_on_import_csv_pressed()
 		TagDockUi.ToolsAction.EXPORT_CSV:
 			_on_export_csv_pressed()
+		TagDockUi.ToolsAction.SCAN_REFERENCES:
+			_on_scan_references_pressed()
+		TagDockUi.ToolsAction.MIGRATE_REFERENCES:
+			_on_migrate_references_pressed()
 		_:
 			pass
+
+
+func _on_migrate_references_pressed() -> void:
+	if _database == null:
+		_load_database()
+	if _database == null:
+		_set_status("No gameplay tag database to migrate against.")
+		return
+
+	var retired_tags: Array[StringName] = _database.get_redirected_tags()
+	if retired_tags.is_empty():
+		_set_status("No renamed tags to migrate.")
+		return
+
+	var changes: Dictionary[String, int] = GameplayTagReferenceIndex.migrate_redirected_tags(
+		_database
+	)
+	if changes.is_empty():
+		_set_status("Nothing still refers to the %d renamed tags." % retired_tags.size())
+		return
+
+	print_rich("[b]Migrated gameplay tag references[/b]")
+	for path in changes:
+		print("  %s (%d tags)" % [path, changes[path]])
+	_set_status(
+		(
+			"Rewrote references in %d file(s). Reload affected scenes before editing them."
+			% changes.size()
+		)
+	)
+
+
+func _on_scan_references_pressed() -> void:
+	if _database == null:
+		_load_database()
+	if _database == null:
+		_set_status("No gameplay tag database to scan against.")
+		return
+
+	var index: Dictionary[StringName, PackedStringArray] = GameplayTagReferenceIndex.scan(_database)
+	var unused: Array[StringName] = GameplayTagReferenceIndex.find_unused_tags(index)
+	var total_references: int = 0
+	for tag in index:
+		total_references += index[tag].size()
+
+	# Printed as well as summarised: the dock status line has room for a count, but the
+	# actual locations are what makes the scan worth running.
+	print_rich("[b]Gameplay tag references[/b]")
+	for tag in index:
+		if index[tag].is_empty():
+			continue
+		print("  %s (%d)" % [String(tag), index[tag].size()])
+		for location in index[tag]:
+			print("    %s" % location)
+	if not unused.is_empty():
+		var unused_names: PackedStringArray = PackedStringArray()
+		for tag in unused:
+			unused_names.append(String(tag))
+		print("  unused: %s" % ", ".join(unused_names))
+
+	_set_status(
+		(
+			"Scanned %d tags: %d references, %d unused. See Output for locations."
+			% [index.size(), total_references, unused.size()]
+		)
+	)
 
 
 func _on_refresh_pressed() -> void:

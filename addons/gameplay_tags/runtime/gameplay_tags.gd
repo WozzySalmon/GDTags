@@ -90,9 +90,17 @@ func normalize_tag(raw_tag: StringName) -> StringName:
 	return GameplayTagDatabase.normalize_tag(raw_tag)
 
 
+## Resolves a retired tag name to whatever replaced it, following redirect chains.
+## Returns the normalized input when no redirect applies.
+func resolve_tag(raw_tag: StringName) -> StringName:
+	return get_database().resolve_tag(raw_tag)
+
+
 ## Returns whether [param raw_tag] is registered in the central database.
+## Retired names are resolved first, so a redirected tag still reports as valid.
 func is_valid_tag(raw_tag: StringName) -> bool:
-	return get_database().has_tag(raw_tag)
+	var database: GameplayTagDatabase = get_database()
+	return database.has_tag(database.resolve_tag(raw_tag))
 
 
 ## Alias for [method is_valid_tag].
@@ -448,9 +456,14 @@ func get_first_overlapping_target_with_tag(
 # which is wasted work on a throwaway result.
 func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContainer:
 	var collected: Array[StringName] = []
+	# Stack depths from every source that reports them, merged by highest rather than
+	# summed: a tag granted by two components is still owned once, and only an owner
+	# that deliberately stacked it should push the depth above one.
+	var counts: Dictionary[String, int] = {}
 	var used_explicit_method: bool = false
 	if object is GameplayTagComponent:
 		collected.append_array(object.owned_tags)
+		_merge_stack_counts(object, object.owned_tags, counts)
 		used_explicit_method = true
 	elif object.has_method("get_owned_gameplay_tags") and object != self:
 		used_explicit_method = _append_tags_from_dynamic_value(
@@ -465,7 +478,29 @@ func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContaine
 		_append_known_property_tags(object, collected)
 	if object is Node:
 		_append_child_component_tags(object, collected)
-	return GameplayTagContainer.new(collected)
+		for child in object.get_children():
+			if child is GameplayTagComponent:
+				_merge_stack_counts(child, child.owned_tags, counts)
+
+	var container: GameplayTagContainer = GameplayTagContainer.new(collected)
+	for tag_key in counts:
+		container.set_tag_count(StringName(tag_key), counts[tag_key])
+	return container
+
+
+# Records the deepest stack each source reports for the tags it owns.
+func _merge_stack_counts(
+	source: Object, source_tags: Array[StringName], counts: Dictionary[String, int]
+) -> void:
+	if not source.has_method("get_tag_count"):
+		return
+	for tag in source_tags:
+		var depth: int = int(source.call("get_tag_count", tag))
+		if depth <= 1:
+			continue
+		var key: String = String(tag)
+		if depth > counts.get(key, 1):
+			counts[key] = depth
 
 
 func _filter_tags_to_database(
@@ -474,8 +509,12 @@ func _filter_tags_to_database(
 	var registered_tags: Array[StringName] = []
 	var database: GameplayTagDatabase = get_database()
 	for tag in GameplayTagDatabase.canonicalize_tag_array(raw_tags):
-		if database.has_tag(tag):
-			registered_tags.append(tag)
+		# Authored data may still name a tag that has since been renamed. Resolving here
+		# is what makes a redirect work: the retired name is accepted and stored as its
+		# replacement rather than being dropped as unregistered.
+		var resolved_tag: StringName = database.resolve_tag(tag)
+		if database.has_tag(resolved_tag):
+			registered_tags.append(resolved_tag)
 		elif warn_on_invalid:
 			push_warning("Gameplay tag is not in the central database: %s" % String(tag))
 	return GameplayTagContainer.new(registered_tags)

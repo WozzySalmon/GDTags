@@ -9,6 +9,8 @@ enum ToolsAction {
 	PASTE_TAGS,
 	IMPORT_CSV,
 	EXPORT_CSV,
+	SCAN_REFERENCES,
+	MIGRATE_REFERENCES,
 }
 
 
@@ -175,6 +177,8 @@ static func build_tools_menu(theme_source: Control) -> MenuButton:
 	var tools_menu: PopupMenu = tools_button.get_popup()
 	tools_menu.add_item("Refresh", ToolsAction.REFRESH)
 	tools_menu.add_item("Regenerate IDs", ToolsAction.REGENERATE_IDS)
+	tools_menu.add_item("Scan Tag References", ToolsAction.SCAN_REFERENCES)
+	tools_menu.add_item("Migrate Renamed Tags", ToolsAction.MIGRATE_REFERENCES)
 	tools_menu.add_separator()
 	tools_menu.add_item("Paste Tags…", ToolsAction.PASTE_TAGS)
 	tools_menu.add_item("Import CSV", ToolsAction.IMPORT_CSV)

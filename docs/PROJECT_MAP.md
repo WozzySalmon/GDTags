@@ -15,6 +15,8 @@ navigation guidance; current source and tests are authoritative.
 | Target-owned tags and reusable node components | `addons/gameplay_tags/runtime/gameplay_tag_component.gd`, `addons/gameplay_tags/runtime/gameplay_tag_utils.gd` | `tests/test_gameplay_tags.gd` |
 | Physics trigger behavior | `addons/gameplay_tags/runtime/gameplay_tag_trigger_3d.gd`, `addons/gameplay_tags/runtime/gameplay_tags.gd` | `tests/test_runtime_edge_cases.gd` |
 | Dock tree, search, tag mutations, CSV, and undo/redo | `addons/gameplay_tags/editor/tag_editor_dock.gd` | `tests/test_editor_workflows.gd` |
+| Tag redirects, stack depth, query diagnostics | `addons/gameplay_tags/resources/gameplay_tag_database.gd`, `addons/gameplay_tags/runtime/gameplay_tag_query.gd` | `tests/test_tag_lifecycle.gd` |
+| Finding where tags are used, dead tags, rename migration | `addons/gameplay_tags/editor/tag_reference_index.gd` | `tests/test_tag_lifecycle.gd` |
 | Inspector detection and tag pickers | `addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd`, `addons/gameplay_tags/editor/gameplay_tag_property.gd`, `addons/gameplay_tags/editor/gameplay_tag_array_property.gd` | `tests/test_editor_picker_interactions.gd` |
 | Generated `GameplayTagIds` constants and collision handling | `addons/gameplay_tags/editor/gameplay_tag_code_generator.gd`, `addons/gameplay_tags/plugin.gd` | `tests/test_gameplay_tags.gd`, `tests/test_editor_workflows.gd` |
 | Formatting, linting, compatibility, benchmarks, packaging, or release readiness | `docs/VALIDATION.md`, `docs/PACKAGING.md`, `tools/linux/` | The matching script documented in those files |
@@ -38,6 +40,7 @@ navigation guidance; current source and tests are authoritative.
 - `tests/test_gameplay_tags.gd`: primary runtime API, database, containers, queries, targets, and IDs.
 - `tests/test_runtime_edge_cases.gd`: mutation, reload, autoload, and physics edge cases.
 - `tests/test_editor_workflows.gd`: dock/plugin workflows and editor-facing state changes.
+- `tests/test_tag_lifecycle.gd`: owner-level stack depth, tag redirects, reference scanning, migration, and query diagnostics.
 - `tests/test_editor_picker_interactions.gd`: `EditorProperty` interactions; requires editor script mode.
 - `benchmarks/bench_10000_tags.gd`: large-tag-set performance.
 - `docs/VALIDATION.md`: canonical local commands and supported Godot versions.

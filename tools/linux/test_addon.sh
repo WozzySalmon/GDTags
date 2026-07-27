@@ -98,6 +98,7 @@ run_editor_smoke() {
 run_script_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_gameplay_tags.gd"
 run_script_test "GDScript editor workflow tests" "res://tests/test_editor_workflows.gd"
 run_script_test "GDScript runtime edge-case tests" "res://tests/test_runtime_edge_cases.gd"
+run_script_test "GDScript tag lifecycle tests" "res://tests/test_tag_lifecycle.gd"
 run_editor_script_test \
   "GDScript editor picker interaction tests" \
   "res://tests/test_editor_picker_interactions.gd"

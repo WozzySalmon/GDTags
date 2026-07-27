@@ -1,5 +1,10 @@
 # Audit gameplay-tags review findings before the next release
 
+> **Status: closed.** Every confirmed defect and coverage gap below has since been
+> implemented. This file is kept as the evidence trail for that work, not as a to-do
+> list — read it as history. Individual items carry follow-up notes where later work
+> changed the conclusion.
+
 ## Context
 
 A first-pass AI review reported several runtime, editor, and test concerns. A second independent pass checked those claims against the current code, documentation, tests, and Godot 4.7 behavior.
@@ -127,6 +132,7 @@ The following first-pass findings should not be treated as confirmed issues with
 1. **Autosave defaults are a bug:** rejected. `save_now = true` is documented; `add_tags()` and CSV import save once per batch, and callers can pass `false` when batching individual operations.
 2. **Property-based target discovery is accidental:** not established. `TAG_PROPERTY_NAMES` and the plain-object tests show this is an intentional adapter, though the common `tags` name is an API-collision risk worth documenting separately if desired.
 3. **Database rename/removal must rewrite scenes and scripts:** rejected as a bug. `docs/PLUGIN_GUIDE.md` explicitly states that existing scene/resource values and script constant names are not rewritten automatically.
+   - *Superseded.* Still correct that this was not a defect, but it was later shipped as a feature: renames record a redirect so retired names keep resolving, and **Tools > Migrate Renamed Tags** rewrites the references on request. Rewriting is opt-in, never automatic.
 4. **`GameplayTagQuery.matches()` must not use the autoload:** rejected. Accepting object targets is part of the documented API; raw containers remain directly matchable without resolution.
 5. **Generated output path is fixed:** incorrect. The path is configurable through `gameplay_tags/generated_tag_ids_path`; only the generated global class name is fixed.
 6. **Missing `_exit_tree()` group removal is a leak:** rejected. Godot removes node group membership on tree exit.
