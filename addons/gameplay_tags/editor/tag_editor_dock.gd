@@ -252,6 +252,7 @@ func _on_add_pressed() -> void:
 	var status_message: String = "Added %s" % String(tag)
 	if undo_redo_manager == null:
 		_apply_database_state(
+			_database,
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
 			status_message,
@@ -307,7 +308,7 @@ func _on_update_description_pressed() -> void:
 	if new_description.is_empty():
 		update_status = "Cleared description for %s." % String(tag)
 	if undo_redo_manager == null:
-		_apply_tag_description(tag, new_description, update_status)
+		_apply_tag_description(_database, tag, new_description, update_status)
 		return
 
 	(
@@ -323,6 +324,7 @@ func _on_update_description_pressed() -> void:
 		. add_do_method(
 			self,
 			"_apply_tag_description",
+			_database,
 			tag,
 			new_description,
 			update_status,
@@ -333,6 +335,7 @@ func _on_update_description_pressed() -> void:
 		. add_undo_method(
 			self,
 			"_apply_tag_description",
+			_database,
 			tag,
 			current_description,
 			"Restored description for %s." % String(tag),
@@ -342,13 +345,21 @@ func _on_update_description_pressed() -> void:
 
 
 func _apply_tag_description(
+	target_database: GameplayTagDatabase,
 	tag: StringName,
 	description: String,
 	status_message: String,
 ) -> void:
+	if target_database == null:
+		return
 	if _database == null:
 		_load_database()
-	if _database == null:
+
+	if target_database != _database:
+		target_database.set_tag_description(tag, description)
+		_persist_off_screen_database(
+			target_database, "Restored a description on the previously configured database."
+		)
 		return
 
 	var changed: bool = false
@@ -419,6 +430,7 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 	var status_message: String = "Renamed %s to %s." % [String(tag), String(new_tag)]
 	if undo_redo_manager == null:
 		_apply_database_state(
+			_database,
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
 			status_message,
@@ -542,17 +554,24 @@ func _remove_tag_immediately(tag: StringName) -> void:
 
 
 func _apply_database_state(
+	target_database: GameplayTagDatabase,
 	raw_tags: Array[StringName],
 	descriptions: Dictionary[String, String],
 	status_message: String,
 	selected_tag: StringName = &"",
 ) -> void:
+	if target_database == null:
+		return
 	if _database == null:
 		_load_database()
-	if _database == null:
+
+	target_database.set_state(raw_tags, descriptions)
+	if target_database != _database:
+		_persist_off_screen_database(
+			target_database, "Restored tags on the previously configured database."
+		)
 		return
 
-	_database.set_state(raw_tags, descriptions)
 	var registry: Node = _get_registry()
 	if registry != null and registry.has_method("set_database"):
 		registry.set_database(_database)
@@ -561,6 +580,20 @@ func _apply_database_state(
 		_select_tag_in_tree(selected_tag)
 	if not _save_database():
 		return
+	_set_status(status_message)
+
+
+# An editor undo action outlives the database it was recorded against: changing the
+# configured path rebinds _database, and replaying an old snapshot into the new database
+# would silently overwrite it. Undo actions therefore carry their own database, and when
+# that database is no longer the one on screen the state is written straight to it rather
+# than through the dock.
+func _persist_off_screen_database(
+	target_database: GameplayTagDatabase, status_message: String
+) -> void:
+	var path: String = target_database.resource_path
+	if not path.is_empty() and not TagDockIo.database_path_conflicts(path):
+		ResourceSaver.save(target_database, path)
 	_set_status(status_message)
 
 

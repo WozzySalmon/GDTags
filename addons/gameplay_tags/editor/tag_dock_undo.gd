@@ -45,6 +45,7 @@ static func commit_state_change(
 		. add_do_method(
 			dock,
 			"_apply_database_state",
+			owner_resource,
 			do_tags,
 			do_descriptions,
 			do_status,
@@ -56,6 +57,7 @@ static func commit_state_change(
 		. add_undo_method(
 			dock,
 			"_apply_database_state",
+			owner_resource,
 			undo_tags,
 			undo_descriptions,
 			undo_status,

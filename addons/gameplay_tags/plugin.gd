@@ -107,7 +107,10 @@ static func _get_autoload_conflict() -> String:
 
 func _ensure_database_resource() -> void:
 	var path: String = GameplayTagUtils.get_database_path()
-	if ResourceLoader.exists(path):
+	# FileAccess.file_exists() first: ResourceLoader.exists() also reports true for a
+	# cache-only resource, which has no file to overwrite and cannot be read back with
+	# CACHE_MODE_IGNORE.
+	if FileAccess.file_exists(path) and ResourceLoader.exists(path):
 		var existing_resource: Resource = (
 			ResourceLoader
 			. load(

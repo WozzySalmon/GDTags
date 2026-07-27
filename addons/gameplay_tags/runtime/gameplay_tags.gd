@@ -592,6 +592,10 @@ func _load_or_create_database(
 
 
 func _database_path_has_incompatible_resource(path: String) -> bool:
+	# A resource that exists only in the cache reports true from ResourceLoader.exists()
+	# but has no file to conflict with, and CACHE_MODE_IGNORE cannot load it back.
+	if not FileAccess.file_exists(path):
+		return false
 	if not ResourceLoader.exists(path):
 		return false
 	var existing_resource: Resource = ResourceLoader.load(

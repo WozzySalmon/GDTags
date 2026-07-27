@@ -4,6 +4,7 @@ const AUTOLOAD_SETTING: String = "autoload/GameplayTags"
 const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 const PluginScript: Script = preload("res://addons/gameplay_tags/plugin.gd")
 const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
+const TagDockIo: Script = preload("res://addons/gameplay_tags/editor/tag_dock_io.gd")
 
 var _assertion_count: int = 0
 var _failed: bool = false
@@ -16,6 +17,8 @@ func _init() -> void:
 func _run_all_tests() -> void:
 	_test_autoload_collision_is_rejected()
 	_test_csv_import_reports_id_generation_failure()
+	_test_cache_only_resource_is_not_a_conflict()
+	_test_undo_targets_its_own_database()
 	if not _failed:
 		print("GDSCRIPT_GAMEPLAY_TAGS_EDITOR_TEST passed (%d assertions)" % _assertion_count)
 		quit(0)
@@ -35,6 +38,54 @@ func _test_autoload_collision_is_rejected() -> void:
 		"A different autoload using GameplayTags should be detected",
 	)
 	ProjectSettings.set_setting(AUTOLOAD_SETTING, original_value)
+
+
+func _test_cache_only_resource_is_not_a_conflict() -> void:
+	# Assigning resource_path registers the resource in the cache, which makes
+	# ResourceLoader.exists() report true even though nothing was written. A
+	# CACHE_MODE_IGNORE load cannot read it back, so without a file check the dock
+	# mistook a brand new database for a foreign resource and refused to save it.
+	var path: String = "res://test_cache_only_database.tres"
+	assert_false(FileAccess.file_exists(path), "Test precondition: the path must not exist on disk")
+
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	database.resource_path = path
+	assert_true(
+		ResourceLoader.exists(path), "Test precondition: the cache entry should be registered"
+	)
+	assert_false(
+		TagDockIo.database_path_conflicts(path),
+		"A cache-only resource has no file to overwrite and must not count as a conflict",
+	)
+
+
+func _test_undo_targets_its_own_database() -> void:
+	# An undo action outlives the database it was recorded against. Applying its snapshot
+	# to whatever database happens to be bound would silently overwrite the new one.
+	var dock: Node = TagEditorDock.new()
+	root.add_child(dock)
+
+	var recorded: GameplayTagDatabase = GameplayTagDatabase.new()
+	recorded.add_tag(&"Recorded.Tag")
+	var current: GameplayTagDatabase = GameplayTagDatabase.new()
+	current.add_tag(&"Current.Tag")
+	dock.set("_database", current)
+
+	var snapshot: Array[StringName] = [&"Snapshot.Tag"]
+	var descriptions: Dictionary[String, String] = {}
+	dock.call("_apply_database_state", recorded, snapshot, descriptions, "restored", &"")
+
+	assert_true(
+		recorded.has_tag(&"Snapshot.Tag"),
+		"The snapshot should be applied to the database the action recorded",
+	)
+	assert_false(
+		current.has_tag(&"Snapshot.Tag"),
+		"The snapshot must not leak into the database the dock currently shows",
+	)
+	assert_true(current.has_tag(&"Current.Tag"), "The currently bound database should be untouched")
+
+	dock.free()
 
 
 func _test_csv_import_reports_id_generation_failure() -> void:
