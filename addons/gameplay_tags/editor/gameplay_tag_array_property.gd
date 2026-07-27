@@ -1,9 +1,6 @@
 @tool
 extends EditorProperty
 
-const DATABASE_SETTING: String = "gameplay_tags/database_path"
-const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
-
 var _current_tags: Array[StringName] = []
 var _updating: bool = false
 var _read_only: bool = false
@@ -220,7 +217,7 @@ func _get_database() -> GameplayTagDatabase:
 	var registry: Node = _get_registry()
 	if registry != null and registry.has_method("get_database"):
 		return registry.get_database()
-	var path: String = String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	var path: String = GameplayTagUtils.get_database_path()
 	if ResourceLoader.exists(path):
 		return load(path) as GameplayTagDatabase
 	return null

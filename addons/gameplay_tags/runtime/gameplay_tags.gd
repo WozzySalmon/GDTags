@@ -1,8 +1,6 @@
 @tool
 extends Node
 
-const DATABASE_SETTING: String = "gameplay_tags/database_path"
-const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
 const COMPONENT_GROUP: StringName = &"gameplay_tag_components"
 const NODE_TAGS_META_NAME: String = "gameplay_tags"
 const NODE_TAG_GROUP: StringName = &"gameplay_tagged_nodes"
@@ -39,16 +37,22 @@ func set_database(database: GameplayTagDatabase, save_now: bool = false) -> void
 
 ## Returns the configured database path from ProjectSettings.
 func get_database_path() -> String:
-	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	return String(
+		ProjectSettings.get_setting(
+			GameplayTagUtils.DATABASE_SETTING, GameplayTagUtils.DEFAULT_DATABASE_PATH
+		)
+	)
 
 
 ## Points the addon at a different database path and drops the cached database.
 func set_database_path(path: String, save_project_settings: bool = false) -> void:
 	var clean_path: String = path.strip_edges()
 	if clean_path.is_empty():
-		clean_path = DEFAULT_DATABASE_PATH
-	ProjectSettings.set_setting(DATABASE_SETTING, clean_path)
-	ProjectSettings.set_initial_value(DATABASE_SETTING, DEFAULT_DATABASE_PATH)
+		clean_path = GameplayTagUtils.DEFAULT_DATABASE_PATH
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, clean_path)
+	ProjectSettings.set_initial_value(
+		GameplayTagUtils.DATABASE_SETTING, GameplayTagUtils.DEFAULT_DATABASE_PATH
+	)
 	if save_project_settings:
 		ProjectSettings.save()
 	_database = null

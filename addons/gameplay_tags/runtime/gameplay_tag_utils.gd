@@ -5,6 +5,21 @@ extends RefCounted
 ## Mostly thin aliases so gameplay code can normalize and match tags without
 ## reaching for GameplayTagDatabase directly.
 
+const DATABASE_SETTING: String = "gameplay_tags/database_path"
+const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
+const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
+const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
+
+
+## Returns the configured gameplay tag database path.
+static func get_database_path() -> String:
+	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+
+
+## Returns the configured path for the generated GameplayTagIds script.
+static func get_tag_ids_path() -> String:
+	return String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
+
 
 ## Convenience alias for [method GameplayTagDatabase.normalize_tag].
 static func normalize_tag_name(raw_tag: StringName) -> StringName:

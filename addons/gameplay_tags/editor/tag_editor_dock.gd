@@ -1,22 +1,14 @@
 @tool
 extends VBoxContainer
 
-enum ToolsAction {
-	REFRESH,
-	REGENERATE_IDS,
-	PASTE_TAGS,
-	IMPORT_CSV,
-	EXPORT_CSV,
-}
-
-const DATABASE_SETTING: String = "gameplay_tags/database_path"
-const TAG_IDS_SETTING: String = "gameplay_tags/generated_tag_ids_path"
-const DEFAULT_DATABASE_PATH: String = "res://gameplay_tags_database.tres"
-const DEFAULT_TAG_IDS_PATH: String = "res://gameplay_tag_ids.gd"
 const TagCodeGenerator: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
 )
 const StatusStyle: Script = preload("res://addons/gameplay_tags/editor/tag_dock_status_style.gd")
+const TagDockIo: Script = preload("res://addons/gameplay_tags/editor/tag_dock_io.gd")
+const TagDockTree: Script = preload("res://addons/gameplay_tags/editor/tag_dock_tree.gd")
+const TagDockUi: Script = preload("res://addons/gameplay_tags/editor/tag_dock_ui.gd")
+const TagDockUndo: Script = preload("res://addons/gameplay_tags/editor/tag_dock_undo.gd")
 
 const SEARCH_DEBOUNCE_SECONDS: float = 0.2
 
@@ -57,217 +49,126 @@ func _ready() -> void:
 func _build_ui() -> void:
 	add_theme_constant_override("separation", 8)
 
-	var title: Label = Label.new()
-	title.text = "Gameplay Tags"
-	if has_theme_font("bold", "EditorFonts"):
-		title.add_theme_font_override("font", get_theme_font("bold", "EditorFonts"))
-	if has_theme_font_size("title_size", "EditorFonts"):
-		(
-			title
-			. add_theme_font_size_override(
-				"font_size",
-				get_theme_font_size("title_size", "EditorFonts"),
-			)
-		)
+	var title: Label = TagDockUi.build_title(self)
 	add_child(title)
 
-	var path_label: Label = Label.new()
-	path_label.text = _get_database_path()
-	path_label.tooltip_text = (
-		"Gameplay Tags database: %s\nGenerated code constants: %s"
-		% [_get_database_path(), _get_tag_ids_path()]
+	var path_label: Label = TagDockUi.build_database_path_label(
+		_get_database_path(), _get_tag_ids_path()
 	)
-	path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	path_label.modulate.a = 0.7
 	add_child(path_label)
 
-	var tags_heading: Label = Label.new()
-	tags_heading.text = "Tags"
+	var tags_heading: Label = TagDockUi.build_tags_heading()
 	add_child(tags_heading)
 
-	_search_input = LineEdit.new()
-	_search_input.placeholder_text = "Search tags"
-	_search_input.clear_button_enabled = true
-	_search_input.tooltip_text = "Filter tags by name or description"
+	_search_input = TagDockUi.build_search_input()
 	_search_input.text_changed.connect(_on_search_changed)
 	add_child(_search_input)
 
 	# Rebuilding the whole Tree on every keystroke is visibly slow once a project has
 	# a few thousand tags, so coalesce bursts of typing into one refresh.
-	_search_debounce_timer = Timer.new()
-	_search_debounce_timer.one_shot = true
-	_search_debounce_timer.wait_time = SEARCH_DEBOUNCE_SECONDS
+	_search_debounce_timer = TagDockUi.build_search_debounce_timer(SEARCH_DEBOUNCE_SECONDS)
 	_search_debounce_timer.timeout.connect(_refresh)
 	add_child(_search_debounce_timer)
 
-	_tag_tree = Tree.new()
-	_tag_tree.hide_root = true
-	_tag_tree.columns = 1
-	_tag_tree.select_mode = Tree.SELECT_SINGLE
-	_tag_tree.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_tag_tree.tooltip_text = "Select a tag to view its description or remove it"
+	_tag_tree = TagDockUi.build_tag_tree()
 	_tag_tree.item_selected.connect(_on_tree_item_selected)
 	add_child(_tag_tree)
 
-	_details_container = VBoxContainer.new()
-	_details_container.add_theme_constant_override("separation", 6)
-	_details_container.visible = false
+	var details: Dictionary[String, Control] = TagDockUi.build_details_panel(self)
+	_details_container = details["container"] as VBoxContainer
+	_selected_tag_label = details["selected_tag_label"] as Label
+	_edit_description_input = details["edit_description_input"] as LineEdit
+	_update_description_button = details["update_description_button"] as Button
+	_add_child_button = details["add_child_button"] as Button
+	_rename_button = details["rename_button"] as Button
+	_remove_button = details["remove_button"] as Button
 	add_child(_details_container)
 
-	_details_container.add_child(HSeparator.new())
+	var details_separator: HSeparator = details["separator"] as HSeparator
+	_details_container.add_child(details_separator)
 
-	var details_heading: Label = Label.new()
-	details_heading.text = "Selected tag"
+	var details_heading: Label = details["heading"] as Label
 	_details_container.add_child(details_heading)
 
-	_selected_tag_label = Label.new()
-	_selected_tag_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	_selected_tag_label.modulate.a = 0.75
 	_details_container.add_child(_selected_tag_label)
 
-	_edit_description_input = LineEdit.new()
-	_edit_description_input.placeholder_text = "Optional description"
-	_edit_description_input.clear_button_enabled = true
 	_edit_description_input.text_changed.connect(_on_edit_description_changed)
 	_edit_description_input.text_submitted.connect(_on_description_submitted)
 	_details_container.add_child(_edit_description_input)
 
-	_update_description_button = Button.new()
-	_update_description_button.text = "Update Description"
-	_update_description_button.tooltip_text = "Save the selected tag's description"
 	_update_description_button.pressed.connect(_on_update_description_pressed)
 	_details_container.add_child(_update_description_button)
 
-	var tag_action_buttons: HBoxContainer = HBoxContainer.new()
-	tag_action_buttons.add_theme_constant_override("separation", 6)
+	var tag_action_buttons: HBoxContainer = details["action_buttons"] as HBoxContainer
 	_details_container.add_child(tag_action_buttons)
 
-	_add_child_button = Button.new()
-	_add_child_button.text = "Add Child"
-	_add_child_button.disabled = true
-	_add_child_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_add_child_button.tooltip_text = "Add a child beneath the selected tag"
-	_apply_editor_icon(_add_child_button, &"Add")
 	_add_child_button.pressed.connect(_on_add_child_pressed)
 	tag_action_buttons.add_child(_add_child_button)
 
-	_rename_button = Button.new()
-	_rename_button.text = "Rename"
-	_rename_button.disabled = true
-	_rename_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_rename_button.tooltip_text = "Rename or move the selected tag and its child tags"
-	_apply_editor_icon(_rename_button, &"Rename")
 	_rename_button.pressed.connect(_on_rename_pressed)
 	tag_action_buttons.add_child(_rename_button)
 
-	_remove_button = Button.new()
-	_remove_button.text = "Remove"
-	_remove_button.disabled = true
-	_remove_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_remove_button.tooltip_text = "Remove the selected tag and its child tags"
-	_apply_editor_icon(_remove_button, &"Remove")
 	_remove_button.pressed.connect(_on_remove_pressed)
 	tag_action_buttons.add_child(_remove_button)
 
-	add_child(HSeparator.new())
+	var add_form: Dictionary[String, Control] = TagDockUi.build_add_form(self)
+	var add_separator: HSeparator = add_form["separator"] as HSeparator
+	add_child(add_separator)
 
-	var add_heading: Label = Label.new()
-	add_heading.text = "Add a tag"
+	var add_heading: Label = add_form["heading"] as Label
 	add_child(add_heading)
 
-	_tag_input = LineEdit.new()
-	_tag_input.placeholder_text = "Tag name, for example State.Stunned"
-	_tag_input.clear_button_enabled = true
-	_tag_input.tooltip_text = "Use dots to create a tag hierarchy"
+	_tag_input = add_form["tag_input"] as LineEdit
 	_tag_input.text_submitted.connect(_on_tag_submitted)
 	add_child(_tag_input)
 
-	_description_input = LineEdit.new()
-	_description_input.placeholder_text = "Optional description"
-	_description_input.clear_button_enabled = true
+	_description_input = add_form["description_input"] as LineEdit
 	_description_input.text_submitted.connect(_on_tag_submitted)
 	add_child(_description_input)
 
-	var buttons: HBoxContainer = HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 6)
+	var buttons: HBoxContainer = add_form["buttons"] as HBoxContainer
 	add_child(buttons)
 
-	var add_button: Button = Button.new()
-	add_button.text = "Add Tag"
-	add_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	add_button.tooltip_text = "Add the tag and any missing parent tags"
-	_apply_editor_icon(add_button, &"Add")
+	var add_button: Button = add_form["add_button"] as Button
 	add_button.pressed.connect(_on_add_pressed)
 	buttons.add_child(add_button)
 
-	var tools_button: MenuButton = MenuButton.new()
-	tools_button.text = "Tools"
-	tools_button.tooltip_text = "Database maintenance, import, and export actions"
-	_apply_editor_icon(tools_button, &"Tools")
+	var tools_button: MenuButton = TagDockUi.build_tools_menu(self)
 	buttons.add_child(tools_button)
 
 	var tools_menu: PopupMenu = tools_button.get_popup()
-	tools_menu.add_item("Refresh", ToolsAction.REFRESH)
-	tools_menu.add_item("Regenerate IDs", ToolsAction.REGENERATE_IDS)
-	tools_menu.add_separator()
-	tools_menu.add_item("Paste Tags…", ToolsAction.PASTE_TAGS)
-	tools_menu.add_item("Import CSV", ToolsAction.IMPORT_CSV)
-	tools_menu.add_item("Export CSV", ToolsAction.EXPORT_CSV)
 	tools_menu.id_pressed.connect(_on_tools_menu_id_pressed)
 
 	_build_file_dialogs()
 
-	_status_label = Label.new()
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_status_label.modulate.a = 0.85
+	_status_label = TagDockUi.build_status_label()
 	add_child(_status_label)
 
 
 func _build_file_dialogs() -> void:
-	_rename_dialog = ConfirmationDialog.new()
-	_rename_dialog.title = "Rename Gameplay Tag"
-	_rename_dialog.get_ok_button().text = "Rename Tag"
+	var dialogs: Dictionary[String, Node] = TagDockUi.build_file_dialogs()
+	_rename_dialog = dialogs["rename_dialog"] as ConfirmationDialog
+	_rename_input = dialogs["rename_input"] as LineEdit
+	_paste_dialog = dialogs["paste_dialog"] as ConfirmationDialog
+	_paste_input = dialogs["paste_input"] as TextEdit
+	_import_dialog = dialogs["import_dialog"] as FileDialog
+	_export_dialog = dialogs["export_dialog"] as FileDialog
+	_remove_confirmation = dialogs["remove_confirmation"] as ConfirmationDialog
+
 	_rename_dialog.confirmed.connect(_on_rename_confirmed)
 	add_child(_rename_dialog)
-
-	_rename_input = LineEdit.new()
-	_rename_input.placeholder_text = "New tag path"
-	_rename_input.clear_button_enabled = true
-	_rename_input.custom_minimum_size = Vector2(460.0, 0.0)
 	_rename_dialog.add_child(_rename_input)
 
-	_paste_dialog = ConfirmationDialog.new()
-	_paste_dialog.title = "Paste Gameplay Tags"
-	_paste_dialog.dialog_text = (
-		"Enter one tag per line. " + "Commas and slashes create hierarchy segments."
-	)
-	_paste_dialog.get_ok_button().text = "Add Tags"
 	_paste_dialog.confirmed.connect(_on_paste_tags_confirmed)
 	add_child(_paste_dialog)
-
-	_paste_input = TextEdit.new()
-	_paste_input.custom_minimum_size = Vector2(560.0, 280.0)
-	_paste_input.placeholder_text = "Ability.Jump\nState,Stunned\nDamage/Fire"
 	_paste_dialog.add_child(_paste_input)
 
-	_import_dialog = FileDialog.new()
-	_import_dialog.access = FileDialog.ACCESS_RESOURCES
-	_import_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	_import_dialog.filters = PackedStringArray(["*.csv ; CSV files"])
-	_import_dialog.title = "Import Gameplay Tags CSV"
 	_import_dialog.file_selected.connect(_on_import_csv_selected)
 	add_child(_import_dialog)
 
-	_export_dialog = FileDialog.new()
-	_export_dialog.access = FileDialog.ACCESS_RESOURCES
-	_export_dialog.file_mode = FileDialog.FILE_MODE_SAVE_FILE
-	_export_dialog.filters = PackedStringArray(["*.csv ; CSV files"])
-	_export_dialog.title = "Export Gameplay Tags CSV"
 	_export_dialog.file_selected.connect(_on_export_csv_selected)
 	add_child(_export_dialog)
 
-	_remove_confirmation = ConfirmationDialog.new()
-	_remove_confirmation.title = "Remove Gameplay Tags"
 	_remove_confirmation.confirmed.connect(_on_remove_confirmed)
 	add_child(_remove_confirmation)
 
@@ -310,42 +211,13 @@ func _refresh() -> void:
 
 	var search_text: String = _search_input.text if _search_input != null else ""
 	var matched_tags: Array[StringName] = _database.find_tags(search_text)
-	var tree_tags: Array[StringName] = _include_ancestor_tags(matched_tags)
-	var root: TreeItem = _tag_tree.create_item()
-	for tag in tree_tags:
-		var tag_text: String = String(tag)
-		var parent_item: TreeItem = root
-		var separator_index: int = tag_text.rfind(".")
-		if separator_index >= 0:
-			var parent_tag: StringName = StringName(tag_text.left(separator_index))
-			parent_item = _tree_items_by_tag.get(parent_tag, root)
-
-		var item: TreeItem = _tag_tree.create_item(parent_item)
-		item.set_text(0, tag_text.get_slice(".", tag_text.get_slice_count(".") - 1))
-		item.set_metadata(0, tag)
-		var description: String = String(_database.tag_descriptions.get(tag_text, ""))
-		var tooltip: String = tag_text
-		if not description.is_empty():
-			tooltip += "\n%s" % description
-		item.set_tooltip_text(0, tooltip)
-		_tree_items_by_tag[tag] = item
+	var tree_tags: Array[StringName] = TagDockTree.include_ancestor_tags(_database, matched_tags)
+	_tree_items_by_tag = TagDockTree.populate(_tag_tree, _database, tree_tags)
 
 	if previously_selected != &"" and _tree_items_by_tag.has(previously_selected):
 		_select_tag_in_tree(previously_selected)
 
 	_set_status("%d visible / %d total tags." % [matched_tags.size(), _database.tags.size()])
-
-
-func _include_ancestor_tags(matched_tags: Array[StringName]) -> Array[StringName]:
-	var tree_tags: Array[StringName] = matched_tags.duplicate()
-	for tag in matched_tags:
-		var parent_text: String = String(tag)
-		while parent_text.contains("."):
-			parent_text = parent_text.left(parent_text.rfind("."))
-			var parent_tag: StringName = StringName(parent_text)
-			if _database.has_tag(parent_tag) and not tree_tags.has(parent_tag):
-				tree_tags.append(parent_tag)
-	return GameplayTagDatabase.canonicalize_tag_array(tree_tags)
 
 
 func _on_add_child_pressed() -> void:
@@ -386,36 +258,35 @@ func _on_add_pressed() -> void:
 			tag,
 		)
 	else:
-		(
-			undo_redo_manager
-			. create_action(
-				"Add Gameplay Tag %s" % String(tag),
-				UndoRedo.MERGE_DISABLE,
-				_database,
-			)
-		)
-		(
-			undo_redo_manager
-			. add_do_method(
-				self,
-				"_apply_database_state",
+		var do_step: Dictionary = (
+			TagDockUndo
+			. make_step(
 				preview.get_all_tags(),
 				preview.tag_descriptions.duplicate(true),
 				status_message,
 				tag,
 			)
 		)
-		(
-			undo_redo_manager
-			. add_undo_method(
-				self,
-				"_apply_database_state",
+		var undo_step: Dictionary = (
+			TagDockUndo
+			. make_step(
 				before_tags,
 				before_descriptions,
 				"Removed newly added %s." % String(tag),
+				&"",
 			)
 		)
-		undo_redo_manager.commit_action()
+		(
+			TagDockUndo
+			. commit_state_change(
+				undo_redo_manager,
+				self,
+				_database,
+				"Add Gameplay Tag %s" % String(tag),
+				do_step,
+				undo_step,
+			)
+		)
 
 	_tag_input.clear()
 	_description_input.clear()
@@ -555,37 +426,35 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 		)
 		return
 
-	(
-		undo_redo_manager
-		. create_action(
-			"Rename Gameplay Tag %s" % String(tag),
-			UndoRedo.MERGE_DISABLE,
-			_database,
-		)
-	)
-	(
-		undo_redo_manager
-		. add_do_method(
-			self,
-			"_apply_database_state",
+	var do_step: Dictionary = (
+		TagDockUndo
+		. make_step(
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
 			status_message,
 			new_tag,
 		)
 	)
-	(
-		undo_redo_manager
-		. add_undo_method(
-			self,
-			"_apply_database_state",
+	var undo_step: Dictionary = (
+		TagDockUndo
+		. make_step(
 			before_tags,
 			before_descriptions,
 			"Restored %s and its child tags." % String(tag),
 			tag,
 		)
 	)
-	undo_redo_manager.commit_action()
+	(
+		TagDockUndo
+		. commit_state_change(
+			undo_redo_manager,
+			self,
+			_database,
+			"Rename Gameplay Tag %s" % String(tag),
+			do_step,
+			undo_step,
+		)
+	)
 
 
 func _on_remove_pressed() -> void:
@@ -623,35 +492,35 @@ func _remove_tag_with_undo(tag: StringName) -> void:
 	if not preview.remove_tag(tag, true):
 		return
 
-	(
-		undo_redo_manager
-		. create_action(
-			"Remove Gameplay Tag %s" % String(tag),
-			UndoRedo.MERGE_DISABLE,
-			_database,
-		)
-	)
-	(
-		undo_redo_manager
-		. add_do_method(
-			self,
-			"_apply_database_state",
+	var do_step: Dictionary = (
+		TagDockUndo
+		. make_step(
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
 			"Removed %s and its children." % String(tag),
+			&"",
 		)
 	)
-	(
-		undo_redo_manager
-		. add_undo_method(
-			self,
-			"_apply_database_state",
+	var undo_step: Dictionary = (
+		TagDockUndo
+		. make_step(
 			before_tags,
 			before_descriptions,
 			"Restored %s and its children." % String(tag),
+			&"",
 		)
 	)
-	undo_redo_manager.commit_action()
+	(
+		TagDockUndo
+		. commit_state_change(
+			undo_redo_manager,
+			self,
+			_database,
+			"Remove Gameplay Tag %s" % String(tag),
+			do_step,
+			undo_step,
+		)
+	)
 
 
 func _remove_tag_immediately(tag: StringName) -> void:
@@ -697,15 +566,15 @@ func _apply_database_state(
 
 func _on_tools_menu_id_pressed(id: int) -> void:
 	match id:
-		ToolsAction.REFRESH:
+		TagDockUi.ToolsAction.REFRESH:
 			_on_refresh_pressed()
-		ToolsAction.REGENERATE_IDS:
+		TagDockUi.ToolsAction.REGENERATE_IDS:
 			_on_regenerate_pressed()
-		ToolsAction.PASTE_TAGS:
+		TagDockUi.ToolsAction.PASTE_TAGS:
 			_on_paste_tags_pressed()
-		ToolsAction.IMPORT_CSV:
+		TagDockUi.ToolsAction.IMPORT_CSV:
 			_on_import_csv_pressed()
-		ToolsAction.EXPORT_CSV:
+		TagDockUi.ToolsAction.EXPORT_CSV:
 			_on_export_csv_pressed()
 		_:
 			pass
@@ -873,23 +742,14 @@ func _save_database_resource() -> bool:
 		_set_status("No gameplay tag database loaded.")
 		return false
 	var path: String = _get_database_path()
-	if ResourceLoader.exists(path):
-		var existing_resource: Resource = (
-			ResourceLoader
-			. load(
-				path,
-				"",
-				ResourceLoader.CACHE_MODE_IGNORE,
-			)
-		)
-		if not existing_resource is GameplayTagDatabase:
-			_set_status("Refusing to overwrite another resource at: %s" % path)
-			return false
+	if TagDockIo.database_path_conflicts(path):
+		_set_status("Refusing to overwrite another resource at: %s" % path)
+		return false
 	var directory_error: Error = _ensure_database_directory(path)
 	if directory_error != OK:
 		_set_status("Could not create database directory: %s" % error_string(directory_error))
 		return false
-	var err: Error = ResourceSaver.save(_database, path)
+	var err: Error = TagDockIo.save_database_resource(_database, path)
 	if err != OK:
 		_set_status("Could not save database: %s" % error_string(err))
 		return false
@@ -920,12 +780,10 @@ func _import_tags_from_csv(path: String) -> int:
 
 
 func _import_tags_from_csv_without_registry(path: String) -> int:
-	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
-	if file == null:
+	var added: int = TagDockIo.import_tags_from_csv_file(_database, path)
+	if added < 0:
 		_set_status("Could not open CSV: %s" % path)
 		return -1
-	var added: int = _database.add_tags_from_csv_text(file.get_as_text())
-	file.close()
 	if added > 0 and not _save_database_resource():
 		return -1
 	return added
@@ -935,40 +793,23 @@ func _export_tags_to_csv(path: String) -> Error:
 	var registry: Node = _get_registry()
 	if registry != null and registry.has_method("export_tags_to_csv"):
 		return registry.export_tags_to_csv(path)
-
-	var directory_error: Error = _ensure_database_directory(path)
-	if directory_error != OK:
-		return directory_error
-	var file: FileAccess = FileAccess.open(path, FileAccess.WRITE)
-	if file == null:
-		return ERR_CANT_OPEN
-	file.store_string(_database.to_csv_text())
-	file.close()
-	return OK
+	return TagDockIo.export_tags_to_csv_file(_database, path)
 
 
 func _ensure_database_directory(path: String) -> Error:
-	var directory: String = path.get_base_dir()
-	if directory.is_empty() or directory == "res://" or directory == "user://":
-		return OK
-	return DirAccess.make_dir_recursive_absolute(directory)
+	return TagDockIo.ensure_database_directory(path)
 
 
 func _get_database_path() -> String:
-	return String(ProjectSettings.get_setting(DATABASE_SETTING, DEFAULT_DATABASE_PATH))
+	return GameplayTagUtils.get_database_path()
 
 
 func _get_tag_ids_path() -> String:
-	return String(ProjectSettings.get_setting(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH))
+	return GameplayTagUtils.get_tag_ids_path()
 
 
 func _get_registry() -> Node:
 	return GameplayTagUtils.get_registry(self)
-
-
-func _apply_editor_icon(button: Button, icon_name: StringName) -> void:
-	if has_theme_icon(icon_name, "EditorIcons"):
-		button.icon = get_theme_icon(icon_name, "EditorIcons")
 
 
 func _set_status(message: String) -> void:
