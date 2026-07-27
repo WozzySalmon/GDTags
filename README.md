@@ -101,8 +101,11 @@ tools\windows\package_addon.cmd
 
 ## Docs
 
-- `docs/PLUGIN_GUIDE.md` - full plugin behavior and usage guide.
-- `addons/gameplay_tags/README.md` - addon usage notes.
+- `addons/gameplay_tags/README.md` - how to use the addon. This is the one that ships
+  with the package, so it is the guide for anyone who installs it.
+- `docs/VALIDATION.md` - local validation, compatibility matrix, benchmarks, and how to
+  check an engine API against the supported Godot versions.
 - `docs/PACKAGING.md` - release/package notes.
-- `docs/VALIDATION.md` - local validation, compatibility, benchmark, and package-test notes.
 - `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo.
+- `docs/PROJECT_MAP.md` - where things live, for anyone changing the code.
+- `AGENTS.md` - what to use and what not to use when editing this project.

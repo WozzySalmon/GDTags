@@ -8,7 +8,7 @@
 #
 # Release binaries carry no prose, so the generated XML has signatures but empty
 # descriptions. Use query_godot_api.py to check availability and signatures, then
-# read the online class reference for semantics. See docs/PLUGIN_GUIDE.md.
+# read the online class reference for semantics. See docs/VALIDATION.md.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

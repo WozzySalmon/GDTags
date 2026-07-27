@@ -49,9 +49,11 @@ navigation guidance; current source and tests are authoritative.
 
 ## Documentation ownership
 
-- `README.md`: concise user-facing overview and public API entry points.
-- `docs/PLUGIN_GUIDE.md`: detailed behavior and usage reference.
-- `docs/GDSCRIPT_STYLE.md`: canonical GDScript and project style rules.
+- `README.md`: repository overview for humans browsing the project.
+- `addons/gameplay_tags/README.md`: how to use the addon. Ships inside the package, so it
+  is the only usage documentation an installing user receives — keep it current.
+- `docs/GDSCRIPT_STYLE.md`: Godot's official style guide. Authoritative; `gdlint` enforces it.
+- `AGENTS.md`: what to use and what not to use when changing this project.
 - `docs/VALIDATION.md`: validation commands and compatibility matrix.
 - `docs/PACKAGING.md`: package construction and installation rules.
 
