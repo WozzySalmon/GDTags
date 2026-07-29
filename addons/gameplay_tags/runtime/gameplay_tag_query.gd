@@ -318,11 +318,6 @@ func add_tag(raw_tag: StringName) -> bool:
 	return true
 
 
-## Alias for [method add_tag].
-func add(raw_tag: StringName) -> bool:
-	return add_tag(raw_tag)
-
-
 ## Adds several tags and returns how many were new.
 func add_tags(raw_tags: Array[StringName]) -> int:
 	var added: int = 0
@@ -341,11 +336,6 @@ func remove_tag(raw_tag: StringName) -> bool:
 	tags.remove_at(index)
 	emit_changed()
 	return true
-
-
-## Alias for [method remove_tag].
-func remove(raw_tag: StringName) -> bool:
-	return remove_tag(raw_tag)
 
 
 ## Removes several tags and returns how many were present.

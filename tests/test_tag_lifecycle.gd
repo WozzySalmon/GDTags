@@ -302,7 +302,7 @@ func _test_redirect_resolution() -> void:
 	var node_tags: Array[StringName] = [&"State.Stunned"]
 	registry.set_node_tags(actor, node_tags)
 	assert_true(
-		registry.get_node_tags(actor).has_exact(&"State.Incapacitated"),
+		registry.get_node_tags(actor).has_tag(&"State.Incapacitated", true),
 		"Direct node tags should resolve a retired name to its replacement",
 	)
 

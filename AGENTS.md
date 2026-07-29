@@ -17,6 +17,7 @@ Current source and tests outrank every document here.
 | `add_tag()`, `remove_tag()`, `rename_tag()`, `ensure_parent_tags()` | assigning `GameplayTagDatabase.tags` | Direct assignment skips hierarchy maintenance and change signals. |
 | `GameplayTagIds.TEAM_ENEMY` | `&"Team.Enemy"` | Generated constants survive renames and are found by the reference index. |
 | `GameplayTagComponent` | node groups | Groups are the tag index's private business, not an authoring surface. |
+| `has_tag()`, `has_any()`, `has_all()`, `has_none()` | short aliases like `has()`, `any()`, `all()` | One name per operation. `GameplayTagComponent`, `GameplayTagDatabase`, and the autoload all use the long form, so a second spelling on containers and queries only doubles the surface to document and test. |
 | `GameplayTagUtils.DATABASE_SETTING` and friends | repeating `"gameplay_tags/database_path"` | Setting names and default paths live in one place. |
 | `GameplayTagUtils.resolve_setting_path()` | `ProjectSettings.get_setting()` | The latter silently ignores per-platform feature-tag overrides. |
 | `resolve_tag()` on authored tag names | assuming the name is current | A tag renamed earlier resolves through its redirect instead of being dropped. |

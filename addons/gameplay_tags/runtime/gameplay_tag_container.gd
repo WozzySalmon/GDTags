@@ -42,11 +42,6 @@ func add_tag(raw_tag: StringName) -> bool:
 	return true
 
 
-## Alias for [method add_tag].
-func add(raw_tag: StringName) -> bool:
-	return add_tag(raw_tag)
-
-
 ## Adds several tags and returns how many were new.
 func add_tags(raw_tags: Array[StringName]) -> int:
 	var existing: Dictionary[String, StringName] = {}
@@ -145,11 +140,6 @@ func remove_tag(raw_tag: StringName) -> bool:
 	return true
 
 
-## Alias for [method remove_tag].
-func remove(raw_tag: StringName) -> bool:
-	return remove_tag(raw_tag)
-
-
 ## Removes several tags and returns how many were present.
 func remove_tags(raw_tags: Array[StringName]) -> int:
 	var remove_set: Dictionary[String, bool] = {}
@@ -189,27 +179,12 @@ func has_tag(raw_tag: StringName, exact: bool = false) -> bool:
 	return _match_tag_set.has(String(tag))
 
 
-## Alias for [method has_tag] with hierarchical matching.
-func has(raw_tag: StringName) -> bool:
-	return has_tag(raw_tag, false)
-
-
-## Alias for [method has_tag] with exact matching.
-func has_exact(raw_tag: StringName) -> bool:
-	return has_tag(raw_tag, true)
-
-
 ## Returns whether at least one of [param required_tags] is owned.
 func has_any(required_tags: Array[StringName], exact: bool = false) -> bool:
 	for tag in required_tags:
 		if has_tag(tag, exact):
 			return true
 	return false
-
-
-## Alias for [method has_any].
-func any(required_tags: Array[StringName], exact: bool = false) -> bool:
-	return has_any(required_tags, exact)
 
 
 ## Returns whether every one of [param required_tags] is owned. An empty list matches.
@@ -222,13 +197,8 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	return true
 
 
-## Alias for [method has_all].
-func all(required_tags: Array[StringName], exact: bool = false) -> bool:
-	return has_all(required_tags, exact)
-
-
 ## Returns whether none of [param blocked_tags] is owned.
-func none(blocked_tags: Array[StringName], exact: bool = false) -> bool:
+func has_none(blocked_tags: Array[StringName], exact: bool = false) -> bool:
 	return not has_any(blocked_tags, exact)
 
 
@@ -254,11 +224,6 @@ func is_empty() -> bool:
 ## Returns a copy of the owned tags, canonically sorted.
 func get_tags() -> Array[StringName]:
 	return tags.duplicate()
-
-
-## Alias for [method get_tags].
-func to_array() -> Array[StringName]:
-	return get_tags()
 
 
 ## Returns an independent copy, including stack depths.
