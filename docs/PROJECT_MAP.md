@@ -9,11 +9,10 @@ navigation guidance; current source and tests are authoritative.
 | Task | Start here | Closest validation |
 |---|---|---|
 | Addon startup, project settings, autoload ownership, database/ID setup | `addons/gameplay_tags/plugin.gd`, `addons/gameplay_tags/plugin.cfg` | `tests/test_editor_workflows.gd`, `tools/linux/test_package_install.sh` |
-| Public runtime API, database access, CSV, target checks, node tagging, overlap helpers | `addons/gameplay_tags/runtime/gameplay_tags.gd` | `tests/test_gameplay_tags.gd`, `tests/test_runtime_edge_cases.gd` |
+| Public runtime API, database access, CSV, target checks, node tagging | `addons/gameplay_tags/runtime/gameplay_tags.gd` | `tests/test_gameplay_tags.gd`, `tests/test_runtime_edge_cases.gd` |
 | Tag hierarchy, descriptions, rename/removal, search, and change signals | `addons/gameplay_tags/resources/gameplay_tag_database.gd`, `addons/gameplay_tags/runtime/gameplay_tag.gd` | `tests/test_gameplay_tags.gd`, `tests/test_runtime_edge_cases.gd` |
 | Containers and query matching | `addons/gameplay_tags/runtime/gameplay_tag_container.gd`, `addons/gameplay_tags/runtime/gameplay_tag_query.gd` | `tests/test_gameplay_tags.gd` |
 | Target-owned tags and reusable node components | `addons/gameplay_tags/runtime/gameplay_tag_component.gd`, `addons/gameplay_tags/runtime/gameplay_tag_utils.gd` | `tests/test_gameplay_tags.gd` |
-| Physics trigger behavior | `addons/gameplay_tags/runtime/gameplay_tag_trigger_3d.gd`, `addons/gameplay_tags/runtime/gameplay_tags.gd` | `tests/test_runtime_edge_cases.gd` |
 | Dock tree, search, tag mutations, CSV, and undo/redo | `addons/gameplay_tags/editor/tag_editor_dock.gd` | `tests/test_editor_workflows.gd` |
 | Tag redirects, stack depth, query diagnostics | `addons/gameplay_tags/resources/gameplay_tag_database.gd`, `addons/gameplay_tags/runtime/gameplay_tag_query.gd` | `tests/test_tag_lifecycle.gd` |
 | Finding where tags are used, dead tags, rename migration | `addons/gameplay_tags/editor/tag_reference_index.gd` | `tests/test_tag_lifecycle.gd` |

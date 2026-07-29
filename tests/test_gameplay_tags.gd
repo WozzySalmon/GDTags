@@ -63,7 +63,6 @@ func _run_tests() -> void:
 	run_test("tag_index_finds_nodes", _test_tag_index)
 	run_test("ambiguous_tags_property_is_ignored", _test_ambiguous_tags_property)
 	run_test("query_modes", _test_query_modes)
-	run_test("area3d_trigger_helper", _test_area3d_trigger_helper)
 
 
 func _make_test_database() -> GameplayTagDatabase:
@@ -778,29 +777,6 @@ func _test_query_modes() -> void:
 	observed_query.exact = true
 	assert_eq(_query_change_count, 2, "Mode and exact changes should emit Resource.changed")
 	component.free()
-
-
-func _test_area3d_trigger_helper() -> void:
-	var actor: Node3D = Node3D.new()
-	var component: GameplayTagComponent = GameplayTagComponent.new()
-	actor.add_child(component)
-	root.add_child(actor)
-	component.add_tag(&"Team.Enemy")
-
-	var trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
-	root.add_child(trigger)
-	trigger.required_tags = [&"Team.Enemy"]
-	assert_true(trigger.can_trigger(actor), "Trigger should accept matching tagged target")
-
-	trigger.required_tags = [&"Team.Player"]
-	assert_false(trigger.can_trigger(actor), "Trigger should reject non-matching target")
-
-	trigger.required_tags = [&"Team"]
-	trigger.exact_match = true
-	assert_false(trigger.can_trigger(actor), "Exact trigger should not match parent")
-
-	actor.free()
-	trigger.free()
 
 
 func _on_query_changed() -> void:

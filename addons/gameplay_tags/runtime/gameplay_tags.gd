@@ -405,47 +405,6 @@ func target_has_all(target: Object, tags: Array[StringName], exact: bool = false
 	)
 
 
-## Returns bodies overlapping [param area] that own [param tag].
-func get_overlapping_bodies_with_tag(
-	area: Area3D, tag: StringName, exact: bool = false
-) -> Array[Node]:
-	var matches: Array[Node] = []
-	if area == null:
-		return matches
-	for body in area.get_overlapping_bodies():
-		if body is Node and target_has_tag(body, tag, exact):
-			matches.append(body)
-	return matches
-
-
-## Returns areas overlapping [param area] that own [param tag].
-func get_overlapping_areas_with_tag(
-	area: Area3D, tag: StringName, exact: bool = false
-) -> Array[Area3D]:
-	var matches: Array[Area3D] = []
-	if area == null:
-		return matches
-	for overlap in area.get_overlapping_areas():
-		if overlap is Area3D and target_has_tag(overlap, tag, exact):
-			matches.append(overlap)
-	return matches
-
-
-## Returns the first overlapping body or area owning [param tag], or null.
-func get_first_overlapping_target_with_tag(
-	area: Area3D, tag: StringName, exact: bool = false
-) -> Node:
-	if area == null:
-		return null
-	for body in area.get_overlapping_bodies():
-		if body is Node and target_has_tag(body, tag, exact):
-			return body
-	for overlap in area.get_overlapping_areas():
-		if overlap is Area3D and target_has_tag(overlap, tag, exact):
-			return overlap
-	return null
-
-
 # Collects into one plain array and builds a single container at the end. Merging
 # container into container re-canonicalized and re-emitted change signals per source,
 # which is wasted work on a throwaway result.

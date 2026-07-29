@@ -75,8 +75,6 @@ func _hint_includes_gameplay_tag(hint_string: String) -> bool:
 func _is_supported_tag_property_name(object: Object, property_name: String) -> bool:
 	if object is GameplayTagComponent:
 		return property_name == "owned_tags"
-	if object is GameplayTagTrigger3D:
-		return property_name == "required_tags"
 	if object is GameplayTagContainer or object is GameplayTagQuery:
 		return property_name == "tags"
 	return false

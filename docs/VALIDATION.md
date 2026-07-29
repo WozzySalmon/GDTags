@@ -16,7 +16,7 @@ tools/linux/check_gdscript.sh
 
 1. `tests/test_gameplay_tags.gd` headlessly.
 2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.
-3. `tests/test_runtime_edge_cases.gd` headlessly for CSV, mutation, trigger, and overlap paths.
+3. `tests/test_runtime_edge_cases.gd` headlessly for CSV and mutation paths.
 4. `tests/test_tag_lifecycle.gd` headlessly for stack depth, redirects, references, and migration.
 5. `tests/test_editor_picker_interactions.gd` in a headless editor for Inspector picker interactions.
 6. A headless editor/plugin load check.

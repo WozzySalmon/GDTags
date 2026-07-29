@@ -82,11 +82,12 @@ runtime state and is not saved.
 
 ## Area triggers
 
-Add a `GameplayTagTrigger3D`, set `required_tags`, and connect its signal instead of
-filtering every overlap by hand:
+Tag-gated volumes are a two-line filter on the signal you already connect, in 2D or 3D:
 
 ```gdscript
-func _on_tagged_body_entered(body: Node) -> void:
+func _on_body_entered(body: Node) -> void:
+	if not GameplayTags.target_has_tag(body, GameplayTagIds.TEAM_ENEMY):
+		return
 	start_combat(body)
 ```
 

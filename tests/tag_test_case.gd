@@ -65,21 +65,6 @@ func run_test(test_name: String, test_callable: Callable) -> void:
 	print("PASS %s" % test_name)
 
 
-## Same contract as [method run_test] for a case that awaits, such as one that has to
-## wait on physics frames. Call it with `await`.
-func run_async_test(test_name: String, test_callable: Callable) -> void:
-	if _failed:
-		return
-	var assertions_before: int = _assertion_count
-	await test_callable.call()
-	if _failed:
-		return
-	if _assertion_count == assertions_before:
-		_fail("%s ran no assertions, so it aborted before verifying anything" % test_name)
-		return
-	print("PASS %s" % test_name)
-
-
 func assert_true(condition: bool, message: String = "Expected condition to be true") -> void:
 	_assertion_count += 1
 	if not condition:

@@ -42,8 +42,6 @@ func _on_body_entered(body: Node) -> void:
 	print("Enemy entered trigger")
 ```
 
-Or use `GameplayTagTrigger3D` directly and set `required_tags` in the Inspector.
-
 ## Public API
 
 - `GameplayTags.get_database()` - central `GameplayTagDatabase` resource.
@@ -57,9 +55,7 @@ Or use `GameplayTagTrigger3D` directly and set `required_tags` in the Inspector.
 - `GameplayTags.get_tagged_nodes(root)`.
 - `GameplayTags.get_nodes_with_tag(root: Node, tag: StringName, exact: bool = false)`.
 - `GameplayTags.import_tags_from_csv(path)` / `export_tags_to_csv(path)`.
-- `GameplayTags.get_overlapping_bodies_with_tag(area: Area3D, tag: StringName, exact: bool = false)`.
 - `GameplayTagComponent` - attach to nodes to own tags.
-- `GameplayTagTrigger3D` - Area3D helper that emits only for matching tagged targets.
 
 The runtime API is deliberately strict: use `StringName` for individual tags and explicitly
 written `Array[StringName]` variables for tag collections. Arbitrary values are not converted

@@ -1,10 +1,6 @@
 extends "res://tests/tag_test_case.gd"
 
-const MAX_OVERLAP_WAIT_FRAMES: int = 10
-
 var _query_change_count: int = 0
-var _body_emission_count: int = 0
-var _area_emission_count: int = 0
 
 
 func _suite_name() -> String:
@@ -15,7 +11,6 @@ func _run_tests() -> void:
 	run_test("database_recursive_removal_and_csv_round_trip", _test_database_edges)
 	run_test("container_component_and_query_mutations", _test_runtime_mutations)
 	run_test("autoload_csv_and_node_helpers", _test_autoload_helpers)
-	await run_async_test("overlap_helpers_and_trigger_once", _test_overlap_helpers_and_trigger_once)
 
 
 func _make_test_database() -> GameplayTagDatabase:
@@ -153,112 +148,5 @@ func _test_autoload_helpers() -> void:
 	actor.free()
 
 
-func _test_overlap_helpers_and_trigger_once() -> void:
-	registry.set_database(_make_test_database())
-
-	var trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
-	trigger.collision_layer = 0
-	trigger.collision_mask = 1
-	trigger.monitoring = true
-	_add_sphere_collision(trigger)
-	root.add_child(trigger)
-
-	var body: StaticBody3D = StaticBody3D.new()
-	body.collision_layer = 1
-	body.collision_mask = 0
-	_add_sphere_collision(body)
-	var body_component: GameplayTagComponent = GameplayTagComponent.new()
-	body.add_child(body_component)
-	root.add_child(body)
-	body_component.add_tag(&"Team.Enemy")
-
-	var area: Area3D = Area3D.new()
-	area.collision_layer = 1
-	area.collision_mask = 0
-	area.monitorable = true
-	_add_sphere_collision(area)
-	var area_component: GameplayTagComponent = GameplayTagComponent.new()
-	area.add_child(area_component)
-	root.add_child(area)
-	area_component.add_tag(&"Team.Player")
-
-	for _frame_index in range(MAX_OVERLAP_WAIT_FRAMES):
-		await physics_frame
-		if trigger.get_overlapping_bodies().has(body) and trigger.get_overlapping_areas().has(area):
-			break
-
-	assert_true(
-		registry.get_overlapping_bodies_with_tag(trigger, &"Team.Enemy").has(body),
-		(
-			"Tagged body did not overlap the trigger within %d physics frames"
-			% MAX_OVERLAP_WAIT_FRAMES
-		),
-	)
-	assert_true(
-		registry.get_overlapping_areas_with_tag(trigger, &"Team.Player").has(area),
-		(
-			"Tagged area did not overlap the trigger within %d physics frames"
-			% MAX_OVERLAP_WAIT_FRAMES
-		),
-	)
-	assert_eq(registry.get_first_overlapping_target_with_tag(trigger, &"Team.Enemy"), body)
-
-	trigger.required_tags = [&"Team.Enemy"]
-	assert_true(trigger.get_matching_overlapping_bodies().has(body))
-	trigger.required_tags = [&"Team.Player"]
-	assert_true(trigger.get_matching_overlapping_areas().has(area))
-
-	var once_body_trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
-	root.add_child(once_body_trigger)
-	once_body_trigger.match_mode = GameplayTagTrigger3D.MatchMode.ANY
-	once_body_trigger.required_tags = [&"Damage.Fire", &"Team.Enemy"]
-	assert_true(once_body_trigger.can_trigger(body), "ANY mode should accept one matching tag")
-	once_body_trigger.required_tags = []
-	assert_true(
-		once_body_trigger.can_trigger(body), "Empty trigger requirements should accept targets"
-	)
-	assert_false(once_body_trigger.can_trigger(null))
-	once_body_trigger.required_tags = [&"Team.Enemy"]
-	once_body_trigger.trigger_once = true
-	_body_emission_count = 0
-	once_body_trigger.tagged_body_entered.connect(_on_tagged_body_entered)
-	once_body_trigger.call("_on_body_entered", body)
-	once_body_trigger.call("_on_body_entered", body)
-	assert_eq(_body_emission_count, 1, "trigger_once should suppress later body emissions")
-	assert_false(once_body_trigger.can_trigger(body))
-
-	var once_area_trigger: GameplayTagTrigger3D = GameplayTagTrigger3D.new()
-	root.add_child(once_area_trigger)
-	once_area_trigger.required_tags = [&"Team.Player"]
-	once_area_trigger.trigger_once = true
-	_area_emission_count = 0
-	once_area_trigger.tagged_area_entered.connect(_on_tagged_area_entered)
-	once_area_trigger.call("_on_area_entered", area)
-	once_area_trigger.call("_on_area_entered", area)
-	assert_eq(_area_emission_count, 1, "trigger_once should suppress later area emissions")
-
-	trigger.free()
-	body.free()
-	area.free()
-	once_body_trigger.free()
-	once_area_trigger.free()
-
-
-func _add_sphere_collision(collision_object: CollisionObject3D) -> void:
-	var collision_shape: CollisionShape3D = CollisionShape3D.new()
-	var sphere: SphereShape3D = SphereShape3D.new()
-	sphere.radius = 2.0
-	collision_shape.shape = sphere
-	collision_object.add_child(collision_shape)
-
-
 func _on_query_changed() -> void:
 	_query_change_count += 1
-
-
-func _on_tagged_body_entered(_body: Node) -> void:
-	_body_emission_count += 1
-
-
-func _on_tagged_area_entered(_area: Area3D) -> void:
-	_area_emission_count += 1
