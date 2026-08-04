@@ -13,6 +13,7 @@ var registry: Node
 var _assertion_count: int = 0
 var _failed: bool = false
 var _previous_database: GameplayTagDatabase
+var _previous_database_path: String
 
 
 func _init() -> void:
@@ -92,6 +93,7 @@ func _fail(message: String) -> void:
 	_failed = true
 	push_error(message)
 	if registry != null:
+		registry.set_database_path(_previous_database_path)
 		registry.set_database(_previous_database)
 	quit(1)
 
@@ -99,6 +101,7 @@ func _fail(message: String) -> void:
 func _run_all_tests() -> void:
 	registry = _get_or_create_registry()
 	_previous_database = registry.get_database()
+	_previous_database_path = registry.get_database_path()
 	registry.set_database(_make_test_database())
 
 	# Awaited so a suite containing an async case still finishes before reporting.
@@ -107,6 +110,7 @@ func _run_all_tests() -> void:
 
 	if _failed:
 		return
+	registry.set_database_path(_previous_database_path)
 	registry.set_database(_previous_database)
 	print("%s passed (%d assertions)" % [_suite_name(), _assertion_count])
 	quit(0)

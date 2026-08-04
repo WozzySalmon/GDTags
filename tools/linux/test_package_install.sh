@@ -53,6 +53,7 @@ extends SceneTree
 
 
 func _init() -> void:
+	create_timer(30.0).timeout.connect(_on_watchdog_timeout)
 	call_deferred("_run")
 
 
@@ -68,7 +69,7 @@ func _run() -> void:
 	if not registry.add_tag(&"Install.Smoke", "Package installation smoke tag"):
 		_fail("Packaged GameplayTags autoload could not add a tag")
 		return
-	if not registry.has_tag(&"Install.Smoke"):
+	if not registry.is_valid_tag(&"Install.Smoke"):
 		_fail("Packaged GameplayTags autoload could not read the added tag")
 		return
 	if not FileAccess.file_exists("res://gameplay_tags_database.tres"):
@@ -84,6 +85,10 @@ func _run() -> void:
 func _fail(message: String) -> void:
 	push_error(message)
 	quit(1)
+
+
+func _on_watchdog_timeout() -> void:
+	_fail("Packaged addon runtime smoke test timed out")
 EOF
 
 scan_log() {
@@ -127,7 +132,7 @@ GameplayTags="*res://addons/gameplay_tags/runtime/gameplay_tags.gd"
 EOF
 
 set +e
-GODOT_SILENCE_ROOT_WARNING=1 "$GODOT_BIN" \
+GODOT_SILENCE_ROOT_WARNING=1 timeout 60s "$GODOT_BIN" \
   --headless --path "$TEMP_PROJECT" --script res://install_smoke.gd >"$RUNTIME_LOG" 2>&1
 runtime_exit=$?
 set -e

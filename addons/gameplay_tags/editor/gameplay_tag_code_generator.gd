@@ -33,6 +33,7 @@ static func save_tag_ids(
 		return FileAccess.get_open_error()
 
 	file.store_string(build_tag_ids_source(database))
+	file.close()
 	return OK
 
 
@@ -84,6 +85,7 @@ static func build_tag_ids_source(database: GameplayTagDatabase) -> String:
 				)
 			)
 
+	lines.append("")
 	lines.append("")
 	lines.append("static func all() -> Array[StringName]:")
 	if entries.is_empty():

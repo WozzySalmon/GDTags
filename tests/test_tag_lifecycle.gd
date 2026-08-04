@@ -43,6 +43,15 @@ func _test_owner_level_stacking() -> void:
 
 	var stunned_tags: Array[StringName] = [GameplayTagIds.STATE_STUNNED]
 	component.owned_tags = stunned_tags
+	assert_true(
+		component.set_tag_count(GameplayTagIds.TEAM_ENEMY, 1),
+		"Setting an unowned component tag to depth one should report the ownership change",
+	)
+	assert_false(
+		component.set_tag_count(GameplayTagIds.TEAM_ENEMY, 1),
+		"Setting an owned component tag to its existing depth should report no change",
+	)
+	component.remove_tag(GameplayTagIds.TEAM_ENEMY)
 
 	assert_eq(
 		component.get_tag_count(GameplayTagIds.STATE_STUNNED),
@@ -78,7 +87,12 @@ func _test_owner_level_stacking() -> void:
 		2,
 		"Releasing one stack should return the remaining depth",
 	)
-	component.remove_tag_stack(GameplayTagIds.STATE_STUNNED)
+	assert_eq(component.remove_tag_stack(GameplayTagIds.STATE_STUNNED), 1)
+	var depth_one_counts: Dictionary[String, int] = component.get("_stack_counts")
+	assert_false(
+		depth_one_counts.has(String(GameplayTagIds.STATE_STUNNED)),
+		"Depth-one component tags should use the implicit representation",
+	)
 	assert_eq(
 		component.remove_tag_stack(GameplayTagIds.STATE_STUNNED),
 		0,
@@ -260,6 +274,15 @@ func _test_rename_redirects() -> void:
 	var cyclic: GameplayTagDatabase = GameplayTagDatabase.new()
 	cyclic.add_tag(&"Alpha")
 	cyclic.add_tag(&"Beta")
+	assert_false(
+		cyclic.add_redirect(&"Alpha", &"Beta"),
+		"A live registered tag must never become a redirect source",
+	)
+	assert_eq(
+		cyclic.resolve_tag(&"Alpha"),
+		&"Alpha",
+		"Refusing a live-source redirect should preserve immediate lookup semantics",
+	)
 	assert_true(cyclic.add_redirect(&"Retired.One", &"Retired.Two"))
 	assert_false(
 		cyclic.add_redirect(&"Retired.Two", &"Retired.One"),

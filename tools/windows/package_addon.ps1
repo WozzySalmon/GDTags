@@ -56,8 +56,29 @@ if (Test-Path $LicensePath) {
 
 Compress-Archive -Path (Join-Path $StageDir "*") -DestinationPath $ZipPath -Force
 
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$Archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+try {
+    $EntryNames = @($Archive.Entries | ForEach-Object { $_.FullName.Replace("\", "/") })
+    if ($EntryNames -notcontains "addons/gameplay_tags/plugin.cfg") {
+        throw "Package validation failed: addon plugin.cfg is missing."
+    }
+    $ForbiddenEntry = $EntryNames | Where-Object {
+        $_ -match '(^|/)(tests|benchmarks|\.godot)(/|$)' `
+        -or $_ -match '(^|/)~' `
+        -or $_ -match '\.tmp$' `
+        -or $_ -match '(^|/)\.DS_Store$'
+    } | Select-Object -First 1
+    if ($null -ne $ForbiddenEntry) {
+        throw "Package validation failed: development artifact included: $ForbiddenEntry"
+    }
+}
+finally {
+    $Archive.Dispose()
+}
+
 Write-Host ""
-Write-Host "Package created:"
+Write-Host "Package created and validated:"
 Write-Host "  $ZipPath"
 Write-Host ""
 Write-Host "Install test: unzip it into another Godot project so it contains:"

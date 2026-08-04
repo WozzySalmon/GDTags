@@ -118,6 +118,8 @@ tools\windows\check_gdscript.cmd
 tools\windows\test_addon.cmd
 ```
 
+Both platform test entry points run the same five script suites plus the editor/plugin smoke check.
+
 Optional formatter/linter if `gdtoolkit` is installed:
 
 ```bash
@@ -129,3 +131,7 @@ tools/linux/lint_gdscript.sh
 tools\windows\format_gdscript.cmd
 tools\windows\lint_gdscript.cmd
 ```
+
+`gdlintrc` raises `max-public-methods` from gdtoolkit's default 20 to 40 because the public
+`GameplayTags` facade intentionally centralizes the addon's supported operations. No checks are
+disabled; new methods still require an explicit API need.

@@ -17,6 +17,7 @@ const TEAM: StringName = &"Team"
 const TEAM_ENEMY: StringName = &"Team.Enemy"
 const TEAM_PLAYER: StringName = &"Team.Player"
 
+
 static func all() -> Array[StringName]:
 	return [
 		ABILITY,

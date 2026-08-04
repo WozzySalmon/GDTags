@@ -61,6 +61,14 @@ func _test_database_edges() -> void:
 	assert_false(GameplayTagDatabase.is_valid_tag_name(&"Invalid@Child"))
 	assert_false(GameplayTagDatabase.tag_matches(&"State", &"State.Stunned"))
 
+	var assigned_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	assigned_database.tags = [&"Valid.Assigned", &"Invalid@Assigned"]
+	assert_true(assigned_database.has_tag(&"Valid.Assigned"))
+	assert_false(
+		assigned_database.has_tag(&"Invalid@Assigned"),
+		"The database setter should reject the same invalid names as containers",
+	)
+
 
 func _test_runtime_mutations() -> void:
 	var container: GameplayTagContainer = GameplayTagContainer.new()
@@ -116,7 +124,33 @@ func _test_autoload_helpers() -> void:
 	registry.set_database(imported_database)
 	assert_true(registry.import_tags_from_csv(csv_path, false) > 0)
 	assert_eq(imported_database.get_all_tags(), source_database.get_all_tags())
+	assert_true(registry.add_tag(&"Facade.New", "Facade description", false))
+	var facade_batch_tags: Array[StringName] = [&"Facade.Batch.One", &"Facade.Batch.Two"]
+	assert_eq(registry.add_tags(facade_batch_tags, false), 2)
+	assert_true(registry.set_tag_description(&"Facade.New", "Updated facade description", false))
+	assert_true(registry.rename_tag(&"Facade.New", &"Facade.Renamed", false))
+	assert_true(registry.is_valid_tag(&"Facade.New"), "Facade validation should resolve redirects")
+	assert_true(registry.request_tag(&"Facade.Renamed") != null)
+	assert_true(registry.get_all_tags().has(&"Facade.Batch.One"))
+	assert_true(registry.find_tags("renamed").has(&"Facade.Renamed"))
+	assert_true(registry.ensure_parent_tags(&"Facade.Batch.One", false) == false)
+	assert_true(registry.remove_tag(&"Facade.Batch", true, false))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(csv_path))
+
+	var original_database_path: String = registry.get_database_path()
+	var save_path: String = "user://gameplay_tags_facade_save_test.tres"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
+	registry.set_database_path(save_path)
+	registry.set_database(GameplayTagDatabase.new())
+	assert_true(registry.add_tag(&"Facade.Saved", "Saved through the facade"))
+	assert_true(FileAccess.file_exists(save_path), "Facade mutations should honor save_now=true")
+	assert_eq(registry.save_database(), OK)
+	assert_true(
+		registry.reload_database().has_tag(&"Facade.Saved"),
+		"Facade-saved mutations should survive a reload",
+	)
+	registry.set_database_path(original_database_path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 
 	registry.set_database(_make_test_database())
 	var actor: Node = Node.new()

@@ -72,7 +72,8 @@ func _test_undo_targets_its_own_database() -> void:
 
 	var snapshot: Array[StringName] = [&"Snapshot.Tag"]
 	var descriptions: Dictionary[String, String] = {}
-	dock.call("_apply_database_state", recorded, snapshot, descriptions, "restored", &"")
+	var redirects: Dictionary[StringName, StringName] = {}
+	dock.call("_apply_database_state", recorded, snapshot, descriptions, redirects, "restored", &"")
 
 	assert_true(
 		recorded.has_tag(&"Snapshot.Tag"),
@@ -212,9 +213,39 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		"Bulk paste should report added and existing tags",
 	)
 
+	paste_input.text = "Ability_jump"
+	dock.call("_on_paste_tags_confirmed")
+	assert_false(
+		registry.get_database().has_tag(&"Ability_jump"),
+		"Bulk paste should reject generated constant-name collisions",
+	)
+	assert_true(
+		status_label.text.contains("GameplayTagIds constants would collide"),
+		"Bulk paste should explain generated constant-name collisions",
+	)
+	tag_input.text = "Ability_jump"
+	dock.call("_on_add_pressed")
+	assert_false(
+		registry.get_database().has_tag(&"Ability_jump"),
+		"Add should reject generated constant-name collisions",
+	)
+	assert_true(
+		status_label.text.contains("GameplayTagIds constants would collide"),
+		"Add should explain generated constant-name collisions",
+	)
+
 	dock.call("_rename_tag_with_undo", &"CSV", "Imported.CSV")
 	assert_true(registry.get_database().has_tag(&"Imported.CSV.One"))
 	assert_false(registry.get_database().has_tag(&"CSV.One"))
+	assert_eq(
+		registry.get_database().resolve_tag(&"CSV.One"),
+		&"Imported.CSV.One",
+		"Dock rename should preserve redirects from every retired child tag",
+	)
+	assert_true(
+		registry.get_database().get_redirected_tags().has(&"CSV.One"),
+		"Dock rename should expose retired names to the migration workflow",
+	)
 	assert_eq(
 		registry.get_database().tag_descriptions.get("Imported.CSV.One", ""),
 		"First CSV tag",
@@ -232,6 +263,19 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 	assert_true(
 		reloaded_database.has_tag(&"Imported.CSV.One"),
 		"The renamed tag should remain present after reloading from disk",
+	)
+	assert_eq(
+		reloaded_database.resolve_tag(&"CSV.One"),
+		&"Imported.CSV.One",
+		"Dock rename redirects should remain present after reloading from disk",
+	)
+
+	var missing_csv_path: String = "user://gameplay_tags_missing_import.csv"
+	_remove_test_file(missing_csv_path)
+	dock.call("_on_import_csv_selected", missing_csv_path)
+	assert_true(
+		status_label.text.contains("Could not open CSV"),
+		"CSV open failures should not be misreported as an empty import",
 	)
 
 	dock.free()

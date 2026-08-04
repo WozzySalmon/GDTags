@@ -12,12 +12,17 @@ const MAX_REDIRECT_DEPTH: int = 16
 
 @export var tags: Array[StringName] = []:
 	set(value):
-		tags = canonicalize_tag_array(value)
+		var canonical_tags: Array[StringName] = canonicalize_valid_tag_array(value)
+		if tags == canonical_tags:
+			return
+		tags = canonical_tags
 		_rebuild_cache()
 		_notify_changed()
 
 @export var tag_descriptions: Dictionary[String, String] = {}:
 	set(value):
+		if tag_descriptions == value:
+			return
 		tag_descriptions = value.duplicate()
 		_notify_changed()
 
@@ -26,6 +31,8 @@ const MAX_REDIRECT_DEPTH: int = 16
 ## Chains are followed, so renaming A to B and then B to C leaves A resolving to C.
 @export var tag_redirects: Dictionary[StringName, StringName] = {}:
 	set(value):
+		if tag_redirects == value:
+			return
 		tag_redirects = value.duplicate()
 		# Load order between this and `tags` is not guaranteed, so enforce the
 		# "a live tag is never a redirect source" invariant from both sides.
@@ -366,7 +373,7 @@ func remove_tag(raw_tag: StringName, remove_children: bool = false) -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
 	if tag == &"":
 		return false
-	if not remove_children and _has_children_not_in_remove_set(tag, {}):
+	if not remove_children and _has_children(tag):
 		return false
 
 	var before: int = tags.size()
@@ -453,14 +460,18 @@ func ensure_parent_tags(raw_tag: StringName = &"") -> bool:
 ## Replaces the whole database in a single pass, keeping parents and signals correct.
 ## Prefer this over per-tag mutation when applying a known end state, such as an
 ## editor undo/redo step: per-tag rebuilds recanonicalize the array once per tag.
-func set_state(raw_tags: Array[StringName], descriptions: Dictionary[String, String]) -> void:
+func set_state(
+	raw_tags: Array[StringName],
+	descriptions: Dictionary[String, String],
+	redirects: Dictionary[StringName, StringName],
+) -> void:
 	var with_parents: Array[StringName] = []
 	for tag in canonicalize_valid_tag_array(raw_tags):
 		with_parents.append(tag)
 		with_parents.append_array(get_canonical_parent_tags(tag))
 
 	_suppress_change_notifications = true
-	tags = canonicalize_tag_array(with_parents)
+	tags = canonicalize_valid_tag_array(with_parents)
 
 	var kept_descriptions: Dictionary[String, String] = {}
 	for description_key in descriptions:
@@ -471,6 +482,7 @@ func set_state(raw_tags: Array[StringName], descriptions: Dictionary[String, Str
 		if _tag_set.has(tag_key):
 			kept_descriptions[tag_key] = description
 	tag_descriptions = kept_descriptions
+	tag_redirects = redirects
 
 	_suppress_change_notifications = false
 	_notify_changed()
@@ -505,6 +517,8 @@ func add_redirect(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 	var to_tag: StringName = normalize_tag(raw_new_tag)
 	if from_tag == &"" or to_tag == &"" or from_tag == to_tag:
 		return false
+	if has_tag(from_tag):
+		return false
 	if not is_valid_tag_name(from_tag) or not is_valid_tag_name(to_tag):
 		return false
 	if tag_redirects.get(from_tag, &"") == to_tag:
@@ -535,6 +549,9 @@ func get_redirected_tags() -> Array[StringName]:
 	return retired
 
 
+## Returns whether the normalized name itself is currently registered.
+## Retired names are not resolved; call [method resolve_tag] first when authored data
+## should remain valid after a rename.
 func has_tag(raw_tag: StringName) -> bool:
 	return _tag_set.has(String(normalize_tag(raw_tag)))
 
@@ -633,13 +650,10 @@ func _add_tag_unchecked(tag: StringName) -> bool:
 	return true
 
 
-func _has_children_not_in_remove_set(tag: StringName, remove_set: Dictionary[String, bool]) -> bool:
+func _has_children(tag: StringName) -> bool:
 	var parent: String = String(tag)
 	for existing in tags:
-		var text: String = String(existing)
-		if not text.begins_with(parent + "."):
-			continue
-		if not remove_set.has(text):
+		if String(existing).begins_with(parent + "."):
 			return true
 	return false
 

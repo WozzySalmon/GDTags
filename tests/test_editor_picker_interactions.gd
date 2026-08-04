@@ -5,6 +5,9 @@ const TagArrayProperty: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_array_property.gd"
 )
 const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
+const TagInspectorPlugin: Script = preload(
+	"res://addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd"
+)
 
 
 class TagSelectionTarget:
@@ -34,6 +37,7 @@ func _run_tests() -> void:
 	run_test("tag_creation_undo_redo", _test_tag_creation_undo_redo)
 	run_test("single_picker_selection", _test_single_picker_selection)
 	run_test("array_picker_selection", _test_array_picker_selection)
+	run_test("inspector_plugin_detects_tag_properties", _test_inspector_plugin_detection)
 
 
 func _test_single_picker_selection() -> void:
@@ -104,6 +108,36 @@ func _test_array_picker_selection() -> void:
 	picker.free()
 
 
+func _test_inspector_plugin_detection() -> void:
+	var inspector_plugin: EditorInspectorPlugin = TagInspectorPlugin.new()
+	var component: GameplayTagComponent = GameplayTagComponent.new()
+	var container: GameplayTagContainer = GameplayTagContainer.new()
+	var query: GameplayTagQuery = GameplayTagQuery.new()
+	var tag: GameplayTag = GameplayTag.new(&"State.Stunned")
+	var unrelated: RefCounted = RefCounted.new()
+
+	assert_true(inspector_plugin.call("_can_handle", component))
+	assert_true(inspector_plugin.call("_can_handle", container))
+	assert_true(inspector_plugin.call("_can_handle", query))
+	assert_true(inspector_plugin.call("_can_handle", tag))
+	assert_false(inspector_plugin.call("_can_handle", unrelated))
+	assert_true(
+		inspector_plugin.call("_is_supported_tag_property_name", component, "owned_tags"),
+		"Components should use the array gameplay-tag picker for owned_tags",
+	)
+	assert_false(
+		inspector_plugin.call("_is_supported_tag_property_name", component, "tags"),
+		"Components should not claim unrelated property names",
+	)
+	assert_true(
+		inspector_plugin.call("_hint_includes_gameplay_tag", "Resource, GameplayTag"),
+		"Resource hints containing GameplayTag should use the single-tag picker",
+	)
+	assert_false(inspector_plugin.call("_hint_includes_gameplay_tag", "Resource, Texture2D"))
+
+	component.free()
+
+
 func _reset_picker_change() -> void:
 	_picker_change_count = 0
 	_picker_changed_property = &""
@@ -131,8 +165,10 @@ func _test_tag_creation_undo_redo() -> void:
 	var original_database: GameplayTagDatabase = registry.get_database()
 	var database_path: String = "user://gameplay_tags_undo_test_database.tres"
 	var tag_ids_path: String = "user://gameplay_tags_undo_test_ids.gd"
+	var csv_path: String = "user://gameplay_tags_undo_test.csv"
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(tag_ids_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(csv_path))
 	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, database_path)
 	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, tag_ids_path)
 
@@ -172,6 +208,43 @@ func _test_tag_creation_undo_redo() -> void:
 			"Redo should restore the added tag description",
 		)
 
+		dock.call("_rename_tag_with_undo", &"Editor.Undoable", "Editor.Renamed")
+		assert_eq(
+			database.resolve_tag(&"Editor.Undoable"),
+			&"Editor.Renamed",
+			"Dock rename should apply its redirect through the undo state",
+		)
+		assert_true(history.undo(), "Dock rename action should be undoable")
+		assert_true(database.has_tag(&"Editor.Undoable"))
+		assert_eq(
+			database.resolve_tag(&"Editor.Undoable"),
+			&"Editor.Undoable",
+			"Undoing a dock rename should restore the previous redirect state",
+		)
+		assert_true(history.redo(), "Dock rename action should be redoable")
+		assert_eq(database.resolve_tag(&"Editor.Undoable"), &"Editor.Renamed")
+
+	undo_redo_manager.clear_history(history_id)
+	var paste_input: TextEdit = dock.get("_paste_input")
+	paste_input.text = "Bulk.Pasted\nBulk.Other"
+	dock.call("_on_paste_tags_confirmed")
+	assert_true(database.has_tag(&"Bulk.Pasted"))
+	history = undo_redo_manager.get_history_undo_redo(history_id)
+	assert_true(history != null and history.undo(), "Bulk paste should be undoable")
+	assert_false(database.has_tag(&"Bulk.Pasted"))
+
+	undo_redo_manager.clear_history(history_id)
+	var csv_file: FileAccess = FileAccess.open(csv_path, FileAccess.WRITE)
+	assert_true(csv_file != null, "Undoable CSV fixture should be writable")
+	if csv_file != null:
+		csv_file.store_string("Imported.Undoable\n")
+		csv_file.close()
+		dock.call("_on_import_csv_selected", csv_path)
+		assert_true(database.has_tag(&"Imported.Undoable"))
+		history = undo_redo_manager.get_history_undo_redo(history_id)
+		assert_true(history != null and history.undo(), "CSV import should be undoable")
+		assert_false(database.has_tag(&"Imported.Undoable"))
+
 	undo_redo_manager.clear_history(history_id)
 	dock.free()
 	registry.set_database(original_database)
@@ -179,6 +252,7 @@ func _test_tag_creation_undo_redo() -> void:
 	ProjectSettings.set_setting(GameplayTagUtils.TAG_IDS_SETTING, original_tag_ids_path)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(database_path))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(tag_ids_path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(csv_path))
 
 
 func _find_tree_item(parent: TreeItem, tag: StringName) -> TreeItem:

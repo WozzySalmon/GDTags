@@ -52,7 +52,6 @@ func _enable_plugin() -> void:
 	if not _ensure_autoload():
 		return
 	_ensure_database_resource()
-	_ensure_tag_ids_script()
 
 
 func _disable_plugin() -> void:

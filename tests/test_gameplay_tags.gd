@@ -550,9 +550,10 @@ func _test_database_set_state() -> void:
 		"State.Stunned": "Stunned state",
 		"Missing.Tag": "Description for a tag that is not in the new state",
 	}
+	var state_redirects: Dictionary[StringName, StringName] = {&"Old.Stun": &"State.Stunned.Heavy"}
 	_database_change_count = 0
 	database.tags_changed.connect(_on_database_changed)
-	database.set_state(state_tags, state_descriptions)
+	database.set_state(state_tags, state_descriptions, state_redirects)
 
 	assert_true(database.has_tag(&"State"), "set_state should create missing parents")
 	assert_true(database.has_tag(&"State.Stunned.Heavy"))
@@ -565,12 +566,26 @@ func _test_database_set_state() -> void:
 	)
 	assert_false(database.tag_descriptions.has("Discarded.Tag"))
 	assert_eq(
+		database.resolve_tag(&"Old.Stun"),
+		&"State.Stunned.Heavy",
+		"set_state should restore redirects as part of the complete state",
+	)
+	assert_eq(
 		_database_change_count, 1, "set_state should apply the whole state in one change signal"
 	)
 
 
 func _test_container_tag_stacking() -> void:
 	var container: GameplayTagContainer = GameplayTagContainer.new()
+	assert_true(
+		container.set_tag_count(GameplayTagIds.STATE_STUNNED, 1),
+		"Setting an unowned tag to depth one should report the ownership change",
+	)
+	assert_false(
+		container.set_tag_count(GameplayTagIds.STATE_STUNNED, 1),
+		"Setting an owned tag to its existing depth should report no change",
+	)
+	container.clear()
 	assert_eq(container.add_tag_stack(GameplayTagIds.STATE_STUNNED), 1, "First stack applies")
 	assert_eq(container.add_tag_stack(GameplayTagIds.STATE_STUNNED), 2, "Second stack accumulates")
 	assert_true(container.has_tag(GameplayTagIds.STATE), "A stacked tag is owned normally")
@@ -582,6 +597,11 @@ func _test_container_tag_stacking() -> void:
 	)
 
 	assert_eq(container.remove_tag_stack(GameplayTagIds.STATE_STUNNED), 1)
+	var depth_one_counts: Dictionary[String, int] = container.get("_tag_counts")
+	assert_false(
+		depth_one_counts.has(String(GameplayTagIds.STATE_STUNNED)),
+		"Depth-one tags should use the implicit representation",
+	)
 	assert_true(
 		container.has_tag(GameplayTagIds.STATE_STUNNED, true),
 		"A tag survives while other stacks remain",

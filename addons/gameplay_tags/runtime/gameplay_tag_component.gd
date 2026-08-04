@@ -104,7 +104,10 @@ func remove_tag_stack(raw_tag: StringName) -> int:
 		remove_tag(tag)
 		return 0
 
-	_stack_counts[key] = remaining
+	if remaining == 1:
+		_stack_counts.erase(key)
+	else:
+		_stack_counts[key] = remaining
 	owned_tags_changed.emit(owned_tags)
 	return remaining
 
@@ -127,8 +130,11 @@ func set_tag_count(raw_tag: StringName, count: int) -> bool:
 	if count <= 0:
 		return remove_tag(tag)
 
-	if not owned_tags.has(tag) and not add_tag(tag):
-		return false
+	if not owned_tags.has(tag):
+		if not add_tag(tag):
+			return false
+		if count == 1:
+			return true
 
 	var key: String = String(tag)
 	if _stack_counts.get(key, 1) == count:

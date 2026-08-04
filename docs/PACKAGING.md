@@ -32,7 +32,8 @@ The script stages the addon, removes development leftovers, creates the archive,
 tools\windows\package_addon.cmd
 ```
 
-Both scripts write:
+Both scripts validate that `addons/gameplay_tags/plugin.cfg` is present and reject development
+artifacts before reporting success. Both scripts write:
 
 ```text
 dist/gameplay_tags-<version>.zip

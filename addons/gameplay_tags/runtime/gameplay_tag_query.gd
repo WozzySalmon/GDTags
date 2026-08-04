@@ -22,7 +22,12 @@ const MAX_SUB_QUERY_DEPTH: int = 16
 
 @export var tags: Array[StringName] = []:
 	set(value):
-		tags = GameplayTagDatabase.canonicalize_valid_tag_array(value)
+		var canonical_tags: Array[StringName] = GameplayTagDatabase.canonicalize_valid_tag_array(
+			value
+		)
+		if tags == canonical_tags:
+			return
+		tags = canonical_tags
 		emit_changed()
 
 @export var exact: bool = false:
@@ -38,6 +43,8 @@ const MAX_SUB_QUERY_DEPTH: int = 16
 ## expressible: build the inner queries, then nest them.
 @export var sub_queries: Array[GameplayTagQuery] = []:
 	set(value):
+		if sub_queries == value:
+			return
 		sub_queries = value.duplicate()
 		emit_changed()
 

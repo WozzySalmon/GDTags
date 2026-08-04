@@ -10,7 +10,12 @@ signal tags_changed
 
 @export var tags: Array[StringName] = []:
 	set(value):
-		tags = GameplayTagDatabase.canonicalize_valid_tag_array(value)
+		var canonical_tags: Array[StringName] = GameplayTagDatabase.canonicalize_valid_tag_array(
+			value
+		)
+		if tags == canonical_tags:
+			return
+		tags = canonical_tags
 		_rebuild_cache()
 		_notify_changed()
 
@@ -94,7 +99,10 @@ func remove_tag_stack(raw_tag: StringName) -> int:
 		remove_tag(tag)
 		return 0
 
-	_tag_counts[key] = remaining
+	if remaining == 1:
+		_tag_counts.erase(key)
+	else:
+		_tag_counts[key] = remaining
 	_notify_changed()
 	return remaining
 
@@ -120,10 +128,16 @@ func set_tag_count(raw_tag: StringName, count: int) -> bool:
 
 	var key: String = String(tag)
 	if not _exact_tag_set.has(key):
-		add_tag(tag)
+		if not add_tag(tag):
+			return false
+		if count == 1:
+			return true
 	if _tag_counts.get(key, 1) == count:
 		return false
-	_tag_counts[key] = count
+	if count == 1:
+		_tag_counts.erase(key)
+	else:
+		_tag_counts[key] = count
 	_notify_changed()
 	return true
 

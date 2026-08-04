@@ -72,6 +72,7 @@ When the same state applies more than once, use stacks so it survives until the 
 source releases it:
 
 ```gdscript
+component.add_tag_stack(GameplayTagIds.STATE_POISONED)     # depth 1
 component.add_tag_stack(GameplayTagIds.STATE_POISONED)     # depth 2
 component.remove_tag_stack(GameplayTagIds.STATE_POISONED)  # depth 1, still poisoned
 component.get_tag_count(GameplayTagIds.STATE_POISONED)

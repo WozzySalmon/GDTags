@@ -5,6 +5,7 @@ const TagCodeGenerator: Script = preload(
 	"res://addons/gameplay_tags/editor/gameplay_tag_code_generator.gd"
 )
 const StatusStyle: Script = preload("res://addons/gameplay_tags/editor/tag_dock_status_style.gd")
+const TagDockBulk: Script = preload("res://addons/gameplay_tags/editor/tag_dock_bulk.gd")
 const TagDockIo: Script = preload("res://addons/gameplay_tags/editor/tag_dock_io.gd")
 const TagDockTree: Script = preload("res://addons/gameplay_tags/editor/tag_dock_tree.gd")
 const TagDockUi: Script = preload("res://addons/gameplay_tags/editor/tag_dock_ui.gd")
@@ -234,6 +235,9 @@ func _on_add_child_pressed() -> void:
 func _on_add_pressed() -> void:
 	if _database == null:
 		_load_database()
+	if _database == null:
+		_set_status("No gameplay tag database loaded.")
+		return
 
 	var tag_text: String = _tag_input.text.strip_edges()
 	if tag_text.is_empty():
@@ -243,10 +247,21 @@ func _on_add_pressed() -> void:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(StringName(tag_text))
 	var before_tags: Array[StringName] = _database.get_all_tags()
 	var before_descriptions: Dictionary[String, String] = _database.tag_descriptions.duplicate(true)
+	var before_redirects: Dictionary[StringName, StringName] = _database.tag_redirects.duplicate(
+		true
+	)
 	var preview: GameplayTagDatabase = GameplayTagDatabase.new()
-	preview.set_state(before_tags, before_descriptions)
+	preview.set_state(before_tags, before_descriptions, before_redirects)
 	if not preview.add_tag(tag, _description_input.text.strip_edges()):
 		_set_status("Tag already exists or is invalid: %s" % tag_text)
+		return
+	if not TagCodeGenerator.get_constant_name_collisions(preview).is_empty():
+		_set_status(
+			(
+				"Could not add %s because the generated GameplayTagIds constants would collide."
+				% String(tag)
+			)
+		)
 		return
 
 	var status_message: String = "Added %s" % String(tag)
@@ -255,6 +270,7 @@ func _on_add_pressed() -> void:
 			_database,
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
+			preview.tag_redirects.duplicate(true),
 			status_message,
 			tag,
 		)
@@ -264,6 +280,7 @@ func _on_add_pressed() -> void:
 			. make_step(
 				preview.get_all_tags(),
 				preview.tag_descriptions.duplicate(true),
+				preview.tag_redirects.duplicate(true),
 				status_message,
 				tag,
 			)
@@ -273,6 +290,7 @@ func _on_add_pressed() -> void:
 			. make_step(
 				before_tags,
 				before_descriptions,
+				before_redirects,
 				"Removed newly added %s." % String(tag),
 				&"",
 			)
@@ -407,8 +425,11 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 	var new_tag: StringName = GameplayTagDatabase.normalize_tag(StringName(raw_new_tag_text))
 	var before_tags: Array[StringName] = _database.get_all_tags()
 	var before_descriptions: Dictionary[String, String] = _database.tag_descriptions.duplicate(true)
+	var before_redirects: Dictionary[StringName, StringName] = _database.tag_redirects.duplicate(
+		true
+	)
 	var preview: GameplayTagDatabase = GameplayTagDatabase.new()
-	preview.set_state(before_tags, before_descriptions)
+	preview.set_state(before_tags, before_descriptions, before_redirects)
 	if not preview.rename_tag(tag, new_tag):
 		_set_status(
 			(
@@ -433,6 +454,7 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 			_database,
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
+			preview.tag_redirects.duplicate(true),
 			status_message,
 			new_tag,
 		)
@@ -443,6 +465,7 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 		. make_step(
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
+			preview.tag_redirects.duplicate(true),
 			status_message,
 			new_tag,
 		)
@@ -452,6 +475,7 @@ func _rename_tag_with_undo(tag: StringName, raw_new_tag_text: String) -> void:
 		. make_step(
 			before_tags,
 			before_descriptions,
+			before_redirects,
 			"Restored %s and its child tags." % String(tag),
 			tag,
 		)
@@ -499,8 +523,11 @@ func _remove_tag_with_undo(tag: StringName) -> void:
 
 	var before_tags: Array[StringName] = _database.get_all_tags()
 	var before_descriptions: Dictionary[String, String] = _database.tag_descriptions.duplicate(true)
+	var before_redirects: Dictionary[StringName, StringName] = _database.tag_redirects.duplicate(
+		true
+	)
 	var preview: GameplayTagDatabase = GameplayTagDatabase.new()
-	preview.set_state(before_tags, before_descriptions)
+	preview.set_state(before_tags, before_descriptions, before_redirects)
 	if not preview.remove_tag(tag, true):
 		return
 
@@ -509,6 +536,7 @@ func _remove_tag_with_undo(tag: StringName) -> void:
 		. make_step(
 			preview.get_all_tags(),
 			preview.tag_descriptions.duplicate(true),
+			preview.tag_redirects.duplicate(true),
 			"Removed %s and its children." % String(tag),
 			&"",
 		)
@@ -518,6 +546,7 @@ func _remove_tag_with_undo(tag: StringName) -> void:
 		. make_step(
 			before_tags,
 			before_descriptions,
+			before_redirects,
 			"Restored %s and its children." % String(tag),
 			&"",
 		)
@@ -541,15 +570,18 @@ func _remove_tag_immediately(tag: StringName) -> void:
 	if registry != null and registry.has_method("remove_tag"):
 		removed = bool(registry.remove_tag(tag, true))
 		_database = registry.get_database()
-		if removed and not _save_tag_ids_script():
-			return
+		if removed:
+			_refresh()
+			if not _save_tag_ids_script():
+				return
 	else:
 		removed = _database.remove_tag(tag, true)
-		if removed and not _save_database():
-			return
+		if removed:
+			_refresh()
+			if not _save_database():
+				return
 
 	if removed:
-		_refresh()
 		_set_status("Removed %s and its children." % String(tag))
 
 
@@ -557,6 +589,7 @@ func _apply_database_state(
 	target_database: GameplayTagDatabase,
 	raw_tags: Array[StringName],
 	descriptions: Dictionary[String, String],
+	redirects: Dictionary[StringName, StringName],
 	status_message: String,
 	selected_tag: StringName = &"",
 ) -> void:
@@ -565,7 +598,7 @@ func _apply_database_state(
 	if _database == null:
 		_load_database()
 
-	target_database.set_state(raw_tags, descriptions)
+	target_database.set_state(raw_tags, descriptions, redirects)
 	if target_database != _database:
 		_persist_off_screen_database(
 			target_database, "Restored tags on the previously configured database."
@@ -583,17 +616,22 @@ func _apply_database_state(
 	_set_status(status_message)
 
 
-# An editor undo action outlives the database it was recorded against: changing the
-# configured path rebinds _database, and replaying an old snapshot into the new database
-# would silently overwrite it. Undo actions therefore carry their own database, and when
-# that database is no longer the one on screen the state is written straight to it rather
-# than through the dock.
+# Undo actions outlive the database they target. If the configured path changes, write an
+# old action's snapshot straight to its original database instead of the one now on screen.
 func _persist_off_screen_database(
 	target_database: GameplayTagDatabase, status_message: String
 ) -> void:
 	var path: String = target_database.resource_path
-	if not path.is_empty() and not TagDockIo.database_path_conflicts(path):
-		ResourceSaver.save(target_database, path)
+	if path.is_empty():
+		_set_status("Could not persist the previously configured gameplay tag database.")
+		return
+	if TagDockIo.database_path_conflicts(path):
+		_set_status("Refusing to overwrite another resource at: %s" % path)
+		return
+	var err: Error = ResourceSaver.save(target_database, path)
+	if err != OK:
+		_set_status("Could not save database: %s" % error_string(err))
+		return
 	_set_status(status_message)
 
 
@@ -706,6 +744,7 @@ func _on_paste_tags_confirmed() -> void:
 	if _database == null:
 		_load_database()
 	if _database == null:
+		_set_status("No gameplay tag database loaded.")
 		return
 
 	var candidates: Array[StringName] = GameplayTagDatabase.tags_from_csv_text(_paste_input.text)
@@ -721,24 +760,34 @@ func _on_paste_tags_confirmed() -> void:
 		elif _database.has_tag(tag):
 			existing_count += 1
 
-	var added: int = 0
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("add_tags"):
-		added = int(registry.add_tags(candidates, false))
-		_database = registry.get_database()
-	else:
-		added = _database.add_tags(candidates)
-	if added > 0:
-		if not _save_database():
-			return
-		_paste_input.clear()
-	_refresh()
-	_set_status(
-		(
-			"Added %d pasted tag(s); %d already existed; %d invalid."
-			% [added, existing_count, invalid_count]
+	var plan: Dictionary = TagDockBulk.make_addition(_database, candidates)
+	var added: int = int(plan["added"])
+	if bool(plan["has_collisions"]):
+		_set_status(
+			"Could not paste tags because the generated GameplayTagIds constants would collide."
+		)
+		return
+
+	var status_message: String = (
+		"Added %d pasted tag(s); %d already existed; %d invalid."
+		% [added, existing_count, invalid_count]
+	)
+	if added == 0:
+		_set_status(status_message)
+		return
+	(
+		TagDockBulk
+		. commit_addition(
+			undo_redo_manager,
+			self,
+			_database,
+			plan,
+			"Paste Gameplay Tags",
+			status_message,
+			"Removed %d pasted tag(s)." % added,
 		)
 	)
+	_paste_input.clear()
 
 
 func _on_import_csv_pressed() -> void:
@@ -752,18 +801,12 @@ func _on_export_csv_pressed() -> void:
 
 func _on_import_csv_selected(path: String) -> void:
 	var added: int = _import_tags_from_csv(path)
-	if added < 0:
-		return
 	if added == 0:
 		_set_status("No new tags imported from %s." % path)
-		return
-	_refresh()
-	if not _save_tag_ids_script():
+	elif added > 0 and _status_label.text.begins_with("Could not generate GameplayTagIds"):
 		_set_status(
 			"Imported %d tags from %s, but GameplayTagIds could not be regenerated." % [added, path]
 		)
-		return
-	_set_status("Imported %d tags from %s." % [added, path])
 
 
 func _on_export_csv_selected(path: String) -> void:
@@ -872,23 +915,42 @@ func _save_tag_ids_script() -> bool:
 
 
 func _import_tags_from_csv(path: String) -> int:
-	var added: int = 0
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("import_tags_from_csv"):
-		added = int(registry.import_tags_from_csv(path, true))
-		_database = registry.get_database()
-	elif _database != null:
-		added = _import_tags_from_csv_without_registry(path)
-	return added
+	if _database == null:
+		_load_database()
+	if _database == null:
+		_set_status("No gameplay tag database loaded.")
+		return -1
 
-
-func _import_tags_from_csv_without_registry(path: String) -> int:
-	var added: int = TagDockIo.import_tags_from_csv_file(_database, path)
-	if added < 0:
+	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
+	if file == null:
 		_set_status("Could not open CSV: %s" % path)
 		return -1
-	if added > 0 and not _save_database_resource():
+	var candidates: Array[StringName] = GameplayTagDatabase.tags_from_csv_text(file.get_as_text())
+	file.close()
+
+	var plan: Dictionary = TagDockBulk.make_addition(_database, candidates)
+	var added: int = int(plan["added"])
+	if added == 0:
+		return 0
+	if bool(plan["has_collisions"]):
+		_set_status(
+			"Could not import tags because the generated GameplayTagIds constants would collide."
+		)
 		return -1
+
+	var status_message: String = "Imported %d tags from %s." % [added, path]
+	(
+		TagDockBulk
+		. commit_addition(
+			undo_redo_manager,
+			self,
+			_database,
+			plan,
+			"Import Gameplay Tags from CSV",
+			status_message,
+			"Removed %d tags imported from %s." % [added, path],
+		)
+	)
 	return added
 
 
@@ -896,6 +958,10 @@ func _export_tags_to_csv(path: String) -> Error:
 	var registry: Node = _get_registry()
 	if registry != null and registry.has_method("export_tags_to_csv"):
 		return registry.export_tags_to_csv(path)
+	if _database == null:
+		_load_database()
+	if _database == null:
+		return ERR_DOES_NOT_EXIST
 	return TagDockIo.export_tags_to_csv_file(_database, path)
 
 

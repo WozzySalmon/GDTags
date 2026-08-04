@@ -22,12 +22,14 @@ tools/linux/check_gdscript.sh
 6. A headless editor/plugin load check.
 
 Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
-with status 0.
+with status 0. `tools/windows/check_gdscript.cmd` delegates to the matching complete Windows suite,
+which runs the same five test scripts and editor/plugin smoke check.
 
 Every test script extends `tests/tag_test_case.gd`, which owns the assertion helpers, the registry
-and database setup, and the runner. A case that records no assertions fails: a runtime error aborts
-the test callable without raising anything the harness can see, so without that check a broken test
-would report `PASS` having verified nothing.
+and database setup, and the runner. A case that records no assertions fails, which catches an abort
+before its first assertion. Godot does not expose later callable aborts to this harness, so direct
+one-file invocations are diagnostic only; the platform scripts' log scan is the authoritative pass
+or fail result for runtime errors after an assertion.
 
 ## Supported versions
 
