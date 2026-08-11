@@ -14,6 +14,7 @@ class TagSelectionTarget:
 	extends RefCounted
 
 	var tag: StringName = &""
+	var tag_resource: GameplayTag
 	var tags: Array[StringName] = []
 
 
@@ -21,6 +22,8 @@ var _picker_change_count: int = 0
 var _picker_changed_property: StringName = &""
 # EditorProperty.property_changed carries different property value types.
 var _picker_changed_value: Variant
+var _picker_target: Object
+var _active_picker: EditorProperty
 
 
 func _suite_name() -> String:
@@ -36,6 +39,7 @@ func _make_test_database() -> GameplayTagDatabase:
 func _run_tests() -> void:
 	run_test("tag_creation_undo_redo", _test_tag_creation_undo_redo)
 	run_test("single_picker_selection", _test_single_picker_selection)
+	run_test("resource_picker_selection", _test_resource_picker_selection)
 	run_test("array_picker_selection", _test_array_picker_selection)
 	run_test("inspector_plugin_detects_tag_properties", _test_inspector_plugin_detection)
 
@@ -45,7 +49,7 @@ func _test_single_picker_selection() -> void:
 	var picker: EditorProperty = TagProperty.new()
 	root.add_child(picker)
 	picker.set_object_and_property(target, &"tag")
-	_reset_picker_change()
+	_reset_picker_change(target, picker)
 	picker.property_changed.connect(_on_picker_property_changed)
 	picker.call("_update_property")
 
@@ -65,10 +69,54 @@ func _test_single_picker_selection() -> void:
 			&"State.Stunned",
 			"Single-tag picker should emit the selected tag",
 		)
+		assert_eq(
+			target.tag,
+			&"State.Stunned",
+			"Inspector-style write-back should update the edited object",
+		)
 		assert_true(
 			tree.get_root() == original_root,
-			"Single-tag selection must not rebuild its Tree during the selection signal",
+			"Synchronous Inspector write-back must not rebuild the Tree re-entrantly",
 		)
+
+	picker.call("_on_clear_pressed")
+	assert_eq(target.tag, &"", "Clear should write an empty tag to the edited object")
+	assert_eq(_picker_change_count, 2, "Clear should emit one additional property change")
+	picker.call("_set_read_only", true)
+	if item != null:
+		item.select(0)
+		picker.call("_on_tree_item_selected")
+	assert_eq(_picker_change_count, 2, "Read-only pickers must ignore selections")
+	var summary_button: Button = picker.get("_summary_button")
+	var clear_button: Button = picker.get("_clear_button")
+	assert_true(summary_button.disabled and clear_button.disabled)
+	picker.free()
+
+
+func _test_resource_picker_selection() -> void:
+	var target: TagSelectionTarget = TagSelectionTarget.new()
+	var picker: EditorProperty = TagProperty.new()
+	picker.set("value_mode", TagProperty.VALUE_RESOURCE)
+	root.add_child(picker)
+	picker.set_object_and_property(target, &"tag_resource")
+	_reset_picker_change(target, picker)
+	picker.property_changed.connect(_on_picker_property_changed)
+	picker.call("_update_property")
+
+	var tree: Tree = picker.get("_tag_tree")
+	var item: TreeItem = _find_tree_item(tree.get_root(), &"State.Stunned")
+	assert_true(item != null, "Resource picker should contain the test tag")
+	if item != null:
+		tree.set_block_signals(true)
+		item.select(0)
+		tree.set_block_signals(false)
+		picker.call("_on_tree_item_selected")
+	assert_true(_picker_changed_value is GameplayTag)
+	assert_true(target.tag_resource != null)
+	if target.tag_resource != null:
+		assert_eq(target.tag_resource.tag_name, &"State.Stunned")
+	picker.call("_on_clear_pressed")
+	assert_true(target.tag_resource == null, "Clear should write null in resource mode")
 	picker.free()
 
 
@@ -77,7 +125,7 @@ func _test_array_picker_selection() -> void:
 	var picker: EditorProperty = TagArrayProperty.new()
 	root.add_child(picker)
 	picker.set_object_and_property(target, &"tags")
-	_reset_picker_change()
+	_reset_picker_change(target, picker)
 	picker.property_changed.connect(_on_picker_property_changed)
 	picker.call("_update_property")
 
@@ -94,6 +142,11 @@ func _test_array_picker_selection() -> void:
 			[&"State.Stunned"],
 			"Array picker should emit the selected tag array",
 		)
+		assert_eq(
+			target.tags,
+			[&"State.Stunned"],
+			"Inspector-style array write-back should update the edited object",
+		)
 		picker.call("_on_tag_multi_selected", item, 0, false)
 		assert_eq(_picker_change_count, 2, "Array picker should emit deselection changes")
 		assert_eq(
@@ -103,7 +156,7 @@ func _test_array_picker_selection() -> void:
 		)
 		assert_true(
 			tree.get_root() == original_root,
-			"Array-tag selection must not rebuild its Tree during the selection signal",
+			"Synchronous array write-back must not rebuild its Tree re-entrantly",
 		)
 	picker.free()
 
@@ -135,13 +188,73 @@ func _test_inspector_plugin_detection() -> void:
 	)
 	assert_false(inspector_plugin.call("_hint_includes_gameplay_tag", "Resource, Texture2D"))
 
+	var name_editor: EditorProperty = (
+		inspector_plugin
+		. call(
+			"_create_property_editor",
+			tag,
+			TYPE_STRING_NAME,
+			"tag_name",
+			PROPERTY_HINT_NONE,
+			"",
+		)
+	)
+	assert_true(name_editor != null, "GameplayTag.tag_name should create a picker")
+	assert_eq(name_editor.get("value_mode"), TagProperty.VALUE_STRING_NAME)
+	var resource_editor: EditorProperty = (
+		inspector_plugin
+		. call(
+			"_create_property_editor",
+			unrelated,
+			TYPE_OBJECT,
+			"tag_resource",
+			PROPERTY_HINT_RESOURCE_TYPE,
+			"GameplayTag",
+		)
+	)
+	assert_true(resource_editor != null, "GameplayTag resources should create a picker")
+	assert_eq(resource_editor.get("value_mode"), TagProperty.VALUE_RESOURCE)
+	var array_editor: EditorProperty = (
+		inspector_plugin
+		. call(
+			"_create_property_editor",
+			component,
+			TYPE_ARRAY,
+			"owned_tags",
+			PROPERTY_HINT_NONE,
+			"",
+		)
+	)
+	assert_true(array_editor != null, "Component owned_tags should create an array picker")
+	assert_true(
+		(
+			(
+				inspector_plugin
+				. call(
+					"_create_property_editor",
+					unrelated,
+					TYPE_STRING,
+					"name",
+					PROPERTY_HINT_NONE,
+					"",
+				)
+			)
+			== null
+		),
+		"Unrelated properties should keep the default Inspector editor",
+	)
+	name_editor.free()
+	resource_editor.free()
+	array_editor.free()
 	component.free()
 
 
-func _reset_picker_change() -> void:
+func _reset_picker_change(target: Object, picker: EditorProperty) -> void:
 	_picker_change_count = 0
 	_picker_changed_property = &""
 	_picker_changed_value = null
+	_picker_target = target
+	_active_picker = picker
 
 
 func _on_picker_property_changed(
@@ -153,6 +266,12 @@ func _on_picker_property_changed(
 	_picker_change_count += 1
 	_picker_changed_property = property
 	_picker_changed_value = value
+	if _picker_target != null:
+		_picker_target.set(property, value)
+	if _active_picker != null:
+		# Real EditorInspector write-back requests an update immediately. Calling it
+		# synchronously proves the picker's _updating guard prevents re-entrancy.
+		_active_picker.call("_update_property")
 
 
 func _test_tag_creation_undo_redo() -> void:

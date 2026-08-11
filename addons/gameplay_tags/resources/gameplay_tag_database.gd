@@ -460,6 +460,8 @@ func ensure_parent_tags(raw_tag: StringName = &"") -> bool:
 ## Replaces the whole database in a single pass, keeping parents and signals correct.
 ## Prefer this over per-tag mutation when applying a known end state, such as an
 ## editor undo/redo step: per-tag rebuilds recanonicalize the array once per tag.
+## [param redirects] is intentionally required so callers cannot silently discard
+## rename history while replacing the tag and description state.
 func set_state(
 	raw_tags: Array[StringName],
 	descriptions: Dictionary[String, String],

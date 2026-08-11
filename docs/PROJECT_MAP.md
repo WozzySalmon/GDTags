@@ -25,11 +25,11 @@ navigation guidance; current source and tests are authoritative.
 - `addons/gameplay_tags/plugin.gd` owns editor-time setup: project settings, the `GameplayTags`
   autoload, the central database resource, generated IDs, inspector integration, and the tag dock.
 - `addons/gameplay_tags/runtime/gameplay_tags.gd` is the public autoload facade for database
-  operations, containers, queries, target-owned tags, node lookup, CSV helpers, and physics overlap helpers.
+  operations, containers, queries, target-owned tags, node lookup, and CSV helpers.
 - `GameplayTagDatabase` owns canonical tag mutation, hierarchy maintenance, lookup caches, and
   `tags_changed` notification. Do not bypass its mutation methods.
 - Containers and queries represent runtime-owned tags and matching rules; components expose owned
-  tags from nodes; the trigger applies query gates to physics overlaps.
+  tags from nodes. Gameplay code applies tag checks to ordinary Godot signals such as `body_entered`.
 - Editor tools must operate through the same database and public mutation boundaries as runtime code.
 - Generated root resources such as `gameplay_tags_database.tres` and `gameplay_tag_ids.gd` are project
   outputs; the installable addon source remains under `addons/gameplay_tags/`.
@@ -38,11 +38,11 @@ navigation guidance; current source and tests are authoritative.
 
 - `tests/tag_test_case.gd`: shared harness every test script extends — assertions, registry setup, runner.
 - `tests/test_gameplay_tags.gd`: primary runtime API, database, containers, queries, targets, and IDs.
-- `tests/test_runtime_edge_cases.gd`: mutation, reload, autoload, and physics edge cases.
+- `tests/test_runtime_edge_cases.gd`: mutation, reload, autoload, and target-resolution edge cases.
 - `tests/test_editor_workflows.gd`: dock/plugin workflows and editor-facing state changes.
 - `tests/test_tag_lifecycle.gd`: owner-level stack depth, tag redirects, reference scanning, migration, and query diagnostics.
 - `tests/test_editor_picker_interactions.gd`: `EditorProperty` interactions; requires editor script mode.
-- `benchmarks/bench_10000_tags.gd`: large-tag-set performance.
+- `benchmarks/bench_10000_tags.gd`: large-tag-set mutation, cached lookup, and target-check performance.
 - `docs/VALIDATION.md`: canonical local commands and supported Godot versions.
 - `docs/PACKAGING.md`: release ZIP contents and clean-install expectations.
 

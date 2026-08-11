@@ -349,6 +349,21 @@ func _test_component_target_helpers() -> void:
 
 	var owned: GameplayTagContainer = registry.get_owned_gameplay_tags(actor)
 	assert_true(owned.has_tag(&"Team.Enemy", true), "Owned tags should come back as a container")
+	assert_true(
+		registry.target_has_tag(owned, GameplayTagIds.TEAM),
+		"Container targets should use their cached hierarchy",
+	)
+	var tag_value: GameplayTag = GameplayTag.new(GameplayTagIds.TEAM_ENEMY)
+	assert_true(
+		registry.target_has_tag(tag_value, GameplayTagIds.TEAM),
+		"GameplayTag values should be valid direct targets",
+	)
+	assert_false(registry.target_has_tag(null, GameplayTagIds.TEAM))
+	var no_required_tags: Array[StringName] = []
+	assert_true(
+		registry.target_has_all(null, no_required_tags),
+		"An empty ALL check should keep vacuous-truth semantics for a null target",
+	)
 	actor.free()
 
 
@@ -466,6 +481,20 @@ func _test_component_lookup_is_bounded() -> void:
 	assert_true(
 		registry.target_has_all(actor, merged_tags),
 		"Every direct child component should contribute its tags",
+	)
+
+	var nested_component: GameplayTagComponent = GameplayTagComponent.new()
+	component.add_child(nested_component)
+	nested_component.add_tag(GameplayTagIds.STATE_INVULNERABLE)
+	assert_true(
+		registry.target_has_tag(component, GameplayTagIds.STATE_INVULNERABLE),
+		"A component target should include its own direct child components",
+	)
+	assert_true(
+		registry.get_owned_gameplay_tags(component).has_tag(
+			GameplayTagIds.STATE_INVULNERABLE, true
+		),
+		"Target checks and resolved ownership should agree for component targets",
 	)
 	level.free()
 
@@ -770,7 +799,7 @@ func _test_query_modes() -> void:
 		)
 	)
 	assert_false(
-		GameplayTagQuery.exact_all([&"State"]).matches(component.get_owned_gameplay_tags())
+		GameplayTagQuery.all([&"State"], true).matches(component.get_owned_gameplay_tags())
 	)
 
 	var populated_container: GameplayTagContainer = GameplayTagContainer.new([&"State.Stunned"])

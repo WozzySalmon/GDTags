@@ -231,6 +231,27 @@ func _test_query_validation() -> void:
 	)
 	inner.remove_sub_query(outer)
 
+	var deep_query: GameplayTagQuery = GameplayTagQuery.all(known_tags)
+	var deepest_query: GameplayTagQuery = deep_query
+	for _depth in range(GameplayTagQuery.MAX_SUB_QUERY_DEPTH):
+		var child_query: GameplayTagQuery = GameplayTagQuery.all([])
+		deepest_query.add_sub_query(child_query)
+		deepest_query = child_query
+	var known_container: GameplayTagContainer = GameplayTagContainer.new(known_tags)
+	assert_false(
+		deep_query.matches(known_container),
+		"A query deeper than the documented nesting limit should not match",
+	)
+	assert_true(
+		deep_query.explain(known_container).contains("nesting limit of 16 exceeded"),
+		"Deep-query explanations should name the same limit used by matching",
+	)
+	var depth_issues: PackedStringArray = deep_query.validate(database)
+	assert_true(
+		not depth_issues.is_empty() and depth_issues[-1].contains("nesting exceeds 16 levels"),
+		"Deep-query validation should report the documented limit",
+	)
+
 
 func _test_rename_redirects() -> void:
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
@@ -298,9 +319,13 @@ func _test_redirect_resolution() -> void:
 	var database: GameplayTagDatabase = registry.get_database()
 	assert_true(database.rename_tag(&"State.Stunned", &"State.Incapacitated"))
 
+	assert_false(
+		database.has_tag(&"State.Stunned"),
+		"Database membership should describe only names in the current catalog",
+	)
 	assert_true(
 		registry.is_valid_tag(&"State.Stunned"),
-		"A retired tag name should still validate through its redirect",
+		"Facade validation should accept authored names that resolve through redirects",
 	)
 
 	# The point of a redirect: a scene authored before the rename keeps working, and

@@ -387,21 +387,115 @@ func get_owned_gameplay_tags(target: Object) -> GameplayTagContainer:
 
 
 ## Returns whether [param target] owns [param tag], matching parents unless [param exact].
+## Direct checks avoid constructing a throwaway [GameplayTagContainer].
 func target_has_tag(target: Object, tag: StringName, exact: bool = false) -> bool:
-	return get_owned_gameplay_tags(target).has_tag(tag, exact)
+	if target is GameplayTagContainer:
+		return target.has_tag(tag, exact)
+	if target is GameplayTag:
+		return GameplayTagDatabase.tag_matches(target.tag_name, tag, exact)
+	if target is GameplayTagDatabase or target is GameplayTagQuery or target == null:
+		return false
+	return _object_has_tag(target, tag, exact)
 
 
 ## Returns whether [param target] owns at least one of [param tags].
 func target_has_any(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
-	return get_owned_gameplay_tags(target).has_any(
-		GameplayTagDatabase.canonicalize_tag_array(tags), exact
-	)
+	var required_tags: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(tags)
+	if target is GameplayTagContainer:
+		return target.has_any(required_tags, exact)
+	for tag in required_tags:
+		if target_has_tag(target, tag, exact):
+			return true
+	return false
 
 
 ## Returns whether [param target] owns every one of [param tags].
 func target_has_all(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
-	return get_owned_gameplay_tags(target).has_all(
-		GameplayTagDatabase.canonicalize_tag_array(tags), exact
+	var required_tags: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(tags)
+	if target is GameplayTagContainer:
+		return target.has_all(required_tags, exact)
+	for tag in required_tags:
+		if not target_has_tag(target, tag, exact):
+			return false
+	return true
+
+
+func _object_has_tag(object: Object, required_tag: StringName, exact: bool) -> bool:
+	var used_explicit_method: bool = false
+	if object is GameplayTagComponent:
+		used_explicit_method = true
+		if object.has_tag(required_tag, exact):
+			return true
+	elif object.has_method("get_owned_gameplay_tags") and object != self:
+		var owned_value: Variant = object.call("get_owned_gameplay_tags")
+		used_explicit_method = _is_dynamic_tag_source(owned_value)
+		if used_explicit_method and _dynamic_tag_value_has_tag(owned_value, required_tag, exact):
+			return true
+	elif object.has_method("get_gameplay_tags"):
+		var gameplay_value: Variant = object.call("get_gameplay_tags")
+		used_explicit_method = _is_dynamic_tag_source(gameplay_value)
+		if used_explicit_method and _dynamic_tag_value_has_tag(gameplay_value, required_tag, exact):
+			return true
+
+	if (
+		(not used_explicit_method or object is Node)
+		and _known_property_has_tag(object, required_tag, exact)
+	):
+		return true
+	if object is Node:
+		for child in object.get_children():
+			if child is GameplayTagComponent and child.has_tag(required_tag, exact):
+				return true
+	return false
+
+
+func _known_property_has_tag(object: Object, required_tag: StringName, exact: bool) -> bool:
+	for property_name in TAG_PROPERTY_NAMES:
+		var value: Variant = object.get(property_name)
+		if _is_dynamic_tag_source(value):
+			return _dynamic_tag_value_has_tag(value, required_tag, exact)
+
+	var ambiguous_value: Variant = object.get(AMBIGUOUS_TAG_PROPERTY_NAME)
+	if _is_unambiguous_tag_payload(ambiguous_value):
+		return _dynamic_tag_value_has_tag(ambiguous_value, required_tag, exact)
+	if object.has_meta(NODE_TAGS_META_NAME):
+		return _dynamic_tag_value_has_tag(object.get_meta(NODE_TAGS_META_NAME), required_tag, exact)
+	return false
+
+
+func _is_dynamic_tag_source(value: Variant) -> bool:
+	return (
+		value is GameplayTagContainer
+		or value is Array
+		or value is GameplayTag
+		or value is StringName
+		or value is String
+	)
+
+
+func _dynamic_tag_value_has_tag(value: Variant, required_tag: StringName, exact: bool) -> bool:
+	var matched: bool = false
+	if value is GameplayTagContainer:
+		matched = value.has_tag(required_tag, exact)
+	elif value is Array:
+		for element in value:
+			if element is GameplayTag:
+				matched = _valid_owned_tag_matches(element.tag_name, required_tag, exact)
+			elif element is StringName or element is String:
+				matched = _valid_owned_tag_matches(StringName(element), required_tag, exact)
+			if matched:
+				break
+	elif value is GameplayTag:
+		matched = _valid_owned_tag_matches(value.tag_name, required_tag, exact)
+	elif value is StringName or value is String:
+		matched = _valid_owned_tag_matches(StringName(value), required_tag, exact)
+	return matched
+
+
+func _valid_owned_tag_matches(owned_tag: StringName, required_tag: StringName, exact: bool) -> bool:
+	return (
+		GameplayTagDatabase.is_valid_tag_name(owned_tag)
+		and GameplayTagDatabase.tag_matches(owned_tag, required_tag, exact)
 	)
 
 
@@ -409,15 +503,29 @@ func target_has_all(target: Object, tags: Array[StringName], exact: bool = false
 # container into container re-canonicalized and re-emitted change signals per source,
 # which is wasted work on a throwaway result.
 func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContainer:
-	var collected: Array[StringName] = []
+	var collected: Array[StringName] = _collect_owned_tag_names_from_object(object)
 	# Stack depths from every source that reports them, merged by highest rather than
 	# summed: a tag granted by two components is still owned once, and only an owner
 	# that deliberately stacked it should push the depth above one.
 	var counts: Dictionary[String, int] = {}
+	if object is GameplayTagComponent:
+		_merge_stack_counts(object, object.owned_tags, counts)
+	if object is Node:
+		for child in object.get_children():
+			if child is GameplayTagComponent:
+				_merge_stack_counts(child, child.owned_tags, counts)
+
+	var container: GameplayTagContainer = GameplayTagContainer.new(collected)
+	for tag_key in counts:
+		container.set_tag_count(StringName(tag_key), counts[tag_key])
+	return container
+
+
+func _collect_owned_tag_names_from_object(object: Object) -> Array[StringName]:
+	var collected: Array[StringName] = []
 	var used_explicit_method: bool = false
 	if object is GameplayTagComponent:
 		collected.append_array(object.owned_tags)
-		_merge_stack_counts(object, object.owned_tags, counts)
 		used_explicit_method = true
 	elif object.has_method("get_owned_gameplay_tags") and object != self:
 		used_explicit_method = _append_tags_from_dynamic_value(
@@ -432,14 +540,7 @@ func _get_owned_gameplay_tags_from_object(object: Object) -> GameplayTagContaine
 		_append_known_property_tags(object, collected)
 	if object is Node:
 		_append_child_component_tags(object, collected)
-		for child in object.get_children():
-			if child is GameplayTagComponent:
-				_merge_stack_counts(child, child.owned_tags, counts)
-
-	var container: GameplayTagContainer = GameplayTagContainer.new(collected)
-	for tag_key in counts:
-		container.set_tag_count(StringName(tag_key), counts[tag_key])
-	return container
+	return GameplayTagDatabase.canonicalize_valid_tag_array(collected)
 
 
 # Records the deepest stack each source reports for the tags it owns.

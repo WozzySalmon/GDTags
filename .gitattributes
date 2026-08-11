@@ -1,5 +1,7 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
 
 # Keep local caches and generated output out of distributable git archives.
 .godot/** export-ignore

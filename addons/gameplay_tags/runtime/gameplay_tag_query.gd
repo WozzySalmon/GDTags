@@ -11,6 +11,7 @@ enum Mode {
 	NONE,
 }
 
+# Includes the root query: valid query trees occupy depths 0 through 15.
 const MAX_SUB_QUERY_DEPTH: int = 16
 
 @export var mode: Mode = Mode.ALL:
@@ -64,10 +65,6 @@ static func none(tag_list: Array[StringName], require_exact: bool = false) -> Ga
 	return _make(Mode.NONE, tag_list, require_exact)
 
 
-static func exact_all(tag_list: Array[StringName]) -> GameplayTagQuery:
-	return _make(Mode.ALL, tag_list, true)
-
-
 ## Builds a query that only combines other queries, with no tags of its own.
 ## [code]compose(Mode.ALL, [any([&"Damage.Fire", &"Damage.Ice"]), none([&"State.Immune"])])[/code]
 ## reads as "(Fire or Ice) and not Immune".
@@ -119,8 +116,7 @@ func validate(database: GameplayTagDatabase = null) -> PackedStringArray:
 
 
 func _matches_container(container: GameplayTagContainer, depth: int) -> bool:
-	if depth > MAX_SUB_QUERY_DEPTH:
-		push_error("Gameplay tag query nesting exceeded %d levels." % MAX_SUB_QUERY_DEPTH)
+	if depth >= MAX_SUB_QUERY_DEPTH:
 		return false
 
 	# This query's own tags are one clause; each sub-query is another. The mode decides
@@ -152,7 +148,7 @@ func _combine_clause(current: bool, clause_matched: bool) -> bool:
 func _explain_container(
 	container: GameplayTagContainer, depth: int, indent: String, trace: Array[String]
 ) -> bool:
-	if depth > MAX_SUB_QUERY_DEPTH:
+	if depth >= MAX_SUB_QUERY_DEPTH:
 		trace.append("%snesting limit of %d exceeded" % [indent, MAX_SUB_QUERY_DEPTH])
 		return false
 
@@ -214,7 +210,7 @@ func _validate_node(
 	if visiting.has(instance_id):
 		issues.append("%s: query is nested inside itself" % path)
 		return
-	if depth > MAX_SUB_QUERY_DEPTH:
+	if depth >= MAX_SUB_QUERY_DEPTH:
 		issues.append("%s: nesting exceeds %d levels" % [path, MAX_SUB_QUERY_DEPTH])
 		return
 	visiting[instance_id] = true

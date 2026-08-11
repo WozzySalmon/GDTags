@@ -33,7 +33,7 @@ if GameplayTags.target_has_tag(player, GameplayTagIds.STATE_STUNNED):
 The dock regenerates `res://gameplay_tag_ids.gd` from the central database so script autocomplete
 can show valid constants after `GameplayTagIds.`.
 
-Area trigger helper:
+Area trigger pattern:
 
 ```gdscript
 func _on_body_entered(body: Node) -> void:

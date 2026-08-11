@@ -118,7 +118,8 @@ tools\windows\check_gdscript.cmd
 tools\windows\test_addon.cmd
 ```
 
-Both platform test entry points run the same five script suites plus the editor/plugin smoke check.
+Both platform test entry points run the same five script suites, the shared-harness runtime-error
+regression probe, and the editor/plugin smoke check.
 
 Optional formatter/linter if `gdtoolkit` is installed:
 

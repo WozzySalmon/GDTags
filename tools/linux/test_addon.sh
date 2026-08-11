@@ -41,6 +41,37 @@ run_script_test() {
   rm -f "$output_file"
 }
 
+run_expected_runtime_error_test() {
+  local label="$1"
+  local script_path="$2"
+  local expected_message="$3"
+  local output_file
+  output_file="$(mktemp -t gameplay_tags_expected_failure_XXXXXX.log)"
+  printf '\n=== %s ===\n' "$label"
+  set +e
+  "$GODOT_BIN" --headless --path "$PROJECT_DIR" --script "$script_path" >"$output_file" 2>&1
+  local godot_exit=$?
+  set -e
+
+  cat "$output_file"
+  if [[ $godot_exit -eq 0 ]]; then
+    echo "Expected the harness probe to fail, but Godot exited successfully."
+    cp "$output_file" "${output_file}.failed"
+    exit 1
+  fi
+  if ! grep -Fq "$expected_message" "$output_file"; then
+    echo "The harness probe did not report the expected captured runtime error."
+    cp "$output_file" "${output_file}.failed"
+    exit 1
+  fi
+  if grep -Fq 'PASS runtime_error_after_assertion' "$output_file"; then
+    echo "The harness incorrectly reported PASS after a script runtime error."
+    cp "$output_file" "${output_file}.failed"
+    exit 1
+  fi
+  rm -f "$output_file"
+}
+
 run_editor_script_test() {
   local label="$1"
   local script_path="$2"
@@ -99,6 +130,10 @@ run_script_test "GDScript Gameplay Tags workflow smoke test" "res://tests/test_g
 run_script_test "GDScript editor workflow tests" "res://tests/test_editor_workflows.gd"
 run_script_test "GDScript runtime edge-case tests" "res://tests/test_runtime_edge_cases.gd"
 run_script_test "GDScript tag lifecycle tests" "res://tests/test_tag_lifecycle.gd"
+run_expected_runtime_error_test \
+  "Shared harness runtime-error regression probe" \
+  "res://tests/fixtures/runtime_error_after_assertion.gd" \
+  "runtime_error_after_assertion raised a script runtime error"
 run_editor_script_test \
   "GDScript editor picker interaction tests" \
   "res://tests/test_editor_picker_interactions.gd"

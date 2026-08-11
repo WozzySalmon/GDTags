@@ -9,14 +9,41 @@ extends SceneTree
 
 const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")
 
+
+class ScriptErrorLogger:
+	extends Logger
+
+	var script_error_count: int = 0
+	var last_script_error: String = ""
+
+	func _log_error(
+		_function: String,
+		_file: String,
+		_line: int,
+		code: String,
+		rationale: String,
+		_editor_notify: bool,
+		error_type: int,
+		_script_backtraces: Array[ScriptBacktrace],
+	) -> void:
+		if error_type != Logger.ERROR_TYPE_SCRIPT:
+			return
+		script_error_count += 1
+		last_script_error = rationale if not rationale.is_empty() else code
+
+
 var registry: Node
 var _assertion_count: int = 0
 var _failed: bool = false
+var _skipped_count: int = 0
 var _previous_database: GameplayTagDatabase
 var _previous_database_path: String
+var _script_error_logger: ScriptErrorLogger
 
 
 func _init() -> void:
+	_script_error_logger = ScriptErrorLogger.new()
+	OS.add_logger(_script_error_logger)
 	call_deferred("_run_all_tests")
 
 
@@ -49,16 +76,24 @@ func _make_test_database() -> GameplayTagDatabase:
 	return database
 
 
-## Runs one case, then reports it. A case that records no assertions is treated as a
-## failure: a runtime error aborts the callable without raising anything the harness
-## can observe, so without this check a broken test reports PASS having verified
-## nothing.
+## Runs one case, then reports it. A case fails when it records no assertions or emits
+## a script runtime error, including an error after one or more successful assertions.
 func run_test(test_name: String, test_callable: Callable) -> void:
 	if _failed:
+		_skipped_count += 1
 		return
 	var assertions_before: int = _assertion_count
+	var script_errors_before: int = _script_error_logger.script_error_count
 	test_callable.call()
 	if _failed:
+		return
+	if _script_error_logger.script_error_count > script_errors_before:
+		_fail(
+			(
+				"%s raised a script runtime error: %s"
+				% [test_name, _script_error_logger.last_script_error]
+			)
+		)
 		return
 	if _assertion_count == assertions_before:
 		_fail("%s ran no assertions, so it aborted before verifying anything" % test_name)
@@ -85,17 +120,13 @@ func assert_eq(actual: Variant, expected: Variant, message: String = "") -> void
 		_fail("%sexpected %s, got %s" % [prefix, str(expected), str(actual)])
 
 
-## Marks the suite failed and stops. Restores the database the suite replaced so a
-## failing run does not leave the project's real database swapped out.
+## Marks the suite failed. Remaining cases are counted as skipped; cleanup and the
+## nonzero exit happen after the suite returns so every failure uses the same path.
 func _fail(message: String) -> void:
 	if _failed:
 		return
 	_failed = true
 	push_error(message)
-	if registry != null:
-		registry.set_database_path(_previous_database_path)
-		registry.set_database(_previous_database)
-	quit(1)
 
 
 func _run_all_tests() -> void:
@@ -108,12 +139,27 @@ func _run_all_tests() -> void:
 	# Awaiting a non-coroutine simply continues.
 	await _run_tests()
 
-	if _failed:
-		return
 	registry.set_database_path(_previous_database_path)
 	registry.set_database(_previous_database)
+	_remove_script_error_logger()
+	if _failed:
+		print(
+			(
+				"%s failed (%d assertions, %d skipped cases)"
+				% [_suite_name(), _assertion_count, _skipped_count]
+			)
+		)
+		quit(1)
+		return
 	print("%s passed (%d assertions)" % [_suite_name(), _assertion_count])
 	quit(0)
+
+
+func _remove_script_error_logger() -> void:
+	if _script_error_logger == null:
+		return
+	OS.remove_logger(_script_error_logger)
+	_script_error_logger = null
 
 
 func _get_or_create_registry() -> Node:

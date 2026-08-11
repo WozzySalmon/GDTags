@@ -34,15 +34,6 @@ static func save_database_resource(database: GameplayTagDatabase, path: String) 
 	return ResourceSaver.save(database, path)
 
 
-static func import_tags_from_csv_file(database: GameplayTagDatabase, path: String) -> int:
-	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
-	if file == null:
-		return -1
-	var added: int = database.add_tags_from_csv_text(file.get_as_text())
-	file.close()
-	return added
-
-
 static func export_tags_to_csv_file(database: GameplayTagDatabase, path: String) -> Error:
 	var directory_error: Error = ensure_database_directory(path)
 	if directory_error != OK:

@@ -25,21 +25,35 @@ func _parse_property(
 	_usage_flags: int,
 	_wide: bool
 ) -> bool:
+	var property_editor: EditorProperty = _create_property_editor(
+		object, type, name, hint_type, hint_string
+	)
+	if property_editor == null:
+		return false
+	add_property_editor(name, property_editor)
+	return true
+
+
+# Kept separate from EditorInspectorPlugin.add_property_editor() so editor selection
+# and configuration can be covered without depending on an active Inspector parse pass.
+func _create_property_editor(
+	object: Object,
+	type: int,
+	name: String,
+	hint_type: int,
+	hint_string: String,
+) -> EditorProperty:
 	if _is_gameplay_tag_name_property(object, type, name):
-		var tag_name_editor: Control = TagProperty.new()
+		var tag_name_editor: EditorProperty = TagProperty.new()
 		tag_name_editor.value_mode = TagProperty.VALUE_STRING_NAME
-		add_property_editor(name, tag_name_editor)
-		return true
+		return tag_name_editor
 	if _is_gameplay_tag_resource_property(type, hint_type, hint_string):
-		var tag_editor: Control = TagProperty.new()
+		var tag_editor: EditorProperty = TagProperty.new()
 		tag_editor.value_mode = TagProperty.VALUE_RESOURCE
-		add_property_editor(name, tag_editor)
-		return true
+		return tag_editor
 	if type == TYPE_ARRAY and _is_supported_tag_property_name(object, name):
-		var array_editor: Control = TagArrayProperty.new()
-		add_property_editor(name, array_editor)
-		return true
-	return false
+		return TagArrayProperty.new()
+	return null
 
 
 func _property_uses_gameplay_tag_editor(object: Object, property: Dictionary) -> bool:

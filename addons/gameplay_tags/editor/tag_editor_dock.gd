@@ -39,6 +39,8 @@ var _selected_tag: StringName = &""
 var _pending_remove_tag: StringName = &""
 var _search_debounce_timer: Timer
 var _tree_items_by_tag: Dictionary[StringName, TreeItem] = {}
+var _last_database_resource_save_succeeded: bool = true
+var _last_database_state_save_succeeded: bool = true
 
 
 func _ready() -> void:
@@ -54,7 +56,7 @@ func _build_ui() -> void:
 	add_child(title)
 
 	var path_label: Label = TagDockUi.build_database_path_label(
-		_get_database_path(), _get_tag_ids_path()
+		GameplayTagUtils.get_database_path(), GameplayTagUtils.get_tag_ids_path()
 	)
 	add_child(path_label)
 
@@ -180,7 +182,7 @@ func _load_database() -> void:
 		_database = registry.get_database()
 		return
 
-	var path: String = _get_database_path()
+	var path: String = GameplayTagUtils.get_database_path()
 	if ResourceLoader.exists(path):
 		var existing_resource: Resource = load(path)
 		if existing_resource is GameplayTagDatabase:
@@ -593,6 +595,8 @@ func _apply_database_state(
 	status_message: String,
 	selected_tag: StringName = &"",
 ) -> void:
+	_last_database_resource_save_succeeded = false
+	_last_database_state_save_succeeded = false
 	if target_database == null:
 		return
 	if _database == null:
@@ -611,8 +615,12 @@ func _apply_database_state(
 	_refresh()
 	if selected_tag != &"":
 		_select_tag_in_tree(selected_tag)
-	if not _save_database():
+	if not _save_database_resource():
 		return
+	_last_database_resource_save_succeeded = true
+	if not _save_tag_ids_script():
+		return
+	_last_database_state_save_succeeded = true
 	_set_status(status_message)
 
 
@@ -732,7 +740,7 @@ func _on_refresh_pressed() -> void:
 
 func _on_regenerate_pressed() -> void:
 	if _save_tag_ids_script():
-		_set_status("Regenerated %s" % _get_tag_ids_path())
+		_set_status("Regenerated %s" % GameplayTagUtils.get_tag_ids_path())
 
 
 func _on_paste_tags_pressed() -> void:
@@ -803,7 +811,11 @@ func _on_import_csv_selected(path: String) -> void:
 	var added: int = _import_tags_from_csv(path)
 	if added == 0:
 		_set_status("No new tags imported from %s." % path)
-	elif added > 0 and _status_label.text.begins_with("Could not generate GameplayTagIds"):
+	elif (
+		added > 0
+		and _last_database_resource_save_succeeded
+		and not _last_database_state_save_succeeded
+	):
 		_set_status(
 			"Imported %d tags from %s, but GameplayTagIds could not be regenerated." % [added, path]
 		)
@@ -887,11 +899,11 @@ func _save_database_resource() -> bool:
 	if _database == null:
 		_set_status("No gameplay tag database loaded.")
 		return false
-	var path: String = _get_database_path()
+	var path: String = GameplayTagUtils.get_database_path()
 	if TagDockIo.database_path_conflicts(path):
 		_set_status("Refusing to overwrite another resource at: %s" % path)
 		return false
-	var directory_error: Error = _ensure_database_directory(path)
+	var directory_error: Error = TagDockIo.ensure_database_directory(path)
 	if directory_error != OK:
 		_set_status("Could not create database directory: %s" % error_string(directory_error))
 		return false
@@ -905,7 +917,7 @@ func _save_database_resource() -> bool:
 func _save_tag_ids_script() -> bool:
 	if _database == null:
 		return false
-	var path: String = _get_tag_ids_path()
+	var path: String = GameplayTagUtils.get_tag_ids_path()
 	var err: Error = TagCodeGenerator.save_tag_ids(_database, path)
 	if err != OK:
 		_set_status("Could not generate GameplayTagIds: %s" % error_string(err))
@@ -963,18 +975,6 @@ func _export_tags_to_csv(path: String) -> Error:
 	if _database == null:
 		return ERR_DOES_NOT_EXIST
 	return TagDockIo.export_tags_to_csv_file(_database, path)
-
-
-func _ensure_database_directory(path: String) -> Error:
-	return TagDockIo.ensure_database_directory(path)
-
-
-func _get_database_path() -> String:
-	return GameplayTagUtils.get_database_path()
-
-
-func _get_tag_ids_path() -> String:
-	return GameplayTagUtils.get_tag_ids_path()
 
 
 func _get_registry() -> Node:

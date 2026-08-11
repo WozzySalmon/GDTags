@@ -148,18 +148,28 @@ func set_tag_count(raw_tag: StringName, count: int) -> bool:
 
 
 ## Returns whether this component owns [param raw_tag], matching parents unless [param exact].
+## The direct scan avoids allocating a temporary container on gameplay hot paths.
 func has_tag(raw_tag: StringName, exact: bool = false) -> bool:
-	return get_owned_gameplay_tags().has_tag(raw_tag, exact)
+	for owned_tag in owned_tags:
+		if GameplayTagDatabase.tag_matches(owned_tag, raw_tag, exact):
+			return true
+	return false
 
 
 ## Returns whether this component owns at least one of [param required_tags].
 func has_any(required_tags: Array[StringName], exact: bool = false) -> bool:
-	return get_owned_gameplay_tags().has_any(required_tags, exact)
+	for tag in required_tags:
+		if has_tag(tag, exact):
+			return true
+	return false
 
 
 ## Returns whether this component owns every one of [param required_tags].
 func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
-	return get_owned_gameplay_tags().has_all(required_tags, exact)
+	for tag in required_tags:
+		if not has_tag(tag, exact):
+			return false
+	return true
 
 
 # Stack depths only mean something while the tag is owned, so drop the rest whenever

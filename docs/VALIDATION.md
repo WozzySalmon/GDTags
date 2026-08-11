@@ -18,18 +18,19 @@ tools/linux/check_gdscript.sh
 2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.
 3. `tests/test_runtime_edge_cases.gd` headlessly for CSV and mutation paths.
 4. `tests/test_tag_lifecycle.gd` headlessly for stack depth, redirects, references, and migration.
-5. `tests/test_editor_picker_interactions.gd` in a headless editor for Inspector picker interactions.
-6. A headless editor/plugin load check.
+5. A deliberately failing harness probe that proves script runtime errors after an assertion cannot report PASS.
+6. `tests/test_editor_picker_interactions.gd` in a headless editor for Inspector picker interactions.
+7. A headless editor/plugin load check.
 
 Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
 with status 0. `tools/windows/check_gdscript.cmd` delegates to the matching complete Windows suite,
-which runs the same five test scripts and editor/plugin smoke check.
+which runs the same five test scripts, harness probe, and editor/plugin smoke check.
 
 Every test script extends `tests/tag_test_case.gd`, which owns the assertion helpers, the registry
-and database setup, and the runner. A case that records no assertions fails, which catches an abort
-before its first assertion. Godot does not expose later callable aborts to this harness, so direct
-one-file invocations are diagnostic only; the platform scripts' log scan is the authoritative pass
-or fail result for runtime errors after an assertion.
+and database setup, and the runner. A case fails if it records no assertions or if the harness's
+`Logger` observes a script runtime error, including an error after earlier assertions. The platform
+scripts additionally scan logs for parser and compiler failures and run a deliberately failing
+fixture to prove that the shared harness exits nonzero instead of printing PASS.
 
 ## Supported versions
 
@@ -51,8 +52,11 @@ tools/linux/package_addon.sh
 tools/linux/test_package_install.sh
 ```
 
-The benchmark fails above a deliberately generous 5,000 ms regression ceiling. Override it for a
-known slower machine with `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
+The benchmark measures 10,000-tag database mutation, cached hierarchical lookups, and 100,000
+direct checks against components, nodes, and containers. It reports the peak database size before
+removal separately from the parent skeleton left afterward. The benchmark fails above a deliberately
+generous 5,000 ms regression ceiling. Override it for a known slower machine with
+`BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
 
 Override the Godot executable when needed:
 

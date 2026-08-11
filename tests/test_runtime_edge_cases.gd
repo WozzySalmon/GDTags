@@ -60,6 +60,11 @@ func _test_database_edges() -> void:
 	assert_true(GameplayTagDatabase.is_valid_tag_name(&"Valid.Child-1"))
 	assert_false(GameplayTagDatabase.is_valid_tag_name(&"Invalid@Child"))
 	assert_false(GameplayTagDatabase.tag_matches(&"State", &"State.Stunned"))
+	var tag_value: GameplayTag = GameplayTag.new(&"State.Stunned")
+	assert_false(tag_value.is_empty())
+	assert_eq(tag_value.parent_name(), &"State")
+	assert_true(tag_value.is_child_of(&"State"))
+	assert_true(GameplayTag.new().is_empty())
 
 	var assigned_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	assigned_database.tags = [&"Valid.Assigned", &"Invalid@Assigned"]
@@ -107,7 +112,11 @@ func _test_runtime_mutations() -> void:
 	assert_eq(query.remove_tags([&"State", &"Missing.Tag"]), 1)
 	query.clear()
 	assert_true(query.tags.is_empty())
-	assert_true(_query_change_count > 0, "Query mutators should emit Resource.changed")
+	assert_eq(
+		_query_change_count,
+		6,
+		"Each effective query mutation should emit Resource.changed exactly once",
+	)
 	assert_false(GameplayTagQuery.all([&"State"]).matches(null))
 
 

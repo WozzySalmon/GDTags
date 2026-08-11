@@ -270,6 +270,29 @@ func _test_csv_import_reports_id_generation_failure() -> void:
 		"Dock rename redirects should remain present after reloading from disk",
 	)
 
+	var conflicting_database_path: String = "user://gameplay_tags_import_conflict.tres"
+	_remove_test_file(conflicting_database_path)
+	assert_eq(ResourceSaver.save(Resource.new(), conflicting_database_path), OK)
+	var database_failure_csv: FileAccess = FileAccess.open(csv_path, FileAccess.WRITE)
+	assert_true(database_failure_csv != null)
+	if database_failure_csv != null:
+		database_failure_csv.store_string("Database.SaveFailure\n")
+		database_failure_csv.close()
+	registry.set_database_path(conflicting_database_path)
+	registry.set_database(reloaded_database)
+	dock.call("_on_import_csv_selected", csv_path)
+	assert_true(
+		status_label.text.contains("Refusing to overwrite another resource"),
+		"A database-resource save failure should keep its accurate status",
+	)
+	assert_false(
+		status_label.text.contains("GameplayTagIds could not be regenerated"),
+		"Database save failures must not be mislabeled as generated-ID failures",
+	)
+	registry.set_database_path(database_path)
+	registry.set_database(reloaded_database)
+	_remove_test_file(conflicting_database_path)
+
 	var missing_csv_path: String = "user://gameplay_tags_missing_import.csv"
 	_remove_test_file(missing_csv_path)
 	dock.call("_on_import_csv_selected", missing_csv_path)

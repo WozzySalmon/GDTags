@@ -98,6 +98,10 @@ Renaming a tag in the dock records a redirect from the old name to the new one, 
 the tag and every child it moved. Scenes authored before the rename keep working —
 the retired name resolves to its replacement instead of being dropped.
 
+`GameplayTagDatabase.has_tag()` answers whether a name is in the current catalog, so
+it returns `false` for a retired name. `GameplayTags.is_valid_tag()` is the authored-data
+check: it follows redirects and returns `true` when the retired name has a valid replacement.
+
 When you are ready to finish the job, **Tools > Migrate Renamed Tags** rewrites the
 references themselves, in both scripts and scenes. Only whole tag names are replaced,
 so renaming `State` will not corrupt `StateMachine`. Commit before running it.
@@ -106,7 +110,9 @@ so renaming `State` will not corrupt `StateMachine`. Commit before running it.
 
 **Tools > Scan Tag References** reports where each tag is used and which are unused,
 reading file text without loading any scene. A tag that exists only to parent a used
-child is not counted as unused, so the list stays short enough to act on.
+child is not counted as unused, so the list stays short enough to act on. The scan is
+conservative: an unrelated quoted string equal to a tag may count as a reference, so
+review the reported locations before removing or migrating tags.
 
 ## Debugging a query
 
@@ -117,8 +123,10 @@ print(vulnerable.explain(target))
 ```
 
 It prints a line per clause and the tags responsible, ending in the verdict.
-`validate()` separately reports unregistered tags, queries that can never match, and
-tags that are both required and forbidden.
+`validate()` separately reports unregistered tags, queries that can never match, tags
+that are both required and forbidden, cycles, and trees deeper than 16 query nodes.
+Empty `ALL` and `NONE` queries match by vacuous truth; an empty `ANY` never matches and
+is reported by `validate()`.
 
 ## Settings
 
