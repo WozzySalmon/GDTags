@@ -443,7 +443,9 @@ func _object_has_tag(object: Object, required_tag: StringName, exact: bool) -> b
 	):
 		return true
 	if object is Node:
-		for child in object.get_children():
+		var node: Node = object as Node
+		for child_index in range(node.get_child_count()):
+			var child: Node = node.get_child(child_index)
 			if child is GameplayTagComponent and child.has_tag(required_tag, exact):
 				return true
 	return false

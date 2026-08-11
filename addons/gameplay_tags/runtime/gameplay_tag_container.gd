@@ -19,8 +19,8 @@ signal tags_changed
 		_rebuild_cache()
 		_notify_changed()
 
-var _exact_tag_set: Dictionary[String, bool] = {}
-var _match_tag_set: Dictionary[String, bool] = {}
+var _exact_tag_set: Dictionary[StringName, bool] = {}
+var _match_tag_set: Dictionary[StringName, bool] = {}
 # Stack depth per owned tag. Runtime state for overlapping effects, so it is not
 # exported: a saved container restores every tag at a count of one.
 var _tag_counts: Dictionary[String, int] = {}
@@ -76,7 +76,7 @@ func add_tag_stack(raw_tag: StringName) -> int:
 		return 0
 
 	var key: String = String(tag)
-	if not _exact_tag_set.has(key):
+	if not _exact_tag_set.has(tag):
 		# _rebuild_cache seeds a new tag at one stack.
 		add_tag(tag)
 		return _tag_counts.get(key, 1)
@@ -91,7 +91,7 @@ func add_tag_stack(raw_tag: StringName) -> int:
 func remove_tag_stack(raw_tag: StringName) -> int:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
 	var key: String = String(tag)
-	if not _exact_tag_set.has(key):
+	if not _exact_tag_set.has(tag):
 		return 0
 
 	var remaining: int = _tag_counts.get(key, 1) - 1
@@ -110,10 +110,10 @@ func remove_tag_stack(raw_tag: StringName) -> int:
 ## Returns how many stacks of [param raw_tag] are applied, or 0 when it is not owned.
 ## Stacks are tracked per exact tag, so a parent tag never reports a child's stacks.
 func get_tag_count(raw_tag: StringName) -> int:
-	var key: String = String(GameplayTagDatabase.normalize_tag(raw_tag))
-	if not _exact_tag_set.has(key):
+	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	if not _exact_tag_set.has(tag):
 		return 0
-	return _tag_counts.get(key, 1)
+	return _tag_counts.get(String(tag), 1)
 
 
 ## Sets the absolute stack depth for [param raw_tag]. A count of 0 or less releases it.
@@ -127,7 +127,7 @@ func set_tag_count(raw_tag: StringName, count: int) -> bool:
 		return remove_tag(tag)
 
 	var key: String = String(tag)
-	if not _exact_tag_set.has(key):
+	if not _exact_tag_set.has(tag):
 		if not add_tag(tag):
 			return false
 		if count == 1:
@@ -185,12 +185,11 @@ func clear() -> void:
 ## Returns whether this container owns [param raw_tag].
 ## A parent tag matches an owned child unless [param exact] is true.
 func has_tag(raw_tag: StringName, exact: bool = false) -> bool:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"":
-		return false
-	if exact:
-		return _exact_tag_set.has(String(tag))
-	return _match_tag_set.has(String(tag))
+	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
+	if tag_set.has(raw_tag):
+		return true
+	var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	return normalized_tag != &"" and tag_set.has(normalized_tag)
 
 
 ## Returns whether at least one of [param required_tags] is owned.
@@ -203,7 +202,8 @@ func has_any(required_tags: Array[StringName], exact: bool = false) -> bool:
 
 ## Returns whether every one of [param required_tags] is owned. An empty list matches.
 func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
-	if required_tags.is_empty():
+	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
+	if tag_set.has_all(required_tags):
 		return true
 	for tag in required_tags:
 		if not has_tag(tag, exact):
@@ -253,11 +253,11 @@ func _rebuild_cache() -> void:
 	var reconciled_counts: Dictionary[String, int] = {}
 	for tag in tags:
 		var key: String = String(tag)
-		_exact_tag_set[key] = true
-		_match_tag_set[key] = true
+		_exact_tag_set[tag] = true
+		_match_tag_set[tag] = true
 		reconciled_counts[key] = maxi(1, _tag_counts.get(key, 1))
 		for parent in GameplayTagDatabase.get_canonical_parent_tags(tag):
-			_match_tag_set[String(parent)] = true
+			_match_tag_set[parent] = true
 	_tag_counts = reconciled_counts
 
 

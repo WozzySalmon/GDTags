@@ -301,8 +301,20 @@ func _test_container() -> void:
 	assert_false(container.has_tag(&"State", true), "Parent should not exact-match child")
 	assert_true(container.has_all([&"State", &"Team.Enemy"]))
 	assert_true(container.has_any([&"Damage", &"Team"]))
-	assert_true(container.has_all([&"State", &"Team.Enemy"]))
-	assert_true(container.has_any([&"Damage", &"Team"]))
+	assert_true(
+		container.has_all([&" State ", &"Team / Enemy"]),
+		"Bulk checks should preserve normalization fallback",
+	)
+	assert_true(
+		container.has_tag(&" Team / Enemy ", true),
+		"Exact checks should preserve normalization fallback",
+	)
+	assert_false(
+		container.has_all([&" State ", &"Damage / Ice"]),
+		"Bulk-check fallback should still reject a missing normalized tag",
+	)
+	var no_required_tags: Array[StringName] = []
+	assert_true(container.has_all(no_required_tags), "An empty ALL check should still match")
 	assert_true(container.has_none([&"Damage.Ice"]), "has_none should reject overlaps")
 	assert_eq(container.overlap_count([&"State", &"Team.Enemy"]), 2)
 	assert_true(container.exact([GameplayTagIds.STATE_STUNNED, GameplayTagIds.TEAM_ENEMY]))
@@ -316,6 +328,7 @@ func _test_container() -> void:
 func _test_component_target_helpers() -> void:
 	var actor: Node = Node.new()
 	var component: GameplayTagComponent = GameplayTagComponent.new()
+	actor.add_child(Node.new())
 	actor.add_child(component)
 	root.add_child(actor)
 
@@ -324,16 +337,37 @@ func _test_component_target_helpers() -> void:
 		"Generated tag IDs should expose database constants"
 	)
 	assert_true(component.add_tag(GameplayTagIds.TEAM_ENEMY), "Registered DB tags can be assigned")
+	assert_true(
+		component.has_tag(GameplayTagIds.TEAM), "Component cache should include parent tags"
+	)
+	assert_true(component.has_tag(&" Team / Enemy ", true), "Cache misses should normalize input")
+	assert_true(
+		component.has_all([GameplayTagIds.TEAM, GameplayTagIds.TEAM_ENEMY]),
+		"Component cache should satisfy canonical ALL checks",
+	)
+	assert_true(component.has_all([]), "An empty component ALL check should match")
+	assert_false(
+		component.has_all([GameplayTagIds.TEAM_ENEMY, &"Missing.Tag"]),
+		"Component ALL checks should reject a missing tag",
+	)
 	assert_false(component.add_tag(&"Missing.Tag"), "Component rejects tags outside central DB")
 	component.owned_tags = [&"Missing.Tag"]
 	assert_false(
 		registry.target_has_tag(component, &"Missing"),
 		"Direct property assignment should reject unregistered tags"
 	)
+	assert_false(
+		component.has_tag(GameplayTagIds.TEAM_ENEMY, true),
+		"Property assignment should clear stale component cache entries",
+	)
 	component.set_owned_gameplay_tags([GameplayTagIds.TEAM_ENEMY, &"Missing.Tag"])
 	assert_false(
 		registry.target_has_tag(component, &"Missing"),
 		"Direct component assignment should reject unregistered tags"
+	)
+	assert_true(
+		component.has_tag(GameplayTagIds.TEAM_ENEMY, true),
+		"Component assignment should rebuild exact cache entries",
 	)
 	assert_true(
 		registry.target_has_tag(actor, GameplayTagIds.TEAM), "Actor child component should be found"
@@ -345,6 +379,8 @@ func _test_component_target_helpers() -> void:
 		registry.target_has_tag(component, &"Custom"),
 		"Target helpers should preserve component tags accepted with validation disabled",
 	)
+	assert_true(component.remove_tag(&"Custom.Unregistered"))
+	assert_false(component.has_tag(&"Custom"), "Removing a tag should rebuild the component cache")
 	assert_false(registry.target_has_tag(actor, &"Team", true), "Exact parent should fail")
 
 	var owned: GameplayTagContainer = registry.get_owned_gameplay_tags(actor)
@@ -420,6 +456,10 @@ func _test_direct_node_tags_and_csv() -> void:
 	assert_eq(database.add_tags_from_csv_text("Ability,Dash\nDamage/Ice\n"), 2)
 	assert_true(database.has_tag(&"Ability"), "CSV import should create parent tags")
 	assert_true(database.has_tag(&"Damage.Ice"), "CSV import should normalize slash paths")
+	assert_true(
+		database.has_tag(&" Damage / Ice "),
+		"Database lookups should preserve normalization fallback",
+	)
 	assert_true(database.to_csv_text().contains("Ability.Dash"))
 
 

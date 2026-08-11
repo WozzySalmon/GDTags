@@ -9,9 +9,12 @@ signal owned_tags_changed(tags: Array[StringName])
 
 const GROUP_NAME: StringName = &"gameplay_tag_components"
 
+## Inspector-authored tag storage. Runtime code must mutate it through the component methods;
+## changing this Array in place bypasses validation, signals, indexing, and lookup-cache rebuilds.
 @export var owned_tags: Array[StringName] = []:
 	set(value):
 		owned_tags = _filter_registered_tags(value)
+		_rebuild_cache()
 		_prune_stack_counts()
 		_refresh_owner_tag_index()
 		owned_tags_changed.emit(owned_tags)
@@ -22,6 +25,8 @@ const GROUP_NAME: StringName = &"gameplay_tag_components"
 # absent rather than stored as 1, so this stays empty for the common case. Runtime
 # state only: stacks are applied by gameplay, not authored in the Inspector.
 var _stack_counts: Dictionary[String, int] = {}
+var _exact_tag_set: Dictionary[StringName, bool] = {}
+var _match_tag_set: Dictionary[StringName, bool] = {}
 
 
 func _enter_tree() -> void:
@@ -148,12 +153,13 @@ func set_tag_count(raw_tag: StringName, count: int) -> bool:
 
 
 ## Returns whether this component owns [param raw_tag], matching parents unless [param exact].
-## The direct scan avoids allocating a temporary container on gameplay hot paths.
+## Cached sets avoid scanning and re-evaluating hierarchy on gameplay hot paths.
 func has_tag(raw_tag: StringName, exact: bool = false) -> bool:
-	for owned_tag in owned_tags:
-		if GameplayTagDatabase.tag_matches(owned_tag, raw_tag, exact):
-			return true
-	return false
+	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
+	if tag_set.has(raw_tag):
+		return true
+	var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+	return normalized_tag != &"" and tag_set.has(normalized_tag)
 
 
 ## Returns whether this component owns at least one of [param required_tags].
@@ -166,10 +172,23 @@ func has_any(required_tags: Array[StringName], exact: bool = false) -> bool:
 
 ## Returns whether this component owns every one of [param required_tags].
 func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
+	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
+	if tag_set.has_all(required_tags):
+		return true
 	for tag in required_tags:
 		if not has_tag(tag, exact):
 			return false
 	return true
+
+
+func _rebuild_cache() -> void:
+	_exact_tag_set.clear()
+	_match_tag_set.clear()
+	for tag in owned_tags:
+		_exact_tag_set[tag] = true
+		_match_tag_set[tag] = true
+		for parent in GameplayTagDatabase.get_canonical_parent_tags(tag):
+			_match_tag_set[parent] = true
 
 
 # Stack depths only mean something while the tag is owned, so drop the rest whenever

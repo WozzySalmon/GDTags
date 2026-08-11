@@ -66,6 +66,10 @@ GameplayTags.add_tag_to_node(enemy, GameplayTagIds.TEAM_ENEMY)
 Any object exposing `owned_tags`, `gameplay_tags`, or a `get_owned_gameplay_tags()`
 method also resolves, so plain `RefCounted` game objects work without a scene tree.
 
+At runtime, change a component through `add_tag()`, `remove_tag()`, or
+`set_owned_gameplay_tags()`. Do not mutate `owned_tags` with `append()`, `erase()`, or
+`clear()`; in-place Array changes bypass validation, signals, and the tag lookup index.
+
 ## Stacking
 
 When the same state applies more than once, use stacks so it survives until the last

@@ -39,7 +39,7 @@ const MAX_REDIRECT_DEPTH: int = 16
 		_drop_redirects_for_live_tags()
 		_notify_changed()
 
-var _tag_set: Dictionary[String, bool] = {}
+var _tag_set: Dictionary[StringName, bool] = {}
 var _suppress_change_notifications: bool = false
 
 
@@ -185,7 +185,7 @@ static func get_parent_tags(raw_tag: StringName) -> Array[StringName]:
 
 
 ## Same result as [method get_parent_tags] for a tag that is already normalized.
-## Skips the normalization pass; used by the per-check container cache rebuild.
+## Skips the normalization pass during container and component lookup-cache rebuilds.
 static func get_canonical_parent_tags(tag_name: StringName) -> Array[StringName]:
 	var tag: String = String(tag_name)
 	var parents: Array[StringName] = []
@@ -480,8 +480,9 @@ func set_state(
 		var description: String = descriptions[description_key].strip_edges()
 		if description.is_empty():
 			continue
-		var tag_key: String = String(normalize_tag(StringName(description_key)))
-		if _tag_set.has(tag_key):
+		var tag_name: StringName = normalize_tag(StringName(description_key))
+		var tag_key: String = String(tag_name)
+		if _tag_set.has(tag_name):
 			kept_descriptions[tag_key] = description
 	tag_descriptions = kept_descriptions
 	tag_redirects = redirects
@@ -555,7 +556,10 @@ func get_redirected_tags() -> Array[StringName]:
 ## Retired names are not resolved; call [method resolve_tag] first when authored data
 ## should remain valid after a rename.
 func has_tag(raw_tag: StringName) -> bool:
-	return _tag_set.has(String(normalize_tag(raw_tag)))
+	if _tag_set.has(raw_tag):
+		return true
+	var normalized_tag: StringName = normalize_tag(raw_tag)
+	return normalized_tag != &"" and _tag_set.has(normalized_tag)
 
 
 ## Returns a GameplayTag for a registered tag, or null when it is unknown.
@@ -693,7 +697,7 @@ func _redirect_would_cycle(from_tag: StringName, to_tag: StringName) -> bool:
 func _rebuild_cache() -> void:
 	_tag_set.clear()
 	for tag in tags:
-		_tag_set[String(tag)] = true
+		_tag_set[tag] = true
 	_drop_redirects_for_live_tags()
 
 
@@ -705,7 +709,7 @@ func _drop_redirects_for_live_tags() -> void:
 	if tag_redirects.is_empty():
 		return
 	for retired_tag in tag_redirects.keys():
-		if _tag_set.has(String(retired_tag)):
+		if _tag_set.has(retired_tag):
 			tag_redirects.erase(retired_tag)
 
 
