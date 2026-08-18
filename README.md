@@ -1,7 +1,7 @@
 # GDTags
 
 Gameplay Tags addon for Godot 4.6+, rebuilt around the Unreal Gameplay Tags workflow:
-central registry, inspector picker, tag components on nodes, optional direct node tags, and simple yes/no gameplay checks.
+central registry, inspector picker, tag components on nodes, and simple yes/no gameplay checks.
 
 Tags are hierarchical:
 
@@ -51,11 +51,14 @@ func _on_body_entered(body: Node) -> void:
 - `GameplayTags.target_has_all(target: Object, tags: Array[StringName], exact: bool = false)`.
 - `GameplayTags.set_tag_description(tag: StringName, description: String, save_now: bool = true)`.
 - `GameplayTags.rename_tag(tag: StringName, new_tag: StringName, save_now: bool = true)`.
-- `GameplayTags.add_tag_to_node(node, tag)` - optional metadata/group tagging.
 - `GameplayTags.get_tagged_nodes(root)`.
 - `GameplayTags.get_nodes_with_tag(root: Node, tag: StringName, exact: bool = false)`.
 - `GameplayTags.import_tags_from_csv(path)` / `export_tags_to_csv(path)`.
-- `GameplayTagComponent` - attach to nodes to own tags.
+- `GameplayTagComponent` - the only way nodes own tags; attach it as a direct child.
+
+Target resolution is deliberately explicit: checks accept a `GameplayTagContainer`, a
+`GameplayTagComponent`, or a node with direct component children. Arbitrary methods, properties,
+and metadata are not inspected.
 
 The runtime API is deliberately strict: use `StringName` for individual tags and explicitly
 written `Array[StringName]` variables for tag collections. Arbitrary values are not converted

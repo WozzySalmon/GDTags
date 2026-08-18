@@ -10,7 +10,7 @@ func _ready() -> void:
 	# In normal scenes, pick owned_tags from the Inspector. This script path is for examples/tests.
 	tags.add_tag(GameplayTagIds.TEAM_ENEMY)
 	tags.add_tag(GameplayTagIds.STATE_STUNNED)
-	GameplayTags.add_tag_to_node(enemy, GameplayTagIds.DAMAGE_FIRE)
+	tags.add_tag(GameplayTagIds.DAMAGE_FIRE)
 
 	if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM_ENEMY):
 		print("Enemy target")

@@ -162,16 +162,6 @@ func _test_autoload_helpers() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(save_path))
 
 	registry.set_database(_make_test_database())
-	var actor: Node = Node.new()
-	root.add_child(actor)
-	var custom_tags: Array[StringName] = [&"Custom.Unregistered"]
-	assert_true(registry.set_node_tags(actor, custom_tags, false))
-	assert_true(registry.get_node_tags(actor).has_tag(&"Custom"))
-	assert_true(actor.is_in_group("gameplay_tagged_nodes"))
-	registry.clear_node_tags(actor)
-	assert_true(registry.get_node_tags(actor).is_empty())
-	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
-
 	var team_enemy_tags: Array[StringName] = [&"Team.Enemy"]
 	var team_tags: Array[StringName] = [&"Team"]
 	var damage_or_team_tags: Array[StringName] = [&"Damage", &"Team"]
@@ -188,7 +178,6 @@ func _test_autoload_helpers() -> void:
 	assert_true(
 		registry.make_query_none(damage_tags).matches(GameplayTagContainer.new(team_enemy_tags))
 	)
-	actor.free()
 
 
 func _on_query_changed() -> void:

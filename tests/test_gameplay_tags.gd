@@ -1,30 +1,13 @@
 extends "res://tests/tag_test_case.gd"
 
 
-class TaggedObject:
+class AdapterTaggedObject:
 	extends RefCounted
 
 	var owned_tags: Array[StringName] = []
 
 	func get_owned_gameplay_tags() -> Array[StringName]:
 		return owned_tags
-
-
-class MethodTaggedObject:
-	extends RefCounted
-
-	var owned_tags: Array[StringName] = []
-	var method_tags: Array[StringName] = []
-
-	func get_owned_gameplay_tags() -> Array[StringName]:
-		return method_tags
-
-
-class UnrelatedTagsObject:
-	extends RefCounted
-
-	# A plain string list that has nothing to do with gameplay tags.
-	var tags: Array[String] = []
 
 
 class StringNameTagsObject:
@@ -51,8 +34,8 @@ func _run_tests() -> void:
 	run_test("generated_id_collisions_are_rejected", _test_generated_id_collisions)
 	run_test("container_hierarchical_matching", _test_container)
 	run_test("component_target_helpers", _test_component_target_helpers)
-	run_test("direct_node_tags_and_csv", _test_direct_node_tags_and_csv)
-	run_test("plain_object_target_helpers", _test_plain_object_target_helpers)
+	run_test("csv_import", _test_csv_import)
+	run_test("unsupported_objects_are_not_tag_targets", _test_unsupported_object_targets)
 	run_test("component_lookup_is_bounded_to_children", _test_component_lookup_is_bounded)
 	run_test("tag_names_are_validated_everywhere", _test_tag_name_validation)
 	run_test("setting_paths_honour_overrides", _test_setting_path_resolution)
@@ -61,7 +44,6 @@ func _run_tests() -> void:
 	run_test("container_tag_stacking", _test_container_tag_stacking)
 	run_test("query_composition", _test_query_composition)
 	run_test("tag_index_finds_nodes", _test_tag_index)
-	run_test("ambiguous_tags_property_is_ignored", _test_ambiguous_tags_property)
 	run_test("query_modes", _test_query_modes)
 
 
@@ -390,9 +372,13 @@ func _test_component_target_helpers() -> void:
 		"Container targets should use their cached hierarchy",
 	)
 	var tag_value: GameplayTag = GameplayTag.new(GameplayTagIds.TEAM_ENEMY)
-	assert_true(
+	assert_false(
 		registry.target_has_tag(tag_value, GameplayTagIds.TEAM),
-		"GameplayTag values should be valid direct targets",
+		"A tag value describes a tag; it is not a tag-owning target",
+	)
+	assert_false(
+		GameplayTagQuery.all([GameplayTagIds.TEAM]).matches(tag_value),
+		"Queries should reject tag values as non-owning targets",
 	)
 	assert_false(registry.target_has_tag(null, GameplayTagIds.TEAM))
 	var no_required_tags: Array[StringName] = []
@@ -403,55 +389,7 @@ func _test_component_target_helpers() -> void:
 	actor.free()
 
 
-func _test_direct_node_tags_and_csv() -> void:
-	var actor: Node = Node.new()
-	root.add_child(actor)
-	var direct_tags: Array[StringName] = [GameplayTagIds.TEAM_PLAYER, &"Missing.Tag"]
-
-	assert_eq(
-		registry.add_tags_to_node(actor, direct_tags),
-		1,
-		"Direct node tags should validate against the central DB"
-	)
-	assert_true(actor.is_in_group("gameplay_tagged_nodes"))
-	assert_true(registry.target_has_tag(actor, GameplayTagIds.TEAM))
-
-	var component: GameplayTagComponent = GameplayTagComponent.new()
-	actor.add_child(component)
-	component.add_tag(GameplayTagIds.STATE_STUNNED)
-	var combined_tags: Array[StringName] = [
-		GameplayTagIds.TEAM_PLAYER,
-		GameplayTagIds.STATE_STUNNED,
-	]
-	assert_true(
-		registry.target_has_all(actor, combined_tags),
-		"Direct node tags and child component tags should combine"
-	)
-
-	var tagged_nodes: Array[Node] = registry.get_nodes_with_tag(root, GameplayTagIds.TEAM_PLAYER)
-	assert_true(tagged_nodes.has(actor), "Node tag group lookup should find direct tags")
-	var component_nodes: Array[Node] = registry.get_nodes_with_tag(
-		root, GameplayTagIds.STATE_STUNNED
-	)
-	assert_true(component_nodes.has(actor), "Node tag group lookup should find component owners")
-	assert_true(registry.remove_tag_from_node(actor, GameplayTagIds.TEAM_PLAYER))
-	assert_false(actor.is_in_group("gameplay_tagged_nodes"))
-	actor.free()
-
-	var custom_actor: Node = Node.new()
-	root.add_child(custom_actor)
-	var custom_tags: Array[StringName] = [&"Custom.Unregistered"]
-	assert_true(registry.set_node_tags(custom_actor, custom_tags, false))
-	assert_true(
-		registry.get_owned_gameplay_tags(custom_actor).has_tag(&"Custom.Unregistered", true),
-		"Owned-tag reads should preserve direct node tags written without validation",
-	)
-	assert_true(
-		registry.target_has_tag(custom_actor, &"Custom"),
-		"Target helpers should preserve direct node tags written without validation",
-	)
-	custom_actor.free()
-
+func _test_csv_import() -> void:
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
 	assert_eq(database.add_tags_from_csv_text("Ability,Dash\nDamage/Ice\n"), 2)
 	assert_true(database.has_tag(&"Ability"), "CSV import should create parent tags")
@@ -463,30 +401,36 @@ func _test_direct_node_tags_and_csv() -> void:
 	assert_true(database.to_csv_text().contains("Ability.Dash"))
 
 
-func _test_plain_object_target_helpers() -> void:
-	var tagged_object: TaggedObject = TaggedObject.new()
-	tagged_object.owned_tags = [GameplayTagIds.STATE_STUNNED]
-
-	assert_true(registry.target_has_tag(tagged_object, GameplayTagIds.STATE))
-	var required_tags: Array[StringName] = [GameplayTagIds.STATE_STUNNED]
-	var blocked_tags: Array[StringName] = [
-		GameplayTagIds.TEAM_ENEMY,
-		GameplayTagIds.DAMAGE_FIRE,
-	]
-	assert_true(registry.target_has_all(tagged_object, required_tags))
-	assert_false(registry.target_has_any(tagged_object, blocked_tags))
-
-	var method_tagged_object: MethodTaggedObject = MethodTaggedObject.new()
-	method_tagged_object.owned_tags = [GameplayTagIds.TEAM_ENEMY]
-	method_tagged_object.method_tags = [GameplayTagIds.STATE_STUNNED]
+func _test_unsupported_object_targets() -> void:
+	var adapter: AdapterTaggedObject = AdapterTaggedObject.new()
+	adapter.owned_tags = [GameplayTagIds.STATE_STUNNED]
+	assert_false(
+		registry.target_has_tag(adapter, GameplayTagIds.STATE),
+		"Methods and properties must not make arbitrary objects into tag targets",
+	)
 	assert_true(
-		registry.target_has_tag(method_tagged_object, GameplayTagIds.STATE),
-		"Explicit get_owned_gameplay_tags() method should provide plain-object tags"
+		registry.get_owned_gameplay_tags(adapter).is_empty(),
+		"Owned-tag reads should reject arbitrary adapter objects",
 	)
 	assert_false(
-		registry.target_has_tag(method_tagged_object, GameplayTagIds.TEAM_ENEMY, true),
-		"Explicit tag method should take precedence over duplicate plain-object properties"
+		GameplayTagQuery.none([GameplayTagIds.TEAM_ENEMY]).matches(adapter),
+		"Queries should reject unsupported objects instead of treating them as empty targets",
 	)
+
+	var tag_holder: StringNameTagsObject = StringNameTagsObject.new()
+	tag_holder.tags = [GameplayTagIds.STATE_STUNNED]
+	assert_false(
+		registry.target_has_tag(tag_holder, GameplayTagIds.STATE),
+		"A property named tags must not make an object into a tag target",
+	)
+
+	var metadata_node: Node = Node.new()
+	metadata_node.set_meta("gameplay_tags", [GameplayTagIds.STATE_STUNNED])
+	assert_false(
+		registry.target_has_tag(metadata_node, GameplayTagIds.STATE),
+		"Node metadata must not bypass GameplayTagComponent ownership",
+	)
+	metadata_node.free()
 
 
 func _test_component_lookup_is_bounded() -> void:
@@ -526,15 +470,19 @@ func _test_component_lookup_is_bounded() -> void:
 	var nested_component: GameplayTagComponent = GameplayTagComponent.new()
 	component.add_child(nested_component)
 	nested_component.add_tag(GameplayTagIds.STATE_INVULNERABLE)
-	assert_true(
+	assert_false(
 		registry.target_has_tag(component, GameplayTagIds.STATE_INVULNERABLE),
-		"A component target should include its own direct child components",
+		"A component target should own only its own tags",
 	)
-	assert_true(
+	assert_false(
+		registry.target_has_tag(actor, GameplayTagIds.STATE_INVULNERABLE),
+		"A node should not inherit tags from nested components",
+	)
+	assert_false(
 		registry.get_owned_gameplay_tags(component).has_tag(
 			GameplayTagIds.STATE_INVULNERABLE, true
 		),
-		"Target checks and resolved ownership should agree for component targets",
+		"Resolved component ownership should include only that component",
 	)
 	level.free()
 
@@ -758,24 +706,25 @@ func _test_query_composition() -> void:
 func _test_tag_index() -> void:
 	var level: Node = Node.new()
 	root.add_child(level)
-	var direct_actor: Node = Node.new()
-	level.add_child(direct_actor)
-	var component_actor: Node = Node.new()
-	level.add_child(component_actor)
-	var component: GameplayTagComponent = GameplayTagComponent.new()
-	component_actor.add_child(component)
+	var player_actor: Node = Node.new()
+	level.add_child(player_actor)
+	var player_component: GameplayTagComponent = GameplayTagComponent.new()
+	player_actor.add_child(player_component)
+	var enemy_actor: Node = Node.new()
+	level.add_child(enemy_actor)
+	var enemy_component: GameplayTagComponent = GameplayTagComponent.new()
+	enemy_actor.add_child(enemy_component)
 
-	var player_tags: Array[StringName] = [GameplayTagIds.TEAM_PLAYER]
-	registry.set_node_tags(direct_actor, player_tags)
-	component.add_tag(GameplayTagIds.TEAM_ENEMY)
+	player_component.add_tag(GameplayTagIds.TEAM_PLAYER)
+	enemy_component.add_tag(GameplayTagIds.TEAM_ENEMY)
 
 	assert_true(
-		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
-		"The index should find metadata-tagged nodes",
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(player_actor),
+		"The index should find component owners",
 	)
 	assert_true(
-		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
-		"The index should find component owners",
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(enemy_actor),
+		"The index should find every matching component owner",
 	)
 	assert_eq(
 		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM).size(),
@@ -788,34 +737,18 @@ func _test_tag_index() -> void:
 		"Exact lookups should not match nodes owning only child tags",
 	)
 
-	registry.clear_node_tags(direct_actor)
+	player_component.remove_tag(GameplayTagIds.TEAM_PLAYER)
 	assert_false(
-		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(direct_actor),
-		"Clearing node tags should drop the node from the index",
-	)
-
-	component.remove_tag(GameplayTagIds.TEAM_ENEMY)
-	assert_false(
-		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(component_actor),
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_PLAYER).has(player_actor),
 		"Removing a component tag should drop its owner from results",
 	)
-	level.free()
 
-
-func _test_ambiguous_tags_property() -> void:
-	var unrelated: UnrelatedTagsObject = UnrelatedTagsObject.new()
-	unrelated.tags = ["State.Stunned"]
+	enemy_component.remove_tag(GameplayTagIds.TEAM_ENEMY)
 	assert_false(
-		registry.target_has_tag(unrelated, GameplayTagIds.STATE),
-		"An Array[String] named tags belongs to the owning class, not this addon",
+		registry.get_nodes_with_tag(level, GameplayTagIds.TEAM_ENEMY).has(enemy_actor),
+		"Removing the final matching component tag should update the index",
 	)
-
-	var tag_holder: StringNameTagsObject = StringNameTagsObject.new()
-	tag_holder.tags = [GameplayTagIds.STATE_STUNNED]
-	assert_true(
-		registry.target_has_tag(tag_holder, GameplayTagIds.STATE),
-		"An Array[StringName] named tags is still an accepted tag payload",
-	)
+	level.free()
 
 
 func _test_query_modes() -> void:

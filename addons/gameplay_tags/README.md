@@ -54,17 +54,14 @@ Every database change regenerates `res://gameplay_tag_ids.gd`. Type `GameplayTag
 in the script editor for autocomplete over valid tags, and let renames and typos
 become compile-time problems rather than silent runtime misses.
 
-## Ways to own tags
+## Owning tags
 
-A `GameplayTagComponent` beneath the node is the normal path. For quick prototypes you
-can tag a node directly:
+A node owns tags through direct `GameplayTagComponent` children. Target checks do not inspect
+arbitrary methods, properties, metadata, or nested descendants. You can also check a component
+or `GameplayTagContainer` directly.
 
-```gdscript
-GameplayTags.add_tag_to_node(enemy, GameplayTagIds.TEAM_ENEMY)
-```
-
-Any object exposing `owned_tags`, `gameplay_tags`, or a `get_owned_gameplay_tags()`
-method also resolves, so plain `RefCounted` game objects work without a scene tree.
+When upgrading from an earlier version, move tags assigned through `set_node_tags()` or
+`add_tag_to_node()` onto a component; the direct metadata APIs have been removed.
 
 At runtime, change a component through `add_tag()`, `remove_tag()`, or
 `set_owned_gameplay_tags()`. Do not mutate `owned_tags` with `append()`, `erase()`, or

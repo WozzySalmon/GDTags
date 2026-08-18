@@ -76,7 +76,7 @@ static func compose(query_mode: Mode, nested_queries: Array[GameplayTagQuery]) -
 
 
 ## Returns whether [param target] satisfies this query.
-## Accepts a container, component, node, or any object the GameplayTags autoload can resolve.
+## Accepts a container, component, or node with direct tag component children.
 func matches(target: Object) -> bool:
 	var container: GameplayTagContainer = _container_from_target(target)
 	if container == null:
@@ -373,6 +373,8 @@ func _container_from_target(target: Object) -> GameplayTagContainer:
 		return target
 	if target is GameplayTagComponent:
 		return target.get_owned_gameplay_tags()
+	if not target is Node:
+		return null
 	var registry: Node = GameplayTagUtils.get_registry()
 	if registry != null and registry.has_method("get_owned_gameplay_tags"):
 		return registry.get_owned_gameplay_tags(target) as GameplayTagContainer

@@ -347,13 +347,6 @@ func _test_redirect_resolution() -> void:
 		"A target authored with the retired name should match the replacement",
 	)
 
-	var node_tags: Array[StringName] = [&"State.Stunned"]
-	registry.set_node_tags(actor, node_tags)
-	assert_true(
-		registry.get_node_tags(actor).has_tag(&"State.Incapacitated", true),
-		"Direct node tags should resolve a retired name to its replacement",
-	)
-
 	root.remove_child(actor)
 	actor.free()
 	registry.set_database(_make_test_database())
