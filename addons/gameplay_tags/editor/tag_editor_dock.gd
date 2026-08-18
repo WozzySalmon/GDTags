@@ -177,8 +177,8 @@ func _build_file_dialogs() -> void:
 
 
 func _load_database() -> void:
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("get_database"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
 		_database = registry.get_database()
 		return
 
@@ -383,9 +383,9 @@ func _apply_tag_description(
 		return
 
 	var changed: bool = false
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("set_tag_description"):
-		changed = bool(registry.set_tag_description(tag, description, false))
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
+		changed = registry.set_tag_description(tag, description, false)
 		_database = registry.get_database()
 	else:
 		changed = _database.set_tag_description(tag, description)
@@ -568,9 +568,9 @@ func _remove_tag_with_undo(tag: StringName) -> void:
 
 func _remove_tag_immediately(tag: StringName) -> void:
 	var removed: bool = false
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("remove_tag"):
-		removed = bool(registry.remove_tag(tag, true))
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
+		removed = registry.remove_tag(tag, true)
 		_database = registry.get_database()
 		if removed:
 			_refresh()
@@ -609,8 +609,8 @@ func _apply_database_state(
 		)
 		return
 
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("set_database"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
 		registry.set_database(_database)
 	_refresh()
 	if selected_tag != &"":
@@ -730,8 +730,8 @@ func _on_scan_references_pressed() -> void:
 
 
 func _on_refresh_pressed() -> void:
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("reload_database"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
 		_database = registry.reload_database()
 	else:
 		_load_database()
@@ -763,7 +763,7 @@ func _on_paste_tags_confirmed() -> void:
 	var existing_count: int = 0
 	var invalid_count: int = 0
 	for tag in candidates:
-		if not GameplayTagDatabase.is_valid_tag_name(tag):
+		if not GameplayTagDatabase.is_canonical_tag_name(tag):
 			invalid_count += 1
 		elif _database.has_tag(tag):
 			existing_count += 1
@@ -967,8 +967,8 @@ func _import_tags_from_csv(path: String) -> int:
 
 
 func _export_tags_to_csv(path: String) -> Error:
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("export_tags_to_csv"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
 		return registry.export_tags_to_csv(path)
 	if _database == null:
 		_load_database()
@@ -977,8 +977,8 @@ func _export_tags_to_csv(path: String) -> Error:
 	return TagDockIo.export_tags_to_csv_file(_database, path)
 
 
-func _get_registry() -> Node:
-	return GameplayTagUtils.get_registry(self)
+func _get_registry() -> GameplayTagRegistry:
+	return GameplayTagUtils.get_registry(self) as GameplayTagRegistry
 
 
 func _set_status(message: String) -> void:

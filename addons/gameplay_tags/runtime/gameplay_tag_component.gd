@@ -13,7 +13,10 @@ const GROUP_NAME: StringName = &"gameplay_tag_components"
 ## changing this Array in place bypasses validation, signals, indexing, and lookup-cache rebuilds.
 @export var owned_tags: Array[StringName] = []:
 	set(value):
-		owned_tags = _filter_registered_tags(value)
+		var filtered_tags: Array[StringName] = _filter_registered_tags(value)
+		if owned_tags == filtered_tags:
+			return
+		owned_tags = filtered_tags
 		_rebuild_cache()
 		_prune_stack_counts()
 		_refresh_owner_tag_index()
@@ -50,7 +53,7 @@ func get_owned_gameplay_tags() -> GameplayTagContainer:
 
 ## Replaces every owned tag, applying the same validation as the exported property.
 func set_owned_gameplay_tags(raw_tags: Array[StringName]) -> void:
-	owned_tags = _filter_registered_tags(raw_tags)
+	owned_tags = raw_tags
 
 
 ## Adds one tag and returns whether it was added.
@@ -58,7 +61,7 @@ func set_owned_gameplay_tags(raw_tags: Array[StringName]) -> void:
 ## tags missing from the central database.
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or owned_tags.has(tag):
+	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or owned_tags.has(tag):
 		return false
 	if validate_with_database and not _is_registered_tag(tag):
 		push_warning("Gameplay tag is not in the central database: %s" % String(tag))
@@ -67,6 +70,19 @@ func add_tag(raw_tag: StringName) -> bool:
 	updated_tags.append(tag)
 	owned_tags = updated_tags
 	return true
+
+
+## Adds several tags and returns how many were new.
+func add_tags(raw_tags: Array[StringName]) -> int:
+	var previous_tags: Array[StringName] = owned_tags.duplicate()
+	var updated_tags: Array[StringName] = owned_tags.duplicate()
+	updated_tags.append_array(raw_tags)
+	owned_tags = updated_tags
+	var added: int = 0
+	for tag in owned_tags:
+		if not previous_tags.has(tag):
+			added += 1
+	return added
 
 
 ## Removes one owned tag and every stack of it. Returns whether it was present.
@@ -81,11 +97,29 @@ func remove_tag(raw_tag: StringName) -> bool:
 	return true
 
 
+## Removes several tags and all their stacks. Returns how many were present.
+func remove_tags(raw_tags: Array[StringName]) -> int:
+	var remove_set: Dictionary[StringName, bool] = {}
+	for raw_tag in raw_tags:
+		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+		if tag != &"":
+			remove_set[tag] = true
+
+	var kept_tags: Array[StringName] = []
+	for tag in owned_tags:
+		if not remove_set.has(tag):
+			kept_tags.append(tag)
+	var removed: int = owned_tags.size() - kept_tags.size()
+	if removed > 0:
+		owned_tags = kept_tags
+	return removed
+
+
 ## Applies one more stack of [param raw_tag], adding the tag when it is not yet owned.
 ## Returns the resulting depth, or 0 when the tag could not be added.
 func add_tag_stack(raw_tag: StringName) -> int:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag):
+	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag):
 		return 0
 	if not owned_tags.has(tag):
 		return 1 if add_tag(tag) else 0
@@ -130,7 +164,7 @@ func get_tag_count(raw_tag: StringName) -> int:
 ## Returns whether anything changed.
 func set_tag_count(raw_tag: StringName, count: int) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag):
+	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag):
 		return false
 	if count <= 0:
 		return remove_tag(tag)
@@ -176,7 +210,8 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	if tag_set.has_all(required_tags):
 		return true
 	for tag in required_tags:
-		if not has_tag(tag, exact):
+		var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(tag)
+		if normalized_tag != &"" and not tag_set.has(normalized_tag):
 			return false
 	return true
 
@@ -208,36 +243,42 @@ func _filter_registered_tags(raw_tags: Array[StringName]) -> Array[StringName]:
 	if not validate_with_database:
 		return canonical_tags
 
-	var registry: Node = _get_registry()
-	if registry == null or not registry.has_method("is_valid_tag"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry == null:
 		return canonical_tags
 
-	var can_resolve: bool = registry.has_method("resolve_tag")
 	var filtered_tags: Array[StringName] = []
+	var resolved_tags: Dictionary[StringName, bool] = {}
+	var redirects_changed_order: bool = false
 	for tag in canonical_tags:
 		# A tag authored before a rename resolves to its replacement rather than being
 		# dropped, so existing scenes survive a renamed branch.
-		var resolved_tag: StringName = registry.resolve_tag(tag) if can_resolve else tag
-		if bool(registry.is_valid_tag(resolved_tag)):
-			filtered_tags.append(resolved_tag)
-		else:
+		var resolved_tag: StringName = registry.resolve_tag(tag)
+		if not registry.is_valid_tag(resolved_tag):
 			push_warning("Gameplay tag is not in the central database: %s" % String(tag))
+			continue
+		if resolved_tags.has(resolved_tag):
+			redirects_changed_order = true
+			continue
+		resolved_tags[resolved_tag] = true
+		filtered_tags.append(resolved_tag)
+		redirects_changed_order = redirects_changed_order or resolved_tag != tag
+	if redirects_changed_order:
+		return GameplayTagDatabase.canonicalize_tag_array(filtered_tags)
 	return filtered_tags
 
 
 func _is_registered_tag(tag: StringName) -> bool:
-	var registry: Node = _get_registry()
-	if registry == null or not registry.has_method("is_valid_tag"):
-		return true
-	return bool(registry.is_valid_tag(tag))
+	var registry: GameplayTagRegistry = _get_registry()
+	return true if registry == null else registry.is_valid_tag(tag)
 
 
 func _refresh_owner_tag_index(deferred: bool = false) -> void:
 	var owner_node: Node = get_parent()
 	if owner_node == null:
 		return
-	var registry: Node = _get_registry()
-	if registry == null or not registry.has_method("refresh_node_tag_index"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry == null:
 		return
 	if deferred:
 		# The owner can be freed before the deferred call runs, so pass an ID the
@@ -247,5 +288,5 @@ func _refresh_owner_tag_index(deferred: bool = false) -> void:
 		registry.refresh_node_tag_index(owner_node)
 
 
-func _get_registry() -> Node:
-	return GameplayTagUtils.get_registry(self)
+func _get_registry() -> GameplayTagRegistry:
+	return GameplayTagUtils.get_registry(self) as GameplayTagRegistry

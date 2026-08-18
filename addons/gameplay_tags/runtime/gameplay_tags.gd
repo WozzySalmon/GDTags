@@ -1,4 +1,5 @@
 @tool
+class_name GameplayTagRegistry
 extends Node
 
 const COMPONENT_GROUP: StringName = &"gameplay_tag_components"
@@ -61,10 +62,10 @@ func save_database() -> Error:
 	if not _can_write_to_path(path):
 		_warn_read_only_target(path)
 		return ERR_UNAVAILABLE
-	if _database_path_has_incompatible_resource(path):
+	if GameplayTagUtils.database_path_conflicts(path):
 		push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return ERR_INVALID_DATA
-	var directory_error: Error = _ensure_database_directory(path)
+	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(path)
 	if directory_error != OK:
 		push_error(
 			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
@@ -182,7 +183,7 @@ func export_tags_to_csv(path: String) -> Error:
 	if not _can_write_to_path(path):
 		_warn_read_only_target(path)
 		return ERR_UNAVAILABLE
-	var directory_error: Error = _ensure_database_directory(path)
+	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(path)
 	if directory_error != OK:
 		push_error(
 			"Could not create gameplay tags CSV directory: %s" % error_string(directory_error)
@@ -258,10 +259,14 @@ func refresh_node_tag_index(node: Node) -> void:
 		return
 
 	var indexed_tags: Dictionary[String, bool] = {}
-	for tag in get_owned_gameplay_tags(node).get_tags():
-		indexed_tags[String(tag)] = true
-		for parent in GameplayTagDatabase.get_canonical_parent_tags(tag):
-			indexed_tags[String(parent)] = true
+	for child_index in range(node.get_child_count()):
+		var child: Node = node.get_child(child_index)
+		if not child is GameplayTagComponent:
+			continue
+		for tag in child.owned_tags:
+			indexed_tags[String(tag)] = true
+			for parent in GameplayTagDatabase.get_canonical_parent_tags(tag):
+				indexed_tags[String(parent)] = true
 
 	for group in node.get_groups():
 		var group_text: String = String(group)
@@ -318,38 +323,66 @@ func target_has_tag(target: Object, tag: StringName, exact: bool = false) -> boo
 
 ## Returns whether [param target] owns at least one of [param tags].
 func target_has_any(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
-	var required_tags: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(tags)
 	if target is GameplayTagContainer:
-		return target.has_any(required_tags, exact)
-	for tag in required_tags:
-		if target_has_tag(target, tag, exact):
+		return target.has_any(tags, exact)
+	if target is GameplayTagComponent:
+		return target.has_any(tags, exact)
+	if target is Node:
+		for child_index in range(target.get_child_count()):
+			var child: Node = target.get_child(child_index)
+			if child is GameplayTagComponent and child.has_any(tags, exact):
+				return true
+		return false
+	for raw_tag in tags:
+		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+		if tag != &"" and target_has_tag(target, tag, exact):
 			return true
 	return false
 
 
 ## Returns whether [param target] owns every one of [param tags].
 func target_has_all(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
-	var required_tags: Array[StringName] = GameplayTagDatabase.canonicalize_tag_array(tags)
 	if target is GameplayTagContainer:
-		return target.has_all(required_tags, exact)
-	for tag in required_tags:
-		if not target_has_tag(target, tag, exact):
+		return target.has_all(tags, exact)
+	if target is GameplayTagComponent:
+		return target.has_all(tags, exact)
+	if target is Node:
+		return _node_has_all(target, tags, exact)
+	for raw_tag in tags:
+		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+		if tag != &"" and not target_has_tag(target, tag, exact):
 			return false
 	return true
 
 
 func _node_has_tag(node: Node, required_tag: StringName, exact: bool) -> bool:
-	for child in node.get_children():
+	for child_index in range(node.get_child_count()):
+		var child: Node = node.get_child(child_index)
 		if child is GameplayTagComponent and child.has_tag(required_tag, exact):
 			return true
 	return false
+
+
+func _node_has_all(node: Node, tags: Array[StringName], exact: bool) -> bool:
+	for child_index in range(node.get_child_count()):
+		var child: Node = node.get_child(child_index)
+		if child is GameplayTagComponent and child.has_all(tags, exact):
+			return true
+	for raw_tag in tags:
+		var required_tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+		if required_tag == &"":
+			continue
+		if not _node_has_tag(node, required_tag, exact):
+			return false
+	return true
 
 
 # Merges every direct component into one result for APIs that need the full owned set.
 func _get_node_owned_gameplay_tags(node: Node) -> GameplayTagContainer:
 	var collected: Array[StringName] = []
 	var counts: Dictionary[String, int] = {}
-	for child in node.get_children():
+	for child_index in range(node.get_child_count()):
+		var child: Node = node.get_child(child_index)
 		if child is GameplayTagComponent:
 			collected.append_array(child.owned_tags)
 			_merge_stack_counts(child, counts)
@@ -432,13 +465,6 @@ func _warn_read_only_target(path: String) -> void:
 	)
 
 
-func _ensure_database_directory(path: String) -> Error:
-	var directory: String = path.get_base_dir()
-	if directory.is_empty() or directory == "res://" or directory == "user://":
-		return OK
-	return DirAccess.make_dir_recursive_absolute(directory)
-
-
 func _load_or_create_database(
 	cache_mode: ResourceLoader.CacheMode = ResourceLoader.CACHE_MODE_REUSE,
 ) -> GameplayTagDatabase:
@@ -455,7 +481,7 @@ func _load_or_create_database(
 	if not _can_write_to_path(path):
 		_warn_read_only_target(path)
 		return database
-	var directory_error: Error = _ensure_database_directory(path)
+	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(path)
 	if directory_error == OK:
 		var save_error: Error = ResourceSaver.save(database, path)
 		if save_error != OK:
@@ -465,16 +491,3 @@ func _load_or_create_database(
 			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
 		)
 	return database
-
-
-func _database_path_has_incompatible_resource(path: String) -> bool:
-	# A resource that exists only in the cache reports true from ResourceLoader.exists()
-	# but has no file to conflict with, and CACHE_MODE_IGNORE cannot load it back.
-	if not FileAccess.file_exists(path):
-		return false
-	if not ResourceLoader.exists(path):
-		return false
-	var existing_resource: Resource = ResourceLoader.load(
-		path, "", ResourceLoader.CACHE_MODE_IGNORE
-	)
-	return not existing_resource is GameplayTagDatabase

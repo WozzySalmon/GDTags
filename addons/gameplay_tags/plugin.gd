@@ -104,24 +104,14 @@ static func _get_autoload_conflict() -> String:
 	return existing_value
 
 
-func _ensure_database_resource() -> void:
+static func _ensure_database_resource() -> void:
 	var path: String = GameplayTagUtils.get_database_path()
-	# FileAccess.file_exists() first: ResourceLoader.exists() also reports true for a
-	# cache-only resource, which has no file to overwrite and cannot be read back with
-	# CACHE_MODE_IGNORE.
-	if FileAccess.file_exists(path) and ResourceLoader.exists(path):
-		var existing_resource: Resource = (
-			ResourceLoader
-			. load(
-				path,
-				"",
-				ResourceLoader.CACHE_MODE_IGNORE,
-			)
-		)
-		if not existing_resource is GameplayTagDatabase:
-			push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
+	if GameplayTagUtils.database_path_conflicts(path):
+		push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return
-	var directory_error: Error = _ensure_database_directory(path)
+	if FileAccess.file_exists(path) and ResourceLoader.exists(path):
+		return
+	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(path)
 	if directory_error != OK:
 		push_error(
 			"Could not create gameplay tag database directory: %s" % error_string(directory_error)
@@ -162,13 +152,6 @@ func _load_database_for_generation() -> GameplayTagDatabase:
 		)
 		return null
 	return GameplayTagDatabase.new()
-
-
-func _ensure_database_directory(path: String) -> Error:
-	var directory: String = path.get_base_dir()
-	if directory.is_empty() or directory == "res://" or directory == "user://":
-		return OK
-	return DirAccess.make_dir_recursive_absolute(directory)
 
 
 func _remove_own_autoload() -> void:

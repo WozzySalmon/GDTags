@@ -24,8 +24,9 @@ navigation guidance; current source and tests are authoritative.
 
 - `addons/gameplay_tags/plugin.gd` owns editor-time setup: project settings, the `GameplayTags`
   autoload, the central database resource, generated IDs, inspector integration, and the tag dock.
-- `addons/gameplay_tags/runtime/gameplay_tags.gd` is the public autoload facade for database
-  operations, containers, queries, target-owned tags, node lookup, and CSV helpers.
+- `addons/gameplay_tags/runtime/gameplay_tags.gd` is the public `GameplayTags` autoload facade for
+  database operations, containers, queries, target-owned tags, node lookup, and CSV helpers. Its
+  script class is `GameplayTagRegistry`, which gives internal autoload lookups a concrete type.
 - `GameplayTagDatabase` owns canonical tag mutation, hierarchy maintenance, lookup caches, and
   `tags_changed` notification. Do not bypass its mutation methods.
 - Containers and queries represent runtime-owned tags and matching rules. Nodes own tags only
@@ -43,7 +44,8 @@ navigation guidance; current source and tests are authoritative.
 - `tests/test_editor_workflows.gd`: dock/plugin workflows and editor-facing state changes.
 - `tests/test_tag_lifecycle.gd`: owner-level stack depth, tag redirects, reference scanning, migration, and query diagnostics.
 - `tests/test_editor_picker_interactions.gd`: `EditorProperty` interactions; requires editor script mode.
-- `benchmarks/bench_10000_tags.gd`: large-tag-set mutation, cached lookup, and target-check performance.
+- `benchmarks/bench_10000_tags.gd`: large-tag-set mutation, parent restoration, cached lookup,
+  direct target-check, and query-match performance.
 - `docs/VALIDATION.md`: canonical local commands and supported Godot versions.
 - `docs/PACKAGING.md`: release ZIP contents and clean-install expectations.
 

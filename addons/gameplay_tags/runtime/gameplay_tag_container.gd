@@ -39,7 +39,7 @@ func set_tags(raw_tags: Array[StringName]) -> void:
 ## Adds one tag at a stack depth of one. Returns false if already present or unusable.
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or tags.has(tag):
+	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or tags.has(tag):
 		return false
 	var updated_tags: Array[StringName] = tags.duplicate()
 	updated_tags.append(tag)
@@ -57,7 +57,7 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 	for raw_tag in raw_tags:
 		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
 		var key: String = String(tag)
-		if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or existing.has(key):
+		if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or existing.has(key):
 			continue
 		existing[key] = tag
 		added += 1
@@ -206,7 +206,8 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	if tag_set.has_all(required_tags):
 		return true
 	for tag in required_tags:
-		if not has_tag(tag, exact):
+		var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(tag)
+		if normalized_tag != &"" and not tag_set.has(normalized_tag):
 			return false
 	return true
 

@@ -22,6 +22,7 @@ const TagCodeGenerator: Script = preload(
 
 var _query_change_count: int = 0
 var _database_change_count: int = 0
+var _component_change_count: int = 0
 
 
 func _suite_name() -> String:
@@ -163,6 +164,15 @@ func _test_database() -> void:
 	var orphan_database: GameplayTagDatabase = GameplayTagDatabase.new()
 	orphan_database.tags = [&"State.Stunned"]
 	assert_eq(orphan_database.validate().size(), 1, "Database should report missing parents")
+	_database_change_count = 0
+	orphan_database.tags_changed.connect(_on_database_changed)
+	assert_true(orphan_database.ensure_parent_tags(), "Missing parents should be restored")
+	assert_true(orphan_database.has_tag(&"State"))
+	assert_eq(
+		_database_change_count,
+		1,
+		"Restoring every missing parent should publish one database change",
+	)
 
 	var tag: GameplayTag = database.get_tag(&"State.Stunned.Heavy")
 	assert_true(tag != null, "get_tag should return a GameplayTag")
@@ -297,6 +307,10 @@ func _test_container() -> void:
 	)
 	var no_required_tags: Array[StringName] = []
 	assert_true(container.has_all(no_required_tags), "An empty ALL check should still match")
+	assert_true(
+		container.has_all([&" "]),
+		"Tags that normalize to empty should preserve vacuous ALL semantics",
+	)
 	assert_true(container.has_none([&"Damage.Ice"]), "has_none should reject overlaps")
 	assert_eq(container.overlap_count([&"State", &"Team.Enemy"]), 2)
 	assert_true(container.exact([GameplayTagIds.STATE_STUNNED, GameplayTagIds.TEAM_ENEMY]))
@@ -328,6 +342,10 @@ func _test_component_target_helpers() -> void:
 		"Component cache should satisfy canonical ALL checks",
 	)
 	assert_true(component.has_all([]), "An empty component ALL check should match")
+	assert_true(
+		component.has_all([&" "]),
+		"Component ALL checks should ignore tags that normalize to empty",
+	)
 	assert_false(
 		component.has_all([GameplayTagIds.TEAM_ENEMY, &"Missing.Tag"]),
 		"Component ALL checks should reject a missing tag",
@@ -351,6 +369,22 @@ func _test_component_target_helpers() -> void:
 		component.has_tag(GameplayTagIds.TEAM_ENEMY, true),
 		"Component assignment should rebuild exact cache entries",
 	)
+	_component_change_count = 0
+	component.owned_tags_changed.connect(_on_component_changed)
+	component.set_owned_gameplay_tags([GameplayTagIds.TEAM_ENEMY])
+	assert_eq(_component_change_count, 0, "Reapplying the same tags should be a no-op")
+	var batch_tags: Array[StringName] = [
+		GameplayTagIds.STATE_STUNNED,
+		GameplayTagIds.TEAM_ENEMY,
+	]
+	assert_eq(component.add_tags(batch_tags), 1, "Batch adds should report only new tags")
+	assert_eq(_component_change_count, 1, "A batch add should publish one component change")
+	assert_eq(
+		component.remove_tags([GameplayTagIds.STATE_STUNNED, &"Missing.Tag"]),
+		1,
+		"Batch removals should report owned tags",
+	)
+	assert_eq(_component_change_count, 2, "A batch removal should publish one component change")
 	assert_true(
 		registry.target_has_tag(actor, GameplayTagIds.TEAM), "Actor child component should be found"
 	)
@@ -385,6 +419,17 @@ func _test_component_target_helpers() -> void:
 	assert_true(
 		registry.target_has_all(null, no_required_tags),
 		"An empty ALL check should keep vacuous-truth semantics for a null target",
+	)
+	var ignored_tags: Array[StringName] = [&" "]
+	assert_true(registry.target_has_all(component, ignored_tags))
+	assert_true(registry.target_has_all(actor, ignored_tags))
+	assert_true(registry.target_has_all(owned, ignored_tags))
+	assert_true(registry.target_has_all(null, ignored_tags))
+	assert_false(registry.target_has_any(component, ignored_tags))
+	var normalized_required_tags: Array[StringName] = [&" Team / Enemy "]
+	assert_true(
+		registry.target_has_all(component, normalized_required_tags),
+		"Bulk target checks should preserve tag normalization",
 	)
 	actor.free()
 
@@ -465,6 +510,10 @@ func _test_component_lookup_is_bounded() -> void:
 	assert_true(
 		registry.target_has_all(actor, merged_tags),
 		"Every direct child component should contribute its tags",
+	)
+	assert_true(
+		GameplayTagQuery.all(merged_tags).matches(actor),
+		"Queries should match tags split across direct child components",
 	)
 
 	var nested_component: GameplayTagComponent = GameplayTagComponent.new()
@@ -752,14 +801,21 @@ func _test_tag_index() -> void:
 
 
 func _test_query_modes() -> void:
+	var actor: Node = Node.new()
 	var component: GameplayTagComponent = GameplayTagComponent.new()
-	root.add_child(component)
+	actor.add_child(component)
+	root.add_child(actor)
 	component.add_tag(&"State.Stunned")
 	component.add_tag(&"Team.Enemy")
 
+	var required_tags: Array[StringName] = [&"State", &"Team.Enemy"]
 	assert_true(
-		GameplayTagQuery.all([&"State", &"Team.Enemy"]).matches(component),
+		GameplayTagQuery.all(required_tags).matches(component),
 		"Queries should resolve tags directly from typed gameplay targets",
+	)
+	assert_true(
+		GameplayTagQuery.all(required_tags).matches(actor),
+		"Queries should match nodes without constructing an owned-tag container",
 	)
 	assert_true(
 		GameplayTagQuery.any([&"Damage.Fire", &"State"]).matches(
@@ -798,7 +854,11 @@ func _test_query_modes() -> void:
 	observed_query.mode = GameplayTagQuery.Mode.ANY
 	observed_query.exact = true
 	assert_eq(_query_change_count, 2, "Mode and exact changes should emit Resource.changed")
-	component.free()
+	actor.free()
+
+
+func _on_component_changed(_tags: Array[StringName]) -> void:
+	_component_change_count += 1
 
 
 func _on_query_changed() -> void:

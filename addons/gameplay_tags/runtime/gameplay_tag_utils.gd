@@ -19,6 +19,25 @@ static func get_tag_ids_path() -> String:
 	return resolve_setting_path(TAG_IDS_SETTING, DEFAULT_TAG_IDS_PATH)
 
 
+## Creates the parent directory for [param path] when it does not already exist.
+static func ensure_parent_directory(path: String) -> Error:
+	var directory: String = path.get_base_dir()
+	if directory.is_empty() or directory == "res://" or directory == "user://":
+		return OK
+	return DirAccess.make_dir_recursive_absolute(directory)
+
+
+## Returns whether [param path] contains a resource that is not a tag database.
+## Cache-only resources have no file to overwrite and therefore are not conflicts.
+static func database_path_conflicts(path: String) -> bool:
+	if not FileAccess.file_exists(path) or not ResourceLoader.exists(path):
+		return false
+	var existing_resource: Resource = ResourceLoader.load(
+		path, "", ResourceLoader.CACHE_MODE_IGNORE
+	)
+	return not existing_resource is GameplayTagDatabase
+
+
 ## Reads a project setting, honouring per-platform feature tag overrides such as
 ## [code]gameplay_tags/database_path.mobile[/code]. [method ProjectSettings.get_setting]
 ## ignores those overrides, so it is deliberately not used here.

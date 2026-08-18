@@ -62,8 +62,9 @@ and metadata are not inspected.
 
 The runtime API is deliberately strict: use `StringName` for individual tags and explicitly
 written `Array[StringName]` variables for tag collections. Arbitrary values are not converted
-into tag strings. Change component tags with `add_tag()`, `remove_tag()`, or
-`set_owned_gameplay_tags()` rather than mutating the exported `owned_tags` Array in place.
+into tag strings. Change component tags with `add_tag()`, `add_tags()`, `remove_tag()`,
+`remove_tags()`, or `set_owned_gameplay_tags()` rather than mutating the exported `owned_tags`
+Array in place.
 
 ## Project layout
 

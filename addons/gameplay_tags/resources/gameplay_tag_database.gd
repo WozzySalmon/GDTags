@@ -203,7 +203,7 @@ static func get_canonical_parent_tags(tag_name: StringName) -> Array[StringName]
 ## Adds one tag plus any missing parents. Returns whether it was added.
 func add_tag(raw_tag: StringName, description: String = "") -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
-	if tag == &"" or not is_valid_tag_name(tag) or has_tag(tag):
+	if tag == &"" or not is_canonical_tag_name(tag) or has_tag(tag):
 		return false
 
 	var added: bool = add_tags([tag]) == 1
@@ -238,7 +238,7 @@ func set_tag_description(raw_tag: StringName, description: String) -> bool:
 func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
 	var new_tag: StringName = normalize_tag(raw_new_tag)
-	if not has_tag(tag) or new_tag == &"" or not is_valid_tag_name(new_tag) or tag == new_tag:
+	if not has_tag(tag) or new_tag == &"" or not is_canonical_tag_name(new_tag) or tag == new_tag:
 		return false
 
 	var tag_text: String = String(tag)
@@ -279,7 +279,7 @@ func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 		updated_descriptions[renamed_description_key] = description
 
 	_prune_empty_old_parents(updated_tags, updated_descriptions, get_parent_tags(tag))
-	tags = canonicalize_tag_array(updated_tags)
+	tags = updated_tags
 	tag_descriptions = updated_descriptions
 	# Must follow the tag assignment: while the retired names are still registered, the
 	# "a live tag is never a redirect source" guard would drop each new entry on sight.
@@ -335,7 +335,7 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 	for raw_tag in raw_tags:
 		var tag: StringName = normalize_tag(raw_tag)
 		var key: String = String(tag)
-		if tag == &"" or not is_valid_tag_name(tag) or existing.has(key):
+		if tag == &"" or not is_canonical_tag_name(tag) or existing.has(key):
 			continue
 
 		for parent in get_canonical_parent_tags(tag):
@@ -349,7 +349,9 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 		changed = true
 
 	if changed:
-		tags = canonicalize_tag_array(existing.values())
+		var updated_tags: Array[StringName] = []
+		updated_tags.assign(existing.values())
+		tags = updated_tags
 	return added
 
 
@@ -445,15 +447,28 @@ func remove_tags(raw_tags: Array[StringName]) -> int:
 
 ## Creates missing parents for one tag, or for every tag when [param raw_tag] is empty.
 func ensure_parent_tags(raw_tag: StringName = &"") -> bool:
-	var changed: bool = false
-	if raw_tag == &"":
-		for tag in tags.duplicate():
-			for parent in get_canonical_parent_tags(tag):
-				changed = _add_tag_unchecked(parent) or changed
-	else:
-		for parent in get_parent_tags(raw_tag):
-			changed = _add_tag_unchecked(parent) or changed
+	var existing: Dictionary[String, StringName] = {}
+	for tag in tags:
+		existing[String(tag)] = tag
 
+	var source_tags: Array[StringName] = []
+	if raw_tag == &"":
+		source_tags = tags
+	else:
+		source_tags.append(normalize_tag(raw_tag))
+	var changed: bool = false
+	for source_tag in source_tags:
+		for parent in get_canonical_parent_tags(source_tag):
+			var parent_key: String = String(parent)
+			if existing.has(parent_key):
+				continue
+			existing[parent_key] = parent
+			changed = true
+
+	if changed:
+		var updated_tags: Array[StringName] = []
+		updated_tags.assign(existing.values())
+		tags = updated_tags
 	return changed
 
 
@@ -473,7 +488,7 @@ func set_state(
 		with_parents.append_array(get_canonical_parent_tags(tag))
 
 	_suppress_change_notifications = true
-	tags = canonicalize_valid_tag_array(with_parents)
+	tags = with_parents
 
 	var kept_descriptions: Dictionary[String, String] = {}
 	for description_key in descriptions:
@@ -522,7 +537,7 @@ func add_redirect(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 		return false
 	if has_tag(from_tag):
 		return false
-	if not is_valid_tag_name(from_tag) or not is_valid_tag_name(to_tag):
+	if not is_canonical_tag_name(from_tag) or not is_canonical_tag_name(to_tag):
 		return false
 	if tag_redirects.get(from_tag, &"") == to_tag:
 		return false
@@ -609,25 +624,17 @@ func find_tags(search_text: String = "") -> Array[StringName]:
 	return found
 
 
-## Returns a list of problems: empty, duplicate, malformed, or orphaned tags.
+## Returns a list of missing-parent and redirect problems.
+## Empty, duplicate, and malformed names cannot survive the [member tags] setter.
 func validate() -> Array[String]:
 	var errors: Array[String] = []
-	var seen: Dictionary[String, bool] = {}
 	var missing_parent_errors: Dictionary[String, bool] = {}
 	for tag in tags:
-		var text: String = String(tag)
-		if text.is_empty():
-			errors.append("Empty gameplay tag")
-		elif seen.has(text):
-			errors.append("Duplicate gameplay tag: %s" % text)
-		elif not is_valid_tag_name(tag):
-			errors.append("Invalid gameplay tag: %s" % text)
 		for parent in get_canonical_parent_tags(tag):
 			var parent_text: String = String(parent)
 			if not has_tag(parent) and not missing_parent_errors.has(parent_text):
 				errors.append("Missing parent gameplay tag: %s" % parent_text)
 				missing_parent_errors[parent_text] = true
-		seen[text] = true
 
 	for retired_tag in tag_redirects:
 		var retired_text: String = String(retired_tag)
@@ -645,15 +652,6 @@ func validate() -> Array[String]:
 				)
 			)
 	return errors
-
-
-func _add_tag_unchecked(tag: StringName) -> bool:
-	if tag == &"" or has_tag(tag):
-		return false
-	var updated_tags: Array[StringName] = tags.duplicate()
-	updated_tags.append(tag)
-	tags = canonicalize_tag_array(updated_tags)
-	return true
 
 
 func _has_children(tag: StringName) -> bool:

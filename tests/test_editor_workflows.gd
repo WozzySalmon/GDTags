@@ -20,6 +20,7 @@ func _run_tests() -> void:
 		_test_csv_import_reports_id_generation_failure,
 	)
 	run_test("cache_only_resource_is_not_a_conflict", _test_cache_only_resource_is_not_a_conflict)
+	run_test("plugin_preserves_existing_database", _test_plugin_preserves_existing_database)
 	run_test("undo_targets_its_own_database", _test_undo_targets_its_own_database)
 
 
@@ -56,6 +57,29 @@ func _test_cache_only_resource_is_not_a_conflict() -> void:
 		TagDockIo.database_path_conflicts(path),
 		"A cache-only resource has no file to overwrite and must not count as a conflict",
 	)
+
+
+func _test_plugin_preserves_existing_database() -> void:
+	var original_path: String = GameplayTagUtils.get_database_path()
+	var path: String = "user://gameplay_tags_plugin_existing_database.tres"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	database.add_tag(&"Existing.Tag")
+	assert_eq(ResourceSaver.save(database, path), OK)
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, path)
+
+	PluginScript._ensure_database_resource()
+	var loaded: GameplayTagDatabase = (
+		ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_REPLACE) as GameplayTagDatabase
+	)
+	assert_true(
+		loaded != null and loaded.has_tag(&"Existing.Tag"),
+		"Plugin startup must not overwrite an existing tag database",
+	)
+
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, original_path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _test_undo_targets_its_own_database() -> void:

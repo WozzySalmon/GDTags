@@ -104,18 +104,25 @@ func _test_runtime_mutations() -> void:
 	_query_change_count = 0
 	query.changed.connect(_on_query_changed)
 	assert_true(query.add_tag(&"State"))
-	assert_eq(query.add_tags([&"Team.Enemy", &"Damage.Fire", &"State"]), 2)
+	var query_batch: Array[StringName] = [
+		&"Team.Enemy",
+		&"Damage.Fire",
+		&"State",
+		&"Team.Enemy",
+		&"Bad@Tag",
+	]
+	assert_eq(query.add_tags(query_batch), 2)
 	assert_true(
 		query.matches(GameplayTagContainer.new([&"State.Stunned", &"Team.Enemy", &"Damage.Fire"]))
 	)
 	assert_true(query.remove_tag(&"Damage.Fire"))
-	assert_eq(query.remove_tags([&"State", &"Missing.Tag"]), 1)
+	assert_eq(query.remove_tags([&"State", &"State", &"Missing.Tag"]), 1)
 	query.clear()
 	assert_true(query.tags.is_empty())
 	assert_eq(
 		_query_change_count,
-		6,
-		"Each effective query mutation should emit Resource.changed exactly once",
+		5,
+		"Each single or batch query mutation should emit Resource.changed exactly once",
 	)
 	assert_false(GameplayTagQuery.all([&"State"]).matches(null))
 

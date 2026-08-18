@@ -1,6 +1,8 @@
 @tool
 extends EditorProperty
 
+const TagDockTree: Script = preload("res://addons/gameplay_tags/editor/tag_dock_tree.gd")
+
 const VALUE_STRING_NAME: int = 0
 const VALUE_RESOURCE: int = 1
 
@@ -172,43 +174,14 @@ func _refresh_popup_list() -> void:
 	var known_tags: Array[StringName] = database.find_tags(
 		_search_box.text if _search_box != null else ""
 	)
-	var tree_tags: Array[StringName] = _include_ancestor_tags(database, known_tags)
-	var root: TreeItem = _tag_tree.create_item()
-	var items_by_tag: Dictionary[StringName, TreeItem] = {}
-	for tag in tree_tags:
-		var tag_text: String = String(tag)
-		var parent_item: TreeItem = root
-		var separator_index: int = tag_text.rfind(".")
-		if separator_index >= 0:
-			var parent_tag: StringName = StringName(tag_text.left(separator_index))
-			parent_item = items_by_tag.get(parent_tag, root)
-		var item: TreeItem = _tag_tree.create_item(parent_item)
-		item.set_text(0, tag_text.get_slice(".", tag_text.get_slice_count(".") - 1))
-		item.set_metadata(0, tag)
-		var description: String = String(database.tag_descriptions.get(tag_text, ""))
-		item.set_tooltip_text(
-			0, tag_text if description.is_empty() else "%s\n%s" % [tag_text, description]
-		)
-		items_by_tag[tag] = item
-		if tag == _current_tag:
-			item.select(0)
+	var tree_tags: Array[StringName] = TagDockTree.include_ancestor_tags(database, known_tags)
+	var items_by_tag: Dictionary[StringName, TreeItem] = TagDockTree.populate(
+		_tag_tree, database, tree_tags
+	)
+	if items_by_tag.has(_current_tag):
+		items_by_tag[_current_tag].select(0)
 	_status_label.text = _get_status_text(database)
 	_updating = was_updating
-
-
-func _include_ancestor_tags(
-	database: GameplayTagDatabase,
-	matched_tags: Array[StringName],
-) -> Array[StringName]:
-	var tree_tags: Array[StringName] = matched_tags.duplicate()
-	for tag in matched_tags:
-		var parent_text: String = String(tag)
-		while parent_text.contains("."):
-			parent_text = parent_text.left(parent_text.rfind("."))
-			var parent_tag: StringName = StringName(parent_text)
-			if database.has_tag(parent_tag) and not tree_tags.has(parent_tag):
-				tree_tags.append(parent_tag)
-	return GameplayTagDatabase.canonicalize_tag_array(tree_tags)
 
 
 func _get_status_text(database: GameplayTagDatabase) -> String:
@@ -229,8 +202,8 @@ func _tag_from_dynamic_value(value: Variant) -> StringName:
 
 
 func _get_database() -> GameplayTagDatabase:
-	var registry: Node = _get_registry()
-	if registry != null and registry.has_method("get_database"):
+	var registry: GameplayTagRegistry = _get_registry()
+	if registry != null:
 		return registry.get_database()
 	var path: String = GameplayTagUtils.get_database_path()
 	if ResourceLoader.exists(path):
@@ -238,5 +211,5 @@ func _get_database() -> GameplayTagDatabase:
 	return null
 
 
-func _get_registry() -> Node:
-	return GameplayTagUtils.get_registry(self)
+func _get_registry() -> GameplayTagRegistry:
+	return GameplayTagUtils.get_registry(self) as GameplayTagRegistry

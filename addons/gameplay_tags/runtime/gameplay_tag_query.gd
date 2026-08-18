@@ -78,10 +78,13 @@ static func compose(query_mode: Mode, nested_queries: Array[GameplayTagQuery]) -
 ## Returns whether [param target] satisfies this query.
 ## Accepts a container, component, or node with direct tag component children.
 func matches(target: Object) -> bool:
-	var container: GameplayTagContainer = _container_from_target(target)
-	if container == null:
+	if (
+		not target is GameplayTagContainer
+		and not target is GameplayTagComponent
+		and not target is Node
+	):
 		return false
-	return _matches_container(container, 0)
+	return _matches_target(target, 0)
 
 
 ## Returns a human-readable trace of how [param target] was evaluated, one line per
@@ -105,8 +108,8 @@ func explain(target: Object) -> String:
 func validate(database: GameplayTagDatabase = null) -> PackedStringArray:
 	var resolved_database: GameplayTagDatabase = database
 	if resolved_database == null:
-		var registry: Node = GameplayTagUtils.get_registry()
-		if registry != null and registry.has_method("get_database"):
+		var registry: GameplayTagRegistry = GameplayTagUtils.get_registry() as GameplayTagRegistry
+		if registry != null:
 			resolved_database = registry.get_database()
 
 	var issues: PackedStringArray = PackedStringArray()
@@ -115,7 +118,7 @@ func validate(database: GameplayTagDatabase = null) -> PackedStringArray:
 	return issues
 
 
-func _matches_container(container: GameplayTagContainer, depth: int) -> bool:
+func _matches_target(target: Object, depth: int) -> bool:
 	if depth >= MAX_SUB_QUERY_DEPTH:
 		return false
 
@@ -123,15 +126,50 @@ func _matches_container(container: GameplayTagContainer, depth: int) -> bool:
 	# how the clauses combine, so all three modes share the same walk.
 	var own_tags_matched: bool = false
 	if mode == Mode.ALL:
-		own_tags_matched = container.has_all(tags, exact)
+		own_tags_matched = _target_has_all(target)
 	else:
-		own_tags_matched = container.has_any(tags, exact)
+		own_tags_matched = _target_has_any(target)
 
 	var matched: bool = _combine_clause(mode != Mode.ANY, own_tags_matched)
 	for sub_query in sub_queries:
 		if sub_query != null:
-			matched = _combine_clause(matched, sub_query._matches_container(container, depth + 1))
+			matched = _combine_clause(matched, sub_query._matches_target(target, depth + 1))
 	return matched
+
+
+func _target_has_any(target: Object) -> bool:
+	if target is GameplayTagContainer:
+		return target.has_any(tags, exact)
+	if target is GameplayTagComponent:
+		return target.has_any(tags, exact)
+	var node: Node = target as Node
+	for child_index in range(node.get_child_count()):
+		var child: Node = node.get_child(child_index)
+		if child is GameplayTagComponent and child.has_any(tags, exact):
+			return true
+	return false
+
+
+func _target_has_all(target: Object) -> bool:
+	if target is GameplayTagContainer:
+		return target.has_all(tags, exact)
+	if target is GameplayTagComponent:
+		return target.has_all(tags, exact)
+	var node: Node = target as Node
+	for child_index in range(node.get_child_count()):
+		var child: Node = node.get_child(child_index)
+		if child is GameplayTagComponent and child.has_all(tags, exact):
+			return true
+	for tag in tags:
+		var found: bool = false
+		for child_index in range(node.get_child_count()):
+			var child: Node = node.get_child(child_index)
+			if child is GameplayTagComponent and child.has_tag(tag, exact):
+				found = true
+				break
+		if not found:
+			return false
+	return true
 
 
 func _combine_clause(current: bool, clause_matched: bool) -> bool:
@@ -313,7 +351,7 @@ func remove_sub_query(sub_query: GameplayTagQuery) -> bool:
 ## Adds one tag to this query. Returns false if already present or unusable.
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_valid_tag_name(tag) or tags.has(tag):
+	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or tags.has(tag):
 		return false
 	var updated_tags: Array[StringName] = tags.duplicate()
 	updated_tags.append(tag)
@@ -323,11 +361,11 @@ func add_tag(raw_tag: StringName) -> bool:
 
 ## Adds several tags and returns how many were new.
 func add_tags(raw_tags: Array[StringName]) -> int:
-	var added: int = 0
-	for raw_tag in raw_tags:
-		if add_tag(raw_tag):
-			added += 1
-	return added
+	var before: int = tags.size()
+	var updated_tags: Array[StringName] = tags.duplicate()
+	updated_tags.append_array(raw_tags)
+	tags = updated_tags
+	return tags.size() - before
 
 
 ## Removes one tag and returns whether it was present.
@@ -343,10 +381,19 @@ func remove_tag(raw_tag: StringName) -> bool:
 
 ## Removes several tags and returns how many were present.
 func remove_tags(raw_tags: Array[StringName]) -> int:
-	var removed: int = 0
+	var remove_set: Dictionary[StringName, bool] = {}
 	for raw_tag in raw_tags:
-		if remove_tag(raw_tag):
-			removed += 1
+		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+		if tag != &"":
+			remove_set[tag] = true
+
+	var kept_tags: Array[StringName] = []
+	for tag in tags:
+		if not remove_set.has(tag):
+			kept_tags.append(tag)
+	var removed: int = tags.size() - kept_tags.size()
+	if removed > 0:
+		tags = kept_tags
 	return removed
 
 
@@ -375,7 +422,9 @@ func _container_from_target(target: Object) -> GameplayTagContainer:
 		return target.get_owned_gameplay_tags()
 	if not target is Node:
 		return null
-	var registry: Node = GameplayTagUtils.get_registry()
-	if registry != null and registry.has_method("get_owned_gameplay_tags"):
-		return registry.get_owned_gameplay_tags(target) as GameplayTagContainer
-	return null
+	var owned_tags: Array[StringName] = []
+	for child_index in range(target.get_child_count()):
+		var child: Node = target.get_child(child_index)
+		if child is GameplayTagComponent:
+			owned_tags.append_array(child.owned_tags)
+	return GameplayTagContainer.new(owned_tags)

@@ -63,8 +63,8 @@ or `GameplayTagContainer` directly.
 When upgrading from an earlier version, move tags assigned through `set_node_tags()` or
 `add_tag_to_node()` onto a component; the direct metadata APIs have been removed.
 
-At runtime, change a component through `add_tag()`, `remove_tag()`, or
-`set_owned_gameplay_tags()`. Do not mutate `owned_tags` with `append()`, `erase()`, or
+At runtime, change a component through `add_tag()`, `add_tags()`, `remove_tag()`,
+`remove_tags()`, or `set_owned_gameplay_tags()`. Do not mutate `owned_tags` with `append()`, `erase()`, or
 `clear()`; in-place Array changes bypass validation, signals, and the tag lookup index.
 
 ## Stacking

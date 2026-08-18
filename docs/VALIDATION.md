@@ -52,10 +52,12 @@ tools/linux/package_addon.sh
 tools/linux/test_package_install.sh
 ```
 
-The benchmark measures 10,000-tag database mutation, cached hierarchical lookups, and 100,000
-direct checks against components, nodes, and containers. It reports the peak database size before
-removal separately from the parent skeleton left afterward. The benchmark fails above a deliberately
-generous 5,000 ms regression ceiling. Override it for a known slower machine with
+The benchmark measures 10,000-tag database mutation, parent restoration, cached hierarchical
+lookups, 100,000 single-tag and 100,000 bulk checks against each of components, nodes, and
+containers (600,000 direct checks total), and 100,000 query matches against each target type
+(300,000 total). It reports the peak database
+size before removal separately from the parent skeleton left afterward. The benchmark fails above a
+deliberately generous 5,000 ms regression ceiling. Override it for a known slower machine with
 `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
 
 Override the Godot executable when needed:

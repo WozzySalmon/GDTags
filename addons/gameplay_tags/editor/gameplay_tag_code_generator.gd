@@ -24,7 +24,7 @@ static func save_tag_ids(
 	if ownership_error != OK:
 		return ownership_error
 
-	var directory_error: Error = _ensure_directory(clean_path)
+	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(clean_path)
 	if directory_error != OK:
 		return directory_error
 
@@ -210,10 +210,3 @@ static func _is_ascii_digit(character: String) -> bool:
 
 static func _is_ascii_digit_code(code: int) -> bool:
 	return code >= 48 and code <= 57
-
-
-static func _ensure_directory(path: String) -> Error:
-	var directory: String = path.get_base_dir()
-	if directory.is_empty() or directory == "res://" or directory == "user://":
-		return OK
-	return DirAccess.make_dir_recursive_absolute(directory)

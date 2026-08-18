@@ -68,6 +68,8 @@ func _test_owner_level_stacking() -> void:
 		3,
 		"Stacking again should keep increasing the depth",
 	)
+	var state_query: GameplayTagQuery = GameplayTagQuery.all([GameplayTagIds.STATE])
+	assert_true(state_query.matches(component), "Queries should match stacked component tags")
 
 	# The point of owner-level stacking: depth survives the autoload's resolution,
 	# which previously rebuilt a container and dropped every count.
@@ -335,12 +337,12 @@ func _test_redirect_resolution() -> void:
 	actor.add_child(component)
 	root.add_child(actor)
 
-	var retired_tags: Array[StringName] = [&"State.Stunned"]
+	var retired_tags: Array[StringName] = [&"State.Stunned", &"State.Incapacitated"]
 	component.owned_tags = retired_tags
 	assert_eq(
 		component.owned_tags,
 		[&"State.Incapacitated"] as Array[StringName],
-		"Authored tags naming a retired branch should be stored as the replacement",
+		"Retired and replacement names should resolve to one stored tag",
 	)
 	assert_true(
 		registry.target_has_tag(actor, &"State.Incapacitated"),
