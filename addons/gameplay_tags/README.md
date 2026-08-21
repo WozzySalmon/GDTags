@@ -22,9 +22,12 @@ if GameplayTags.target_has_tag(player, GameplayTagIds.STATE_STUNNED):
 4. Add a `GameplayTagComponent` child to any node that should own tags, and pick its
    `owned_tags` in the Inspector.
 
-Enabling the plugin creates the `GameplayTags` autoload, the tag database, and the
-generated constants script. It refuses to replace a different autoload of the same
-name, or to overwrite a file it did not generate.
+Enabling the plugin creates the `GameplayTags` autoload, tag database, and generated constants
+script when they are missing. It leaves an existing `GameplayTagDatabase` at the configured path
+untouched and refuses to replace a different resource or autoload.
+
+Use `GameplayTags` as the singleton name in gameplay code. Its script class is
+`GameplayTagRegistry`, which exists for typed references to that singleton.
 
 ## Tags are hierarchical
 
@@ -45,8 +48,13 @@ GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM, true)  # false
 Parents are created for you: adding `State.Stunned.Heavy` also registers `State` and
 `State.Stunned`.
 
-Tag names are normalized before storage — surrounding whitespace trimmed, `/` and `\`
-turned into `.`, spaces removed inside segments. Segments may use `A-Z a-z 0-9 _ -`.
+Tag names are normalized before storage. The database trims surrounding whitespace, converts `/`
+and `\` to `.`, removes spaces inside segments, and drops empty segments. Segments may use
+`A-Z a-z 0-9 _ -`.
+
+An empty list satisfies `has_all()` and `target_has_all()`. Entries that normalize to an empty name,
+such as a whitespace-only string, are ignored by these `ALL` checks. They do not satisfy
+`has_any()`.
 
 ## Generated constants
 
@@ -64,8 +72,12 @@ When upgrading from an earlier version, move tags assigned through `set_node_tag
 `add_tag_to_node()` onto a component; the direct metadata APIs have been removed.
 
 At runtime, change a component through `add_tag()`, `add_tags()`, `remove_tag()`,
-`remove_tags()`, or `set_owned_gameplay_tags()`. Do not mutate `owned_tags` with `append()`, `erase()`, or
-`clear()`; in-place Array changes bypass validation, signals, and the tag lookup index.
+`remove_tags()`, or `set_owned_gameplay_tags()`. Do not mutate `owned_tags` with `append()`, `erase()`,
+or `clear()`. In-place Array changes bypass validation, signals, and the tag lookup index.
+
+A component emits `owned_tags_changed(tags)` after an effective tag or stack update. Batch add and
+remove calls emit at most once for the whole batch. Replacing the tags with the same filtered set
+emits nothing.
 
 ## Stacking
 
@@ -103,9 +115,13 @@ the retired name resolves to its replacement instead of being dropped.
 it returns `false` for a retired name. `GameplayTags.is_valid_tag()` is the authored-data
 check: it follows redirects and returns `true` when the retired name has a valid replacement.
 
-When you are ready to finish the job, **Tools > Migrate Renamed Tags** rewrites the
-references themselves, in both scripts and scenes. Only whole tag names are replaced,
-so renaming `State` will not corrupt `StateMachine`. Commit before running it.
+When you are ready to finish the job, **Tools > Migrate Renamed Tags** rewrites references in
+scripts and scenes. Only whole tag names are replaced, so renaming `State` will not corrupt
+`StateMachine`. Commit before running it.
+
+`GameplayTagDatabase.validate()` reports missing parents and redirect problems. Empty, duplicate,
+and malformed names cannot survive the database setter, so validation does not report those
+unreachable states.
 
 ## Finding unused tags
 
@@ -115,19 +131,37 @@ child is not counted as unused, so the list stays short enough to act on. The sc
 conservative: an unrelated quoted string equal to a tag may count as a reference, so
 review the reported locations before removing or migrating tags.
 
-## Debugging a query
+## Building and debugging queries
 
-When a `GameplayTagQuery` gives an answer you did not expect, ask it why:
+Build query resources with `GameplayTags.make_query_all()`, `make_query_any()`, or
+`make_query_none()`. `matches()` accepts a container, component, or node with direct tag component
+children.
+
+```gdscript
+var required_tags: Array[StringName] = [
+	GameplayTagIds.STATE_STUNNED,
+	GameplayTagIds.DAMAGE_FIRE,
+]
+var vulnerable: GameplayTagQuery = GameplayTags.make_query_all(required_tags)
+
+if vulnerable.matches(target):
+	apply_bonus_damage(target)
+```
+
+Queries also provide `GameplayTagQuery.all()`, `any()`, `none()`, and `compose()` constructors.
+Use `add_sub_query()` to nest conditions such as "Fire or Ice, and not Immune." Batch tag changes
+through `add_tags()` and `remove_tags()` emit at most one `changed` notification.
+
+When a query gives an unexpected answer, print its trace:
 
 ```gdscript
 print(vulnerable.explain(target))
 ```
 
-It prints a line per clause and the tags responsible, ending in the verdict.
-`validate()` separately reports unregistered tags, queries that can never match, tags
-that are both required and forbidden, cycles, and trees deeper than 16 query nodes.
-Empty `ALL` and `NONE` queries match by vacuous truth; an empty `ANY` never matches and
-is reported by `validate()`.
+The trace prints one line per clause, the responsible tags, and the verdict. `validate()` reports
+unregistered tags, queries that can never match, tags that are both required and forbidden, cycles,
+and trees deeper than 16 query nodes. Empty `ALL` and `NONE` queries match by vacuous truth. An empty
+`ANY` never matches and is reported by `validate()`.
 
 ## Settings
 

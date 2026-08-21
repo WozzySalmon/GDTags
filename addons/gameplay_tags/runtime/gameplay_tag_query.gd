@@ -360,6 +360,7 @@ func add_tag(raw_tag: StringName) -> bool:
 
 
 ## Adds several tags and returns how many were new.
+## Emits the Resource [signal Resource.changed] signal at most once for the whole batch.
 func add_tags(raw_tags: Array[StringName]) -> int:
 	var before: int = tags.size()
 	var updated_tags: Array[StringName] = tags.duplicate()
@@ -380,6 +381,7 @@ func remove_tag(raw_tag: StringName) -> bool:
 
 
 ## Removes several tags and returns how many were present.
+## Emits the Resource [signal Resource.changed] signal at most once for the whole batch.
 func remove_tags(raw_tags: Array[StringName]) -> int:
 	var remove_set: Dictionary[StringName, bool] = {}
 	for raw_tag in raw_tags:

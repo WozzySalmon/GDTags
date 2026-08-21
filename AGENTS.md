@@ -14,16 +14,20 @@ Current source and tests outrank every document here.
 |---|---|---|
 | `var x: int = 1` | `var x := 1` | Explicit types everywhere: variables, constants, parameters, returns. |
 | `GameplayTags` autoload | `GameplayTagDatabase` directly | The autoload is the public facade for target checks, containers, queries, and database operations. |
-| `add_tag()`, `remove_tag()`, `rename_tag()`, `ensure_parent_tags()` | assigning `GameplayTagDatabase.tags` | Direct assignment skips hierarchy maintenance and change signals. |
+| `add_tag()`, `add_tags()`, `remove_tag()`, `rename_tag()`, `ensure_parent_tags()` | assigning `GameplayTagDatabase.tags` | Direct assignment skips hierarchy maintenance and change signals. |
+| component/query `add_tags()` and `remove_tags()` | repeated single-tag loops | Batch methods filter once and send at most one change notification. |
 | `GameplayTagIds.TEAM_ENEMY` | `&"Team.Enemy"` | Generated constants survive renames and are found by the reference index. |
 | `GameplayTagComponent` | node groups | Groups are the tag index's private business, not an authoring surface. |
 | `has_tag()`, `has_any()`, `has_all()`, `has_none()` | short aliases like `has()`, `any()`, `all()` | One name per operation. `GameplayTagComponent`, `GameplayTagDatabase`, and the autoload all use the long form, so a second spelling on containers and queries only doubles the surface to document and test. |
 | `GameplayTagUtils.DATABASE_SETTING` and friends | repeating `"gameplay_tags/database_path"` | Setting names and default paths live in one place. |
 | `GameplayTagUtils.resolve_setting_path()` | `ProjectSettings.get_setting()` | The latter silently ignores per-platform feature-tag overrides. |
+| `GameplayTagUtils.ensure_parent_directory()` and `database_path_conflicts()` | local editor copies | File creation and conflict rules must agree across plugin, dock, and code generation. |
+| `TagDockTree.populate()` and `include_ancestor_tags()` | separate picker tree builders | The dock and Inspector must display the same hierarchy and search ancestors. |
 | `resolve_tag()` on authored tag names | assuming the name is current | A tag renamed earlier resolves through its redirect instead of being dropped. |
 | stack methods on `GameplayTagComponent` | stack methods on a resolved container | `get_owned_gameplay_tags()` returns a fresh copy; stacking it changes nothing. |
 | `FileAccess.file_exists()` | `ResourceLoader.exists()` as proof of a file | `exists()` also returns true for a cache-only resource with no file behind it. |
 | `tools/linux/query_godot_api.py` | the online class reference | The project targets Godot 4.6; the web docs show whatever is current. |
+| `get_child_count()` with `get_child(index)` | `get_children()` in target-check loops | Indexed traversal avoids allocating a child Array for each check. |
 
 `Variant` is for engine boundaries only — `EditorProperty` values, `Object.call`
 returns, undo/redo parameters. Convert to a concrete type at the boundary and never
@@ -45,6 +49,7 @@ The addon implementation stays pure GDScript.
    is running.
 
 `docs/VALIDATION.md` and `docs/PACKAGING.md` are the canonical command references.
+Run ZIP packaging and clean-install validation only for a final release candidate.
 
 ## Tests
 

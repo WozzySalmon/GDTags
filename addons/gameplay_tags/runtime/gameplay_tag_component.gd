@@ -5,6 +5,7 @@ extends Node
 ## Add it as a direct child of the node that should own the tags; components nested
 ## deeper do not contribute. Every direct child component of a node is merged.
 
+## Emitted once after an effective tag or stack update. No-op tag assignments emit nothing.
 signal owned_tags_changed(tags: Array[StringName])
 
 const GROUP_NAME: StringName = &"gameplay_tag_components"
@@ -52,6 +53,7 @@ func get_owned_gameplay_tags() -> GameplayTagContainer:
 
 
 ## Replaces every owned tag, applying the same validation as the exported property.
+## Does nothing when filtering produces the currently owned set.
 func set_owned_gameplay_tags(raw_tags: Array[StringName]) -> void:
 	owned_tags = raw_tags
 
@@ -73,6 +75,7 @@ func add_tag(raw_tag: StringName) -> bool:
 
 
 ## Adds several tags and returns how many were new.
+## Emits [signal owned_tags_changed] at most once for the whole batch.
 func add_tags(raw_tags: Array[StringName]) -> int:
 	var previous_tags: Array[StringName] = owned_tags.duplicate()
 	var updated_tags: Array[StringName] = owned_tags.duplicate()
@@ -98,6 +101,7 @@ func remove_tag(raw_tag: StringName) -> bool:
 
 
 ## Removes several tags and all their stacks. Returns how many were present.
+## Emits [signal owned_tags_changed] at most once for the whole batch.
 func remove_tags(raw_tags: Array[StringName]) -> int:
 	var remove_set: Dictionary[StringName, bool] = {}
 	for raw_tag in raw_tags:
@@ -205,6 +209,7 @@ func has_any(required_tags: Array[StringName], exact: bool = false) -> bool:
 
 
 ## Returns whether this component owns every one of [param required_tags].
+## An empty list matches, and entries that normalize to an empty name are ignored.
 func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
 	if tag_set.has_all(required_tags):

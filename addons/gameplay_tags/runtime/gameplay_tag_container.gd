@@ -6,6 +6,7 @@ extends Resource
 ## is released only when the last stack is removed. Stack depth is runtime state and
 ## is not serialized.
 
+## Emitted once after an effective tag or stack update. No-op tag assignments emit nothing.
 signal tags_changed
 
 @export var tags: Array[StringName] = []:
@@ -31,7 +32,7 @@ func _init(initial_tags: Array[StringName] = []) -> void:
 		tags = initial_tags
 
 
-## Replaces every tag in this container.
+## Replaces every tag in this container. Does nothing when canonicalization changes nothing.
 func set_tags(raw_tags: Array[StringName]) -> void:
 	tags = raw_tags
 
@@ -48,6 +49,7 @@ func add_tag(raw_tag: StringName) -> bool:
 
 
 ## Adds several tags and returns how many were new.
+## Emits [signal tags_changed] at most once for the whole batch.
 func add_tags(raw_tags: Array[StringName]) -> int:
 	var existing: Dictionary[String, StringName] = {}
 	for tag in tags:
@@ -155,6 +157,7 @@ func remove_tag(raw_tag: StringName) -> bool:
 
 
 ## Removes several tags and returns how many were present.
+## Emits [signal tags_changed] at most once for the whole batch.
 func remove_tags(raw_tags: Array[StringName]) -> int:
 	var remove_set: Dictionary[String, bool] = {}
 	for raw_tag in raw_tags:
@@ -200,7 +203,8 @@ func has_any(required_tags: Array[StringName], exact: bool = false) -> bool:
 	return false
 
 
-## Returns whether every one of [param required_tags] is owned. An empty list matches.
+## Returns whether every one of [param required_tags] is owned.
+## An empty list matches, and entries that normalize to an empty name are ignored.
 func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
 	if tag_set.has_all(required_tags):

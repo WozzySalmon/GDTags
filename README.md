@@ -49,22 +49,31 @@ func _on_body_entered(body: Node) -> void:
 - `GameplayTags.get_owned_gameplay_tags(target: Object)`.
 - `GameplayTags.target_has_any(target: Object, tags: Array[StringName], exact: bool = false)`.
 - `GameplayTags.target_has_all(target: Object, tags: Array[StringName], exact: bool = false)`.
+- `GameplayTags.add_tag(...)`, `add_tags(...)`, `remove_tag(...)`, and `rename_tag(...)` mutate the central catalog.
+- `GameplayTags.ensure_parent_tags(...)` restores missing hierarchy parents.
 - `GameplayTags.set_tag_description(tag: StringName, description: String, save_now: bool = true)`.
-- `GameplayTags.rename_tag(tag: StringName, new_tag: StringName, save_now: bool = true)`.
+- `GameplayTags.make_container(...)` and `make_query_all(...)` / `make_query_any(...)` / `make_query_none(...)` build runtime checks.
 - `GameplayTags.get_tagged_nodes(root)`.
 - `GameplayTags.get_nodes_with_tag(root: Node, tag: StringName, exact: bool = false)`.
 - `GameplayTags.import_tags_from_csv(path)` / `export_tags_to_csv(path)`.
 - `GameplayTagComponent` - the only way nodes own tags; attach it as a direct child.
 
-Target resolution is deliberately explicit: checks accept a `GameplayTagContainer`, a
-`GameplayTagComponent`, or a node with direct component children. Arbitrary methods, properties,
-and metadata are not inspected.
+Target resolution is explicit. Checks accept a `GameplayTagContainer`, a
+`GameplayTagComponent`, or a node with direct component children. They do not inspect arbitrary
+methods, properties, metadata, or nested descendants.
 
-The runtime API is deliberately strict: use `StringName` for individual tags and explicitly
-written `Array[StringName]` variables for tag collections. Arbitrary values are not converted
-into tag strings. Change component tags with `add_tag()`, `add_tags()`, `remove_tag()`,
-`remove_tags()`, or `set_owned_gameplay_tags()` rather than mutating the exported `owned_tags`
-Array in place.
+`GameplayTags` is the singleton used by gameplay code. The same script registers
+`GameplayTagRegistry` as its class name so addon code and typed helpers can refer to the singleton's
+concrete type.
+
+Use `StringName` for individual tags and explicit `Array[StringName]` variables for collections.
+The API does not convert arbitrary values into tag strings. Change component tags with `add_tag()`,
+`add_tags()`, `remove_tag()`, `remove_tags()`, or `set_owned_gameplay_tags()` rather than mutating
+`owned_tags` in place. Batch component and query mutations send one change notification. Replacing
+an existing filtered tag set with the same values sends none.
+
+An empty tag list satisfies `has_all()` and `target_has_all()`. Entries that normalize to an empty
+name are ignored by these `ALL` checks and do not satisfy `has_any()`.
 
 ## Project layout
 
@@ -84,21 +93,22 @@ tools/windows/          Windows test/package helpers
 tools/linux/check_gdscript.sh
 ```
 
-Smoke-test configured Godot versions, run the benchmark, and build a package:
+Test the configured Godot versions and run the performance benchmark:
 
 ```bash
 tools/linux/test_all_godot_versions.sh
 tools/linux/benchmark.sh
-tools/linux/package_addon.sh
 ```
 
-Windows:
+Windows development checks:
 
 ```bat
 tools\windows\check_gdscript.cmd
 tools\windows\test_addon.cmd
-tools\windows\package_addon.cmd
 ```
+
+Build ZIPs and run clean-install checks only for a final release candidate. See
+`docs/PACKAGING.md` for the Linux and Windows package commands.
 
 ## Docs
 
@@ -110,3 +120,4 @@ tools\windows\package_addon.cmd
 - `docs/GDSCRIPT_STYLE.md` - GDScript style guide for this repo.
 - `docs/PROJECT_MAP.md` - where things live, for anyone changing the code.
 - `AGENTS.md` - what to use and what not to use when editing this project.
+- `REVIEW_FINDINGS.md` - resolved review history and its last recorded validation snapshot.

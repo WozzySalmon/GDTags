@@ -1,4 +1,7 @@
-# Packaging the Gameplay Tags Addon
+# Packaging the Gameplay Tags addon
+
+Run this workflow only for a final release candidate. Routine development stops after the focused,
+both-version, and benchmark checks in `docs/VALIDATION.md`.
 
 The release ZIP contains only the files needed to install and use the addon.
 

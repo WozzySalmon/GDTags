@@ -42,23 +42,36 @@ tools/linux/test_all_godot_versions.sh
 
 The supported versions are Godot 4.6.3 and Godot 4.7.
 
-## Performance and packaging
+## Performance benchmark
 
-Run the performance regression smoke test, build the addon package, and test it in a clean project:
+Run the performance regression smoke test:
 
 ```bash
 tools/linux/benchmark.sh
+```
+
+The benchmark measures 10,000-tag database mutation, parent restoration, cached hierarchy lookups,
+and batch removal. Its target workload is split into three equal groups:
+
+- `target_check_count=100000` for each component, node, and container target.
+- `target_check_total=300000` across those single-tag checks.
+- `bulk_target_check_total=300000` across `target_has_all()` checks on the same target types.
+- `query_check_count=100000` for each target type and `query_check_total=300000` across query matches.
+
+The benchmark reports the peak database size before removal separately from the parent skeleton left
+afterward. It fails above a deliberately generous 5,000 ms regression ceiling. Override the ceiling
+for a known slower machine with `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
+
+## Final release packaging
+
+Build the ZIP and run the clean-project install test only for a final release candidate:
+
+```bash
 tools/linux/package_addon.sh
 tools/linux/test_package_install.sh
 ```
 
-The benchmark measures 10,000-tag database mutation, parent restoration, cached hierarchical
-lookups, 100,000 single-tag and 100,000 bulk checks against each of components, nodes, and
-containers (600,000 direct checks total), and 100,000 query matches against each target type
-(300,000 total). It reports the peak database
-size before removal separately from the parent skeleton left afterward. The benchmark fails above a
-deliberately generous 5,000 ms regression ceiling. Override it for a known slower machine with
-`BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
+`docs/PACKAGING.md` defines package contents and installation checks.
 
 Override the Godot executable when needed:
 

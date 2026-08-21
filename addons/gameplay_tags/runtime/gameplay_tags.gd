@@ -1,6 +1,8 @@
 @tool
 class_name GameplayTagRegistry
 extends Node
+## Concrete class for the [code]GameplayTags[/code] autoload singleton.
+## Gameplay code should call the singleton; this class name supports typed references to it.
 
 const COMPONENT_GROUP: StringName = &"gameplay_tag_components"
 const TAG_INDEX_GROUP_PREFIX: String = "gameplay_tag:"
@@ -322,6 +324,7 @@ func target_has_tag(target: Object, tag: StringName, exact: bool = false) -> boo
 
 
 ## Returns whether [param target] owns at least one of [param tags].
+## Entries that normalize to an empty name do not match.
 func target_has_any(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
 	if target is GameplayTagContainer:
 		return target.has_any(tags, exact)
@@ -341,6 +344,7 @@ func target_has_any(target: Object, tags: Array[StringName], exact: bool = false
 
 
 ## Returns whether [param target] owns every one of [param tags].
+## An empty list matches, and entries that normalize to an empty name are ignored.
 func target_has_all(target: Object, tags: Array[StringName], exact: bool = false) -> bool:
 	if target is GameplayTagContainer:
 		return target.has_all(tags, exact)

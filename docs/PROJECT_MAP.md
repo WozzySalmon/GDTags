@@ -12,11 +12,12 @@ navigation guidance; current source and tests are authoritative.
 | Public runtime API, database access, CSV, target checks, node lookup | `addons/gameplay_tags/runtime/gameplay_tags.gd` | `tests/test_gameplay_tags.gd`, `tests/test_runtime_edge_cases.gd` |
 | Tag hierarchy, descriptions, rename/removal, search, and change signals | `addons/gameplay_tags/resources/gameplay_tag_database.gd`, `addons/gameplay_tags/runtime/gameplay_tag.gd` | `tests/test_gameplay_tags.gd`, `tests/test_runtime_edge_cases.gd` |
 | Containers and query matching | `addons/gameplay_tags/runtime/gameplay_tag_container.gd`, `addons/gameplay_tags/runtime/gameplay_tag_query.gd` | `tests/test_gameplay_tags.gd` |
-| Target-owned tags and reusable node components | `addons/gameplay_tags/runtime/gameplay_tag_component.gd`, `addons/gameplay_tags/runtime/gameplay_tag_utils.gd` | `tests/test_gameplay_tags.gd` |
-| Dock tree, search, tag mutations, CSV, and undo/redo | `addons/gameplay_tags/editor/tag_editor_dock.gd` | `tests/test_editor_workflows.gd` |
+| Target-owned tags and reusable node components | `addons/gameplay_tags/runtime/gameplay_tag_component.gd`, `addons/gameplay_tags/runtime/gameplay_tags.gd` | `tests/test_gameplay_tags.gd` |
+| Shared settings, path resolution, directory creation, and database path conflicts | `addons/gameplay_tags/runtime/gameplay_tag_utils.gd` | `tests/test_editor_workflows.gd`, `tests/test_runtime_edge_cases.gd` |
+| Dock tree, search, tag mutations, CSV, and undo/redo | `addons/gameplay_tags/editor/tag_editor_dock.gd`, `addons/gameplay_tags/editor/tag_dock_tree.gd` | `tests/test_editor_workflows.gd` |
 | Tag redirects, stack depth, query diagnostics | `addons/gameplay_tags/resources/gameplay_tag_database.gd`, `addons/gameplay_tags/runtime/gameplay_tag_query.gd` | `tests/test_tag_lifecycle.gd` |
 | Finding where tags are used, dead tags, rename migration | `addons/gameplay_tags/editor/tag_reference_index.gd` | `tests/test_tag_lifecycle.gd` |
-| Inspector detection and tag pickers | `addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd`, `addons/gameplay_tags/editor/gameplay_tag_property.gd`, `addons/gameplay_tags/editor/gameplay_tag_array_property.gd` | `tests/test_editor_picker_interactions.gd` |
+| Inspector detection and tag pickers | `addons/gameplay_tags/editor/gameplay_tag_inspector_plugin.gd`, `addons/gameplay_tags/editor/gameplay_tag_property.gd`, `addons/gameplay_tags/editor/gameplay_tag_array_property.gd`, `addons/gameplay_tags/editor/tag_dock_tree.gd` | `tests/test_editor_picker_interactions.gd` |
 | Generated `GameplayTagIds` constants and collision handling | `addons/gameplay_tags/editor/gameplay_tag_code_generator.gd`, `addons/gameplay_tags/plugin.gd` | `tests/test_gameplay_tags.gd`, `tests/test_editor_workflows.gd` |
 | Formatting, linting, compatibility, benchmarks, packaging, or release readiness | `docs/VALIDATION.md`, `docs/PACKAGING.md`, `tools/linux/` | The matching script documented in those files |
 
@@ -32,6 +33,10 @@ navigation guidance; current source and tests are authoritative.
 - Containers and queries represent runtime-owned tags and matching rules. Nodes own tags only
   through direct `GameplayTagComponent` children. Gameplay code applies tag checks to ordinary
   Godot signals such as `body_entered`.
+- `GameplayTagUtils` owns setting resolution, parent-directory creation, and database path conflict
+  checks shared by runtime and editor code.
+- `TagDockTree` owns hierarchy population and ancestor inclusion for the dock and both Inspector
+  pickers.
 - Editor tools must operate through the same database and public mutation boundaries as runtime code.
 - Generated root resources such as `gameplay_tags_database.tres` and `gameplay_tag_ids.gd` are project
   outputs; the installable addon source remains under `addons/gameplay_tags/`.
@@ -45,7 +50,7 @@ navigation guidance; current source and tests are authoritative.
 - `tests/test_tag_lifecycle.gd`: owner-level stack depth, tag redirects, reference scanning, migration, and query diagnostics.
 - `tests/test_editor_picker_interactions.gd`: `EditorProperty` interactions; requires editor script mode.
 - `benchmarks/bench_10000_tags.gd`: large-tag-set mutation, parent restoration, cached lookup,
-  direct target-check, and query-match performance.
+  300,000 single-tag target checks, 300,000 bulk checks, and 300,000 query matches.
 - `docs/VALIDATION.md`: canonical local commands and supported Godot versions.
 - `docs/PACKAGING.md`: release ZIP contents and clean-install expectations.
 
@@ -57,7 +62,8 @@ navigation guidance; current source and tests are authoritative.
 - `docs/GDSCRIPT_STYLE.md`: Godot's official style guide. Authoritative; `gdlint` enforces it.
 - `AGENTS.md`: what to use and what not to use when changing this project.
 - `docs/VALIDATION.md`: validation commands and compatibility matrix.
-- `docs/PACKAGING.md`: package construction and installation rules.
+- `docs/PACKAGING.md`: final-release package construction and installation rules.
+- `REVIEW_FINDINGS.md`: resolved review history and the last recorded validation snapshot.
 
 Update this map only when file responsibilities, entry points, or validation ownership changes. Do not
 copy implementation details here that are likely to drift.
