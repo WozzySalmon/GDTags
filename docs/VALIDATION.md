@@ -1,4 +1,4 @@
-# Local Validation
+# Local validation
 
 The addon uses a pure GDScript runtime and editor workflow.
 
@@ -6,20 +6,24 @@ Validation runs locally with the scripts under `tools/linux/`.
 
 ## Complete smoke suite
 
-Run the complete suite with the default Godot executable:
+Run the five test scripts plus the harness probe and editor/plugin check with the default
+executable `godot4.7`:
 
 ```bash
 tools/linux/check_gdscript.sh
 ```
 
-`check_gdscript.sh` delegates to the complete `test_addon.sh` suite, which runs:
+`check_gdscript.sh` delegates to `test_addon.sh`, which runs the five test scripts:
 
-1. `tests/test_gameplay_tags.gd` headlessly.
-2. `tests/test_editor_workflows.gd` headlessly for dock/autoload regressions.
-3. `tests/test_runtime_edge_cases.gd` headlessly for CSV and mutation paths.
-4. `tests/test_tag_lifecycle.gd` headlessly for stack depth, redirects, references, and migration.
-5. A deliberately failing harness probe that proves script runtime errors after an assertion cannot report PASS.
-6. `tests/test_editor_picker_interactions.gd` in a headless editor for Inspector picker interactions.
+1. `tests/test_gameplay_tags.gd` headlessly. Covers runtime API, database, containers, queries, targets, and IDs.
+2. `tests/test_editor_workflows.gd` headlessly. Covers dock and autoload regressions.
+3. `tests/test_runtime_edge_cases.gd` headlessly. Covers CSV and mutation paths.
+4. `tests/test_tag_lifecycle.gd` headlessly. Covers stack depth, redirects, references, and migration.
+5. `tests/test_editor_picker_interactions.gd` in a headless editor. Covers Inspector picker interactions.
+
+Two checks round out the suite:
+
+6. A deliberately failing harness probe that proves script runtime errors after an assertion cannot report PASS.
 7. A headless editor/plugin load check.
 
 Script-test output is scanned for parser, compile, and runtime script errors even when Godot exits
@@ -29,7 +33,7 @@ which runs the same five test scripts, harness probe, and editor/plugin smoke ch
 Every test script extends `tests/tag_test_case.gd`, which owns the assertion helpers, the registry
 and database setup, and the runner. A case fails if it records no assertions or if the harness's
 `Logger` observes a script runtime error, including an error after earlier assertions. The platform
-scripts additionally scan logs for parser and compiler failures and run a deliberately failing
+scripts also scan logs for parser and compiler failures and run a deliberately failing
 fixture to prove that the shared harness exits nonzero instead of printing PASS.
 
 ## Supported versions
@@ -51,12 +55,13 @@ tools/linux/benchmark.sh
 ```
 
 The benchmark measures 10,000-tag database mutation, parent restoration, cached hierarchy lookups,
-and batch removal. Its target workload is split into three equal groups:
+and batch removal. Its workload is three equal groups of 300,000 checks:
 
-- `target_check_count=100000` for each component, node, and container target.
-- `target_check_total=300000` across those single-tag checks.
-- `bulk_target_check_total=300000` across `target_has_all()` checks on the same target types.
-- `query_check_count=100000` for each target type and `query_check_total=300000` across query matches.
+- single-tag checks: `target_check_count=100000` for each component, node, and container target,
+  with `target_check_total=300000` across them.
+- bulk checks: `bulk_target_check_total=300000` across `target_has_all()` on the same target types.
+- query matches: `query_check_count=100000` for each target type and `query_check_total=300000`
+  across query matches.
 
 The benchmark reports the peak database size before removal separately from the parent skeleton left
 afterward. It fails above a deliberately generous 5,000 ms regression ceiling. Override the ceiling
@@ -73,7 +78,8 @@ tools/linux/test_package_install.sh
 
 `docs/PACKAGING.md` defines package contents and installation checks.
 
-Override the Godot executable when needed:
+The default executable is `godot4.7`. Set `GODOT_BIN` to run the checks with another
+Godot binary:
 
 ```bash
 GODOT_BIN=/path/to/godot tools/linux/check_gdscript.sh
@@ -83,7 +89,7 @@ GODOT_BIN=/path/to/godot tools/linux/check_gdscript.sh
 
 `project.godot` declares support for Godot 4.6, and the test matrix runs against
 4.6 and 4.7. That makes "does this engine API exist?" a question about the support
-floor, not about the newest release — and the online class reference defaults to
+floor, not about the newest release. The online class reference defaults to
 whatever version is current, so it will happily show you methods 4.6 does not have.
 
 To answer it from the engine itself:
@@ -99,11 +105,11 @@ and about exact signatures and defaults in the versions this addon ships against
 Output lands in `.godot-api/`, which is gitignored.
 
 Release binaries ship without documentation prose, so the generated XML has no
-descriptions. It tells you *what exists*, never *what it does*. For semantics —
-behaviour, caveats, deprecations — read the class reference for the matching
-version, which the query tool links for you. Use both: the dump to confirm a member
-exists in 4.6 with the signature you expect, the reference to confirm it behaves the
-way you assume.
+descriptions. It tells you *what exists*, never *what it does*. For semantics,
+read the class reference for the matching version, which the query tool links
+for you. It describes behaviour, caveats, and deprecations. Use both: the dump
+to confirm a member exists in 4.6 with the signature you expect, the reference
+to confirm it behaves the way you assume.
 
 Adopting a member that only exists in the newer version breaks the support floor.
-The 4.6 test run is what catches that.
+The 4.6 test run catches it.

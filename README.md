@@ -16,11 +16,11 @@ Owning `State.Stunned` also satisfies checks for `State` unless exact matching i
 ## Workflow
 
 1. Enable **Project > Project Settings > Plugins > Gameplay Tags**.
-2. Add global tags in the **Gameplay Tags** dock; select a parent and choose **Add Child** to extend its hierarchy.
+2. Add global tags in the **Gameplay Tags** dock. Select a parent and choose **Add Child**
+   to extend its hierarchy.
 3. Add a `GameplayTagComponent` child to any gameplay node.
 4. Pick the component's `owned_tags` from the central database in the Inspector.
-5. Optionally import/export simple CSV tag lists from the dock.
-6. Check tags in gameplay code using generated constants:
+5. Check tags in gameplay code using generated constants:
 
 ```gdscript
 if GameplayTags.target_has_tag(enemy, GameplayTagIds.TEAM_ENEMY):
@@ -30,10 +30,13 @@ if GameplayTags.target_has_tag(player, GameplayTagIds.STATE_STUNNED):
 	return
 ```
 
-The dock regenerates `res://gameplay_tag_ids.gd` from the central database so script autocomplete
-can show valid constants after `GameplayTagIds.`.
+The dock regenerates `res://gameplay_tag_ids.gd` after each add, rename, remove, paste, or
+import, so script autocomplete shows valid constants after `GameplayTagIds.`. CSV import and
+export from the dock are optional, for moving tags between projects.
 
-Area trigger pattern:
+## Area triggers
+
+Gate a `body_entered` signal on a tag check:
 
 ```gdscript
 func _on_body_entered(body: Node) -> void:
@@ -112,8 +115,8 @@ Build ZIPs and run clean-install checks only for a final release candidate. See
 
 ## Docs
 
-- `addons/gameplay_tags/README.md` - how to use the addon. This is the one that ships
-  with the package, so it is the guide for anyone who installs it.
+- `addons/gameplay_tags/README.md` - how to use the addon. It ships inside the package
+  as the guide for installing users.
 - `docs/VALIDATION.md` - local validation, compatibility matrix, benchmarks, and how to
   check an engine API against the supported Godot versions.
 - `docs/PACKAGING.md` - release/package notes.

@@ -29,7 +29,7 @@ func _update_property() -> void:
 	var edited: Object = get_edited_object()
 	_current_tag = &""
 	if edited != null:
-		# get() returns Variant — unavoidable dynamic boundary.
+		# get() returns Variant, an unavoidable dynamic boundary.
 		_current_tag = _tag_from_dynamic_value(edited.get(get_edited_property()))
 	_refresh_summary()
 	_refresh_popup_list()
@@ -191,7 +191,7 @@ func _get_status_text(database: GameplayTagDatabase) -> String:
 	return status
 
 
-# EditorProperty gives us Variant values from Object.get() — unavoidable boundary.
+# EditorProperty gives us Variant values from Object.get(), an unavoidable boundary.
 # We convert to StringName here and require callers to provide legit types.
 func _tag_from_dynamic_value(value: Variant) -> StringName:
 	if value is GameplayTag:

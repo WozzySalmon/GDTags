@@ -24,7 +24,7 @@ func _update_property() -> void:
 	_updating = true
 	var edited: Object = get_edited_object()
 	if edited != null:
-		# get() returns Variant — unavoidable dynamic boundary.
+		# get() returns Variant, an unavoidable dynamic boundary.
 		_current_tags = _canonicalize_dynamic_value(edited.get(get_edited_property()))
 	_refresh_summary()
 	_refresh_popup_list()
@@ -209,7 +209,7 @@ func _get_invalid_current_tags(database: GameplayTagDatabase) -> Array[StringNam
 	return invalid
 
 
-# EditorProperty gives us Variant from Object.get() — unavoidable boundary.
+# EditorProperty gives us Variant from Object.get(), an unavoidable boundary.
 func _canonicalize_dynamic_value(value: Variant) -> Array[StringName]:
 	if value is GameplayTagContainer:
 		return value.get_tags()

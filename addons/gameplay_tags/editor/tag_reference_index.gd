@@ -32,8 +32,8 @@ static func scan(
 	return scan_tags(database.get_all_tags(), root_path, extra_excluded_paths)
 
 
-## Same scan for an explicit tag list rather than the database's. Lets retired names
-## still be located after a rename, which is what makes reference migration possible.
+## Same scan for an explicit tag list rather than the database's. Reference
+## migration runs it on retired names to locate files before rewriting them.
 static func scan_tags(
 	scanned_tags: Array[StringName],
 	root_path: String = "res://",

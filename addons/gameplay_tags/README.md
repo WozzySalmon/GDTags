@@ -58,9 +58,10 @@ such as a whitespace-only string, are ignored by these `ALL` checks. They do not
 
 ## Generated constants
 
-Every database change regenerates `res://gameplay_tag_ids.gd`. Type `GameplayTagIds.`
-in the script editor for autocomplete over valid tags, and let renames and typos
-become compile-time problems rather than silent runtime misses.
+The dock regenerates `res://gameplay_tag_ids.gd` when you add, rename, remove, paste, or
+import tags, and via **Tools > Regenerate IDs**. Runtime `GameplayTags` calls do not
+regenerate it. Type `GameplayTagIds.` in the script editor for autocomplete over valid
+tags; renames and typos become compile-time problems instead of silent runtime misses.
 
 ## Owning tags
 
@@ -81,14 +82,14 @@ emits nothing.
 
 ## Stacking
 
-When the same state applies more than once, use stacks so it survives until the last
+When the same state applies more than once, stack it so the tag stays until the last
 source releases it:
 
 ```gdscript
-component.add_tag_stack(GameplayTagIds.STATE_POISONED)     # depth 1
-component.add_tag_stack(GameplayTagIds.STATE_POISONED)     # depth 2
-component.remove_tag_stack(GameplayTagIds.STATE_POISONED)  # depth 1, still poisoned
-component.get_tag_count(GameplayTagIds.STATE_POISONED)
+component.add_tag_stack(GameplayTagIds.STATE_STUNNED)     # depth 1
+component.add_tag_stack(GameplayTagIds.STATE_STUNNED)     # depth 2
+component.remove_tag_stack(GameplayTagIds.STATE_STUNNED)  # depth 1, still stunned
+component.get_tag_count(GameplayTagIds.STATE_STUNNED)
 ```
 
 Depth is tracked per exact tag, so a parent never reports a child's stacks. It is
@@ -96,7 +97,7 @@ runtime state and is not saved.
 
 ## Area triggers
 
-Tag-gated volumes are a two-line filter on the signal you already connect, in 2D or 3D:
+Gate a `body_entered` signal on a tag check, in 2D or 3D:
 
 ```gdscript
 func _on_body_entered(body: Node) -> void:
@@ -108,8 +109,8 @@ func _on_body_entered(body: Node) -> void:
 ## Renaming tags safely
 
 Renaming a tag in the dock records a redirect from the old name to the new one, for
-the tag and every child it moved. Scenes authored before the rename keep working —
-the retired name resolves to its replacement instead of being dropped.
+the tag and every child it moved. Scenes authored before the rename keep working.
+The retired name resolves to its replacement instead of being dropped.
 
 `GameplayTagDatabase.has_tag()` answers whether a name is in the current catalog, so
 it returns `false` for a retired name. `GameplayTags.is_valid_tag()` is the authored-data
@@ -148,9 +149,23 @@ if vulnerable.matches(target):
 	apply_bonus_damage(target)
 ```
 
-Queries also provide `GameplayTagQuery.all()`, `any()`, `none()`, and `compose()` constructors.
-Use `add_sub_query()` to nest conditions such as "Fire or Ice, and not Immune." Batch tag changes
-through `add_tags()` and `remove_tags()` emit at most one `changed` notification.
+Queries also provide the static factory methods `GameplayTagQuery.all()`,
+`GameplayTagQuery.any()`, `GameplayTagQuery.none()`, and `GameplayTagQuery.compose()`.
+`compose()` builds one query from others:
+
+```gdscript
+var fire_or_ice: GameplayTagQuery = GameplayTagQuery.any([
+	GameplayTagIds.DAMAGE_FIRE,
+	GameplayTagIds.DAMAGE_ICE,
+])
+var guard: GameplayTagQuery = GameplayTagQuery.compose(
+	GameplayTagQuery.Mode.ALL,
+	[fire_or_ice, GameplayTagQuery.none([GameplayTagIds.STATE_INVULNERABLE])]
+)
+```
+
+Use `add_sub_query()` to nest conditions such as "Fire or Ice, and not Immune." Batch tag
+changes through `add_tags()` and `remove_tags()` emit at most one `changed` notification.
 
 When a query gives an unexpected answer, print its trace:
 
@@ -174,6 +189,6 @@ Per-platform overrides such as `gameplay_tags/database_path.mobile` are honoured
 
 ## Not included
 
-No multiplayer replication layer — replicate tag state using your project's own
+No multiplayer replication layer. Replicate tag state with your project's own
 networking. No visual query builder. The Inspector picker cannot yet be restricted to
 one branch of the hierarchy.

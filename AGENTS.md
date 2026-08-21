@@ -1,9 +1,9 @@
-# Gameplay Tags Project Instructions
+# Gameplay Tags project instructions
 
 ## Authority
 
 `docs/GDSCRIPT_STYLE.md` is Godot's official style guide and is not negotiable.
-`gdlint` and `gdformat` enforce it — a lint failure is a defect in your code, not in
+`gdlint` and `gdformat` enforce it. A lint failure is a defect in your code, not in
 the config. Do not edit `gdlintrc` to make your change pass.
 
 Current source and tests outrank every document here.
@@ -17,8 +17,8 @@ Current source and tests outrank every document here.
 | `add_tag()`, `add_tags()`, `remove_tag()`, `rename_tag()`, `ensure_parent_tags()` | assigning `GameplayTagDatabase.tags` | Direct assignment skips hierarchy maintenance and change signals. |
 | component/query `add_tags()` and `remove_tags()` | repeated single-tag loops | Batch methods filter once and send at most one change notification. |
 | `GameplayTagIds.TEAM_ENEMY` | `&"Team.Enemy"` | Generated constants survive renames and are found by the reference index. |
-| `GameplayTagComponent` | node groups | Groups are the tag index's private business, not an authoring surface. |
-| `has_tag()`, `has_any()`, `has_all()`, `has_none()` | short aliases like `has()`, `any()`, `all()` | One name per operation. `GameplayTagComponent`, `GameplayTagDatabase`, and the autoload all use the long form, so a second spelling on containers and queries only doubles the surface to document and test. |
+| `GameplayTagComponent` | node groups | Groups support the internal tag index. Do not use them to author tags. |
+| `has_tag()`, `has_any()`, `has_all()`, `has_none()` | short aliases like `has()`, `any()`, `all()` | One name per operation. `GameplayTagComponent`, `GameplayTagDatabase`, and the autoload all use the long form, so aliases only add more API to document and test. |
 | `GameplayTagUtils.DATABASE_SETTING` and friends | repeating `"gameplay_tags/database_path"` | Setting names and default paths live in one place. |
 | `GameplayTagUtils.resolve_setting_path()` | `ProjectSettings.get_setting()` | The latter silently ignores per-platform feature-tag overrides. |
 | `GameplayTagUtils.ensure_parent_directory()` and `database_path_conflicts()` | local editor copies | File creation and conflict rules must agree across plugin, dock, and code generation. |
@@ -29,8 +29,8 @@ Current source and tests outrank every document here.
 | `tools/linux/query_godot_api.py` | the online class reference | The project targets Godot 4.6; the web docs show whatever is current. |
 | `get_child_count()` with `get_child(index)` | `get_children()` in target-check loops | Indexed traversal avoids allocating a child Array for each check. |
 
-`Variant` is for engine boundaries only — `EditorProperty` values, `Object.call`
-returns, undo/redo parameters. Convert to a concrete type at the boundary and never
+`Variant` is for engine boundaries only. It flows through `EditorProperty` values, `Object.call`
+returns, and undo/redo parameters. Convert to a concrete type at the boundary and never
 propagate it into helper signatures.
 
 `@tool` is required on editor plugin scripts *and* on every Resource or RefCounted
@@ -54,7 +54,7 @@ Run ZIP packaging and clean-install validation only for a final release candidat
 ## Tests
 
 Every test file extends `tests/tag_test_case.gd`. Do not hand-roll assertion helpers
-or a runner — a test that asserts nothing must fail, and that guard lives in the base
+or a runner. A test that asserts nothing must fail, and that guard lives in the base
 class so it cannot be forgotten.
 
 Add a test to the file matching its subject; add a new file only for a genuinely new

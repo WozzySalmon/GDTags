@@ -40,8 +40,8 @@ const MAX_SUB_QUERY_DEPTH: int = 16
 
 ## Nested queries evaluated alongside [member tags] under the same [member mode].
 ## ALL requires every sub-query to match, ANY accepts any of them, and NONE rejects
-## the target if any of them matches. This is what makes "(A or B) and not C"
-## expressible: build the inner queries, then nest them.
+## the target if any of them matches. To express "(A or B) and not C", build the
+## inner queries, then nest them.
 @export var sub_queries: Array[GameplayTagQuery] = []:
 	set(value):
 		if sub_queries == value:

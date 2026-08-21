@@ -1,7 +1,7 @@
 # Packaging the Gameplay Tags addon
 
-Run this workflow only for a final release candidate. Routine development stops after the focused,
-both-version, and benchmark checks in `docs/VALIDATION.md`.
+Run this workflow only for a final release candidate. For routine development, run the
+checks in `docs/VALIDATION.md` and stop after they pass.
 
 The release ZIP contains only the files needed to install and use the addon.
 
@@ -35,8 +35,8 @@ The script stages the addon, removes development leftovers, creates the archive,
 tools\windows\package_addon.cmd
 ```
 
-Both scripts validate that `addons/gameplay_tags/plugin.cfg` is present and reject development
-artifacts before reporting success. Both scripts write:
+Both scripts validate that `addons/gameplay_tags/plugin.cfg` is present, reject development
+artifacts, and write:
 
 ```text
 dist/gameplay_tags-<version>.zip

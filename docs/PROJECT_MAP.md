@@ -1,4 +1,4 @@
-# Project Map
+# Project map
 
 Use this file to locate the smallest relevant context for a task. Start with the routed entry point
 and nearest test, then follow only evidence-relevant imports, callers, and dependencies. This map is
@@ -43,7 +43,7 @@ navigation guidance; current source and tests are authoritative.
 
 ## Validation routes
 
-- `tests/tag_test_case.gd`: shared harness every test script extends — assertions, registry setup, runner.
+- `tests/tag_test_case.gd`: shared harness every test script extends. Handles assertions, registry, and running.
 - `tests/test_gameplay_tags.gd`: primary runtime API, database, containers, queries, targets, and IDs.
 - `tests/test_runtime_edge_cases.gd`: mutation, reload, autoload, and target-resolution edge cases.
 - `tests/test_editor_workflows.gd`: dock/plugin workflows and editor-facing state changes.
@@ -58,7 +58,7 @@ navigation guidance; current source and tests are authoritative.
 
 - `README.md`: repository overview for humans browsing the project.
 - `addons/gameplay_tags/README.md`: how to use the addon. Ships inside the package, so it
-  is the only usage documentation an installing user receives — keep it current.
+  is the only usage documentation an installing user receives. Keep it current.
 - `docs/GDSCRIPT_STYLE.md`: Godot's official style guide. Authoritative; `gdlint` enforces it.
 - `AGENTS.md`: what to use and what not to use when changing this project.
 - `docs/VALIDATION.md`: validation commands and compatibility matrix.

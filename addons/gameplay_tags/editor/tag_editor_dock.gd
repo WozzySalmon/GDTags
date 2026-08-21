@@ -707,7 +707,7 @@ func _on_scan_references_pressed() -> void:
 		total_references += index[tag].size()
 
 	# Printed as well as summarised: the dock status line has room for a count, but the
-	# actual locations are what makes the scan worth running.
+	# actual locations are the point of the scan.
 	print_rich("[b]Gameplay tag references[/b]")
 	for tag in index:
 		if index[tag].is_empty():

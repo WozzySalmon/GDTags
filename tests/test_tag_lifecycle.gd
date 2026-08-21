@@ -374,7 +374,7 @@ func _test_reference_index() -> void:
 		"A tag referenced only through a scene file should still be found",
 	)
 	# Line 3 of the fixture names this tag only through GameplayTagIds, line 4 only as a
-	# literal. Finding both is what makes the index usable for scripts as well as scenes.
+	# literal. The index must find both, in scripts and in scenes.
 	var heavy_locations: PackedStringArray = index[&"State.Stunned.Heavy"]
 	assert_eq(heavy_locations.size(), 2, "A tag should be found through constant and literal")
 	assert_true(

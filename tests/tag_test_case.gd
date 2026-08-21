@@ -4,7 +4,7 @@ extends SceneTree
 ## Each test file extends this and implements [method _run_tests], calling
 ## [method run_test] once per case. Assertion helpers, registry setup, database
 ## save/restore, and the pass/fail reporting all live here so no test file
-## reimplements them — the copies used to drift, and one of them was missing the
+## reimplements them. The copies used to drift, and one of them was missing the
 ## guard that fails a test which asserts nothing.
 
 const GameplayTagsScript: Script = preload("res://addons/gameplay_tags/runtime/gameplay_tags.gd")

@@ -59,7 +59,7 @@ func set_owned_gameplay_tags(raw_tags: Array[StringName]) -> void:
 
 
 ## Adds one tag and returns whether it was added.
-## Rejects duplicates, unusable names, and — unless [member validate_with_database] is off —
+## Rejects duplicates, unusable names, and, unless [member validate_with_database] is off,
 ## tags missing from the central database.
 func add_tag(raw_tag: StringName) -> bool:
 	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)

@@ -700,8 +700,8 @@ func _rebuild_cache() -> void:
 
 
 # A registered tag must never also be a redirect source, or it would resolve away from
-# itself. Enforced here rather than at each call site so restoring a renamed tag —
-# through undo, set_state(), or a plain add — cleans up the redirect the rename left.
+# itself. Enforced here rather than at each call site so restoring a renamed tag,
+# through undo, set_state(), or a plain add, cleans up the redirect the rename left.
 # Mutates the backing dictionary directly: the caller's change notification covers it.
 func _drop_redirects_for_live_tags() -> void:
 	if tag_redirects.is_empty():

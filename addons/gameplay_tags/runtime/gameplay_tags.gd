@@ -247,7 +247,7 @@ func get_nodes_with_tag(
 			continue
 		# The index narrows the candidate set; it is not the source of truth. Verifying
 		# each candidate keeps a stale entry from producing a false positive, which is
-		# what lets component removal refresh the index on the next idle frame.
+		# how component removal can refresh the index on the next idle frame.
 		if not target_has_tag(candidate, normalized_tag, exact):
 			continue
 		matches.append(candidate)
