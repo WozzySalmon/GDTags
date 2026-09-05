@@ -23,6 +23,8 @@ const TagCodeGenerator: Script = preload(
 var _query_change_count: int = 0
 var _database_change_count: int = 0
 var _component_change_count: int = 0
+var _signal_argument_tags: Array[StringName] = []
+var _signal_emit_count: int = 0
 
 
 func _suite_name() -> String:
@@ -35,6 +37,7 @@ func _run_tests() -> void:
 	run_test("generated_id_collisions_are_rejected", _test_generated_id_collisions)
 	run_test("container_hierarchical_matching", _test_container)
 	run_test("component_target_helpers", _test_component_target_helpers)
+	run_test("component_signal_argument_is_a_copy", _test_component_signal_argument_is_a_copy)
 	run_test("csv_import", _test_csv_import)
 	run_test("unsupported_objects_are_not_tag_targets", _test_unsupported_object_targets)
 	run_test("component_lookup_is_bounded_to_children", _test_component_lookup_is_bounded)
@@ -251,6 +254,19 @@ func _test_generated_id_collisions() -> void:
 		first_generated_source.contains(TagCodeGenerator.GENERATED_FILE_MARKER),
 		"Generated-ID output should include its ownership marker",
 	)
+	var first_generated_mtime: int = FileAccess.get_modified_time(generated_path)
+	OS.delay_msec(1100)
+	assert_eq(
+		TagCodeGenerator.save_tag_ids(generated_database, generated_path),
+		OK,
+		"Saving an unchanged catalog should succeed",
+	)
+	assert_eq(
+		FileAccess.get_modified_time(generated_path),
+		first_generated_mtime,
+		"Byte-identical output must skip the write and keep the modification time",
+	)
+
 	generated_database.add_tag(&"Team.Enemy")
 	assert_eq(
 		TagCodeGenerator.save_tag_ids(generated_database, generated_path),
@@ -260,6 +276,10 @@ func _test_generated_id_collisions() -> void:
 	assert_true(
 		FileAccess.get_file_as_string(generated_path).contains("const TEAM_ENEMY"),
 		"Replacing generated output should write the latest tags",
+	)
+	assert_true(
+		FileAccess.get_modified_time(generated_path) != first_generated_mtime,
+		"A changed catalog must still rewrite the generated script",
 	)
 
 	var sentinel_source: String = 'extends Node\n\nconst SENTINEL: String = "keep me"\n'
@@ -432,6 +452,40 @@ func _test_component_target_helpers() -> void:
 		"Bulk target checks should preserve tag normalization",
 	)
 	actor.free()
+
+
+func _test_component_signal_argument_is_a_copy() -> void:
+	# The signal hands out a copy: a listener that appends to or clears its argument
+	# must not be able to mutate the component's owned set, caches, or tag index.
+	var component: GameplayTagComponent = GameplayTagComponent.new()
+	component.validate_with_database = false
+	root.add_child(component)
+	component.owned_tags = [&"Signal.Copy"]
+
+	_signal_argument_tags = []
+	_signal_emit_count = 0
+	component.owned_tags_changed.connect(_on_owned_tags_changed)
+	assert_eq(component.add_tags([&"Signal.Other", &"Signal.Third"]), 2)
+	assert_eq(_signal_emit_count, 1, "A batch add should emit exactly one change")
+	assert_eq(
+		_signal_argument_tags,
+		[&"Signal.Copy", &"Signal.Other", &"Signal.Third"] as Array[StringName],
+		"The signal argument should carry the updated owned set",
+	)
+
+	_signal_argument_tags.append(&"Sneaky.Tag")
+	_signal_argument_tags.clear()
+	assert_true(
+		component.has_tag(&"Signal.Copy", true),
+		"Mutating the signal argument must not touch the component's owned set",
+	)
+	assert_eq(
+		component.owned_tags.size(),
+		3,
+		"Clearing the signal argument must not empty the component's owned tags",
+	)
+	component.owned_tags_changed.disconnect(_on_owned_tags_changed)
+	component.free()
 
 
 func _test_csv_import() -> void:
@@ -859,6 +913,11 @@ func _test_query_modes() -> void:
 
 func _on_component_changed(_tags: Array[StringName]) -> void:
 	_component_change_count += 1
+
+
+func _on_owned_tags_changed(tags: Array[StringName]) -> void:
+	_signal_argument_tags = tags
+	_signal_emit_count += 1
 
 
 func _on_query_changed() -> void:

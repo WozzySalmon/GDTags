@@ -7,6 +7,7 @@ const LocalGameplayTagsScript: Script = preload(
 const PluginScript: Script = preload("res://addons/gameplay_tags/plugin.gd")
 const TagEditorDock: Script = preload("res://addons/gameplay_tags/editor/tag_editor_dock.gd")
 const TagDockIo: Script = preload("res://addons/gameplay_tags/editor/tag_dock_io.gd")
+const TagDockUiScript: Script = preload("res://addons/gameplay_tags/editor/tag_dock_ui.gd")
 
 
 func _suite_name() -> String:
@@ -20,8 +21,17 @@ func _run_tests() -> void:
 		_test_csv_import_reports_id_generation_failure,
 	)
 	run_test("cache_only_resource_is_not_a_conflict", _test_cache_only_resource_is_not_a_conflict)
+	run_test(
+		"plugin_generation_ignores_cache_only_database",
+		_test_plugin_generation_ignores_cache_only_database,
+	)
 	run_test("plugin_preserves_existing_database", _test_plugin_preserves_existing_database)
 	run_test("undo_targets_its_own_database", _test_undo_targets_its_own_database)
+	run_test(
+		"database_file_check_ignores_cache_only_resource",
+		_test_database_file_check_ignores_cache_only_resource,
+	)
+	run_test("dock_migration_confirmation_lifecycle", _test_dock_migration_confirmation_lifecycle)
 
 
 func _test_autoload_collision_is_rejected() -> void:
@@ -57,6 +67,37 @@ func _test_cache_only_resource_is_not_a_conflict() -> void:
 		TagDockIo.database_path_conflicts(path),
 		"A cache-only resource has no file to overwrite and must not count as a conflict",
 	)
+
+
+func _test_plugin_generation_ignores_cache_only_database() -> void:
+	# The plugin's ID generation loads the database from its configured path. A cache-only
+	# resource (no file behind it) must not be treated as an on-disk database to load or
+	# overwrite, matching the autoload's loader.
+	var original_path: String = GameplayTagUtils.get_database_path()
+	var path: String = "user://gameplay_tags_plugin_cache_only.tres"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+	var cache_only_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	cache_only_database.add_tag(&"Cache.Only")
+	cache_only_database.resource_path = path
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, path)
+	assert_true(
+		ResourceLoader.exists(path), "Test precondition: the cache entry should be registered"
+	)
+	assert_false(FileAccess.file_exists(path), "Test precondition: no file may exist on disk")
+
+	var loaded: GameplayTagDatabase = PluginScript._load_database_for_generation()
+	assert_true(
+		loaded != null and not loaded.has_tag(&"Cache.Only"),
+		"A cache-only resource must not be loaded as the generation database",
+	)
+	assert_false(
+		FileAccess.file_exists(path),
+		"Generation must not write a database of its own at the configured path",
+	)
+
+	ProjectSettings.set_setting(GameplayTagUtils.DATABASE_SETTING, original_path)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _test_plugin_preserves_existing_database() -> void:
@@ -110,6 +151,148 @@ func _test_undo_targets_its_own_database() -> void:
 	assert_true(current.has_tag(&"Current.Tag"), "The currently bound database should be untouched")
 
 	dock.free()
+
+
+func _test_database_file_check_ignores_cache_only_resource() -> void:
+	# The Inspector pickers and every other database loader gate their fallback on
+	# GameplayTagUtils.has_database_file(). A cache-only resource (a loaded copy whose
+	# file was deleted) must not pass, while a real file must.
+	var path: String = "user://gameplay_tags_picker_cache_only.tres"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+	var cache_only_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	cache_only_database.add_tag(&"Cache.Only")
+	cache_only_database.resource_path = path
+	assert_true(
+		ResourceLoader.exists(path), "Test precondition: the cache entry should be registered"
+	)
+	assert_false(
+		GameplayTagUtils.has_database_file(path),
+		"A cache-only resource must not pass as a database file",
+	)
+
+	assert_eq(ResourceSaver.save(cache_only_database, path), OK)
+	assert_true(
+		GameplayTagUtils.has_database_file(path),
+		"A database file that exists on disk must pass the file check",
+	)
+
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _test_dock_migration_confirmation_lifecycle() -> void:
+	# The migration workflow scans once, reports blocked redirects and affected file
+	# counts, and clears the pending preparation after the confirmed write.
+	var dock: Control = TagEditorDock.new()
+	root.add_child(dock)
+	var status_label: Label = dock.get("_status_label")
+
+	# Retired tags whose redirect points at an unregistered tag report a status
+	# instead of asking for a rewrite. Tag names are built at runtime so this test's
+	# own source never counts as a reference during the res:// scan.
+	var broken_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	var broken_tag: StringName = StringName("Broken" + "." + "Redirect")
+	assert_true(broken_database.add_tag(broken_tag))
+	assert_true(broken_database.rename_tag(broken_tag, StringName("Broken" + "." + "Dead")))
+	assert_true(broken_database.remove_tag(StringName("Broken" + "." + "Dead")))
+	dock.set("_database", broken_database)
+	dock.call("_on_migrate_references_pressed")
+	assert_true(
+		status_label.text.contains("point at unregistered tags"),
+		"A broken redirect should surface a clear status instead of a confirmation",
+	)
+	assert_true(
+		(dock.get("_pending_migration") as Dictionary).is_empty(),
+		"A blocked migration must not leave a pending preparation behind",
+	)
+
+	# A rename nothing refers to reports status without a confirmation and also
+	# clears the pending preparation.
+	var unreferenced_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	var moved_tag: StringName = StringName("Dock" + "." + "Unreferenced")
+	assert_true(unreferenced_database.add_tag(moved_tag))
+	assert_true(unreferenced_database.rename_tag(moved_tag, StringName("Dock" + "." + "Renamed")))
+	dock.set("_database", unreferenced_database)
+	dock.call("_on_migrate_references_pressed")
+	assert_true(
+		status_label.text.contains("Nothing still refers to the 1 renamed tags"),
+		"A rename with no references should report status instead of confirming",
+	)
+	assert_true(
+		(dock.get("_pending_migration") as Dictionary).is_empty(),
+		"A skipped confirmation must clear the pending preparation",
+	)
+
+	# The confirmed write reuses the prepared scan, reports the affected file count,
+	# and clears the pending preparation afterwards.
+	var migrated_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	var retired_tag: StringName = StringName("Dock" + "." + "Retired")
+	assert_true(migrated_database.add_tag(retired_tag))
+	assert_true(migrated_database.rename_tag(retired_tag, StringName("Dock" + "." + "Current")))
+
+	var fixture_path: String = "user://dock_migration_fixture.gd"
+	var fixture: FileAccess = FileAccess.open(fixture_path, FileAccess.WRITE)
+	assert_true(fixture != null, "Test precondition: the migration fixture should be writable")
+	if fixture != null:
+		fixture.store_string('extends Node\nvar tag: StringName = &"Dock.Retired"\n')
+		fixture.close()
+
+	var index: Dictionary[StringName, PackedStringArray] = {
+		retired_tag: PackedStringArray([fixture_path + ":2"])
+	}
+	var preparation: Dictionary = {
+		"retired_tags": migrated_database.get_redirected_tags(),
+		"index": index,
+		"file_paths": PackedStringArray([fixture_path]),
+	}
+	dock.set("_database", migrated_database)
+	dock.set("_pending_migration", preparation)
+	dock.call("_on_migrate_confirmed")
+	assert_true(
+		status_label.text.contains("Rewrote references in 1 file(s)"),
+		"The status should report the affected file count after the confirmed write",
+	)
+	assert_true(
+		(dock.get("_pending_migration") as Dictionary).is_empty(),
+		"The pending migration must be cleared once the confirmed write is done",
+	)
+	assert_true(
+		FileAccess.get_file_as_string(fixture_path).contains('"Dock.Current"'),
+		"The confirmed write should rewrite the prepared scan's file",
+	)
+
+	# The extracted confirmation seam shows the retired tag count and the affected
+	# file count it asks the user to confirm.
+	var confirmation: ConfirmationDialog = ConfirmationDialog.new()
+	root.add_child(confirmation)
+	assert_true(
+		TagDockUiScript.present_migration_confirmation(confirmation, preparation),
+		"A preparation with affected files should present the confirmation",
+	)
+	assert_true(
+		confirmation.dialog_text.contains("1 renamed tag"),
+		"The confirmation should name the retired tag count",
+	)
+	assert_true(
+		confirmation.dialog_text.contains("1 file(s)"),
+		"The confirmation should show the affected file count",
+	)
+	assert_eq(
+		confirmation.get_ok_button().text,
+		"Rewrite 1 File(s)",
+		"The confirm button should show the affected file count",
+	)
+	assert_false(
+		TagDockUiScript.present_migration_confirmation(
+			confirmation, {"file_paths": PackedStringArray()}
+		),
+		"A preparation without affected files must not ask for confirmation",
+	)
+
+	confirmation.hide()
+	confirmation.free()
+	dock.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(fixture_path))
 
 
 func _test_csv_import_reports_id_generation_failure() -> void:

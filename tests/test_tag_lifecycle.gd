@@ -15,6 +15,8 @@ func _run_tests() -> void:
 	run_test("redirects_keep_authored_data_resolving", _test_redirect_resolution)
 	run_test("reference_index_finds_uses_and_dead_tags", _test_reference_index)
 	run_test("migration_rewrites_only_whole_references", _test_reference_migration)
+	run_test("migration_scans_before_writing", _test_migration_scan_before_write)
+	run_test("migration_skips_broken_redirects", _test_migration_skips_broken_redirects)
 	run_test("renaming_then_migrating_retires_the_redirect", _test_redirect_driven_migration)
 
 
@@ -411,6 +413,11 @@ func _test_reference_migration() -> void:
 		&"State.Stunned", &"Condition.Disabled", files
 	)
 	assert_eq(changes.size(), 1, "Migration should report the one file it rewrote")
+	assert_eq(
+		changes[script_path],
+		2,
+		"The count should be the references replaced: one literal and one constant",
+	)
 
 	var migrated: String = FileAccess.get_file_as_string(script_path)
 	assert_true(
@@ -440,6 +447,109 @@ func _test_reference_migration() -> void:
 	_remove_directory(scan_root)
 
 
+func _test_migration_scan_before_write() -> void:
+	# The dock workflow scans first, confirms the affected file count with the user, and
+	# only then rewrites. The confirmed write reuses the very same scan, so preparing a
+	# migration must not touch a single file and its index must still describe the work.
+	var scan_root: String = _make_scan_fixture()
+	var script_path: String = scan_root.path_join("gameplay.gd")
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	database.add_tags([&"State.Stunned", &"State.Stunned.Heavy", &"Team.Enemy"])
+
+	assert_true(
+		GameplayTagReferenceIndex.prepare_migration(database, scan_root).is_empty(),
+		"A database without renames has no migration to prepare",
+	)
+	assert_true(database.rename_tag(&"State.Stunned", &"Condition.Disabled"))
+
+	var before: String = FileAccess.get_file_as_string(script_path)
+	var preparation: Dictionary = GameplayTagReferenceIndex.prepare_migration(database, scan_root)
+	assert_false(preparation.is_empty(), "A rename with references should prepare a migration")
+	assert_true(
+		(preparation["blocked_tags"] as Array[StringName]).is_empty(),
+		"A healthy rename should block nothing",
+	)
+	assert_eq(
+		preparation["file_paths"],
+		PackedStringArray([script_path]),
+		"The confirmation should list the unique affected files",
+	)
+	assert_true(
+		(preparation["retired_tags"] as Array[StringName]).has(&"State.Stunned"),
+		"The confirmation should carry the retired tags",
+	)
+	assert_eq(
+		FileAccess.get_file_as_string(script_path),
+		before,
+		"Preparing a migration must not rewrite any file before the user confirms",
+	)
+
+	var changes: Dictionary[String, int] = GameplayTagReferenceIndex.migrate_from_index(
+		database, preparation["index"]
+	)
+	assert_eq(changes.size(), 1, "The confirmed write should rewrite the one affected file")
+	assert_eq(
+		changes[script_path],
+		4,
+		"The count should be the four references replaced, not the two retired tags",
+	)
+	assert_true(
+		FileAccess.get_file_as_string(script_path).contains('"Condition.Disabled"'),
+		"The confirmed write should reuse the prepared scan to rewrite references",
+	)
+
+	var finished: Dictionary = GameplayTagReferenceIndex.prepare_migration(database, scan_root)
+	assert_true(
+		(finished["file_paths"] as PackedStringArray).is_empty(),
+		"After migration nothing still refers to the retired tags",
+	)
+
+	_remove_directory(scan_root)
+
+
+func _test_migration_skips_broken_redirects() -> void:
+	# A retired tag whose redirect points at a tag that no longer exists must never be
+	# rewritten: migrating its references onto a dead name would corrupt every file.
+	var scan_root: String = _make_scan_fixture()
+	var script_path: String = scan_root.path_join("gameplay.gd")
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	assert_true(database.add_tag(&"State.Stunned"))
+	assert_true(database.rename_tag(&"State.Stunned", &"Gone.Now"))
+	assert_true(database.remove_tag(&"Gone.Now"))
+	assert_false(
+		database.has_tag(database.resolve_tag(&"State.Stunned")),
+		"Test precondition: the redirect must resolve to an unregistered tag",
+	)
+
+	var before: String = FileAccess.get_file_as_string(script_path)
+	var preparation: Dictionary = GameplayTagReferenceIndex.prepare_migration(database, scan_root)
+	assert_true(
+		(preparation["blocked_tags"] as Array[StringName]).has(&"State.Stunned"),
+		"Preparation should surface the retired tag whose redirect is broken",
+	)
+	assert_true(
+		(preparation["file_paths"] as PackedStringArray).is_empty(),
+		"A broken redirect must not be offered for rewriting",
+	)
+
+	# The write path guards on its own too, because callers can pass an index built
+	# elsewhere, for example straight from scan_tags().
+	var full_index: Dictionary[StringName, PackedStringArray] = GameplayTagReferenceIndex.scan_tags(
+		database.get_redirected_tags(), scan_root
+	)
+	assert_true(
+		GameplayTagReferenceIndex.migrate_from_index(database, full_index).is_empty(),
+		"Migration must not rewrite a retired tag with a broken redirect",
+	)
+	assert_eq(
+		FileAccess.get_file_as_string(script_path),
+		before,
+		"A broken redirect must leave the referencing file untouched",
+	)
+
+	_remove_directory(scan_root)
+
+
 func _test_redirect_driven_migration() -> void:
 	var scan_root: String = _make_scan_fixture()
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
@@ -452,6 +562,11 @@ func _test_redirect_driven_migration() -> void:
 		database, scan_root
 	)
 	assert_eq(changes.size(), 1, "Migration should rewrite the one file naming retired tags")
+	assert_eq(
+		changes[scan_root.path_join("gameplay.gd")],
+		4,
+		"The count should be the four references replaced, not the two retired tags",
+	)
 
 	var migrated: String = FileAccess.get_file_as_string(scan_root.path_join("gameplay.gd"))
 	assert_true(migrated.contains('"Condition.Disabled"'), "The retired parent should be rewritten")

@@ -63,9 +63,16 @@ and batch removal. Its workload is three equal groups of 300,000 checks:
 - query matches: `query_check_count=100000` for each target type and `query_check_total=300000`
   across query matches.
 
+Bounded extra workloads cover the paths the fixed-count groups do not: singular database
+`add_tag()`/`remove_tag()` calls, singular and batch component add/remove, multi-component
+`target_has_all()` and query fallbacks, container stack operations, and component merge
+resolution. Each extra workload has a fixed small count, so the whole run stays well below
+the regression ceiling.
+
 The benchmark reports the peak database size before removal separately from the parent skeleton left
 afterward. It fails above a deliberately generous 5,000 ms regression ceiling. Override the ceiling
-for a known slower machine with `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`.
+for a known slower machine with `BENCHMARK_MAX_TOTAL_MS=<milliseconds>`, and it also fails when
+any setup sanity check records a failure.
 
 ## Final release packaging
 

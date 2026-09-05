@@ -30,12 +30,20 @@ static func ensure_parent_directory(path: String) -> Error:
 ## Returns whether [param path] contains a resource that is not a tag database.
 ## Cache-only resources have no file to overwrite and therefore are not conflicts.
 static func database_path_conflicts(path: String) -> bool:
-	if not FileAccess.file_exists(path) or not ResourceLoader.exists(path):
+	if not has_database_file(path):
 		return false
 	var existing_resource: Resource = ResourceLoader.load(
 		path, "", ResourceLoader.CACHE_MODE_IGNORE
 	)
 	return not existing_resource is GameplayTagDatabase
+
+
+## Returns whether a database file actually exists at [param path].
+## ResourceLoader.exists() also reports cache-only resources with no file behind them,
+## for example after the database file was deleted while a copy was still loaded, so
+## every database loader requires the file itself before loading or recreating.
+static func has_database_file(path: String) -> bool:
+	return FileAccess.file_exists(path) and ResourceLoader.exists(path)
 
 
 ## Reads a project setting, honouring per-platform feature tag overrides such as

@@ -109,7 +109,7 @@ static func _ensure_database_resource() -> void:
 	if GameplayTagUtils.database_path_conflicts(path):
 		push_error("Refusing to overwrite a non-GameplayTagDatabase resource at: %s" % path)
 		return
-	if FileAccess.file_exists(path) and ResourceLoader.exists(path):
+	if GameplayTagUtils.has_database_file(path):
 		return
 	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(path)
 	if directory_error != OK:
@@ -118,7 +118,9 @@ static func _ensure_database_resource() -> void:
 		)
 		return
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
-	database.resource_path = path
+	# Same cache-ownership handover as the autoload's loader: a cache-only copy of a
+	# deleted database still owns the path, so a plain resource_path assignment fails.
+	database.take_over_path(path)
 	var save_error: Error = ResourceSaver.save(database, path)
 	if save_error != OK:
 		push_error("Could not create gameplay tag database: %s" % error_string(save_error))
@@ -134,9 +136,13 @@ func _ensure_tag_ids_script() -> void:
 		push_error("Could not generate gameplay tag IDs: %s" % error_string(save_error))
 
 
-func _load_database_for_generation() -> GameplayTagDatabase:
+# Static so the workflow tests can exercise it headlessly: an EditorPlugin can only
+# be instantiated by the editor itself. It reads ProjectSettings only.
+static func _load_database_for_generation() -> GameplayTagDatabase:
 	var database_path: String = GameplayTagUtils.get_database_path()
-	if ResourceLoader.exists(database_path):
+	# Same cache-only guard as the autoload: a resource whose file is gone must not be
+	# treated as an on-disk database to load or overwrite.
+	if GameplayTagUtils.has_database_file(database_path):
 		var existing_resource: Resource = (
 			ResourceLoader
 			. load(

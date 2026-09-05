@@ -35,8 +35,11 @@ var _paste_input: TextEdit
 var _import_dialog: FileDialog
 var _export_dialog: FileDialog
 var _remove_confirmation: ConfirmationDialog
+var _migration_confirmation: ConfirmationDialog
 var _selected_tag: StringName = &""
 var _pending_remove_tag: StringName = &""
+# A migration is scanned once, confirmed with the affected file count, then written.
+var _pending_migration: Dictionary = {}
 var _search_debounce_timer: Timer
 var _tree_items_by_tag: Dictionary[StringName, TreeItem] = {}
 var _last_database_resource_save_succeeded: bool = true
@@ -157,6 +160,7 @@ func _build_file_dialogs() -> void:
 	_import_dialog = dialogs["import_dialog"] as FileDialog
 	_export_dialog = dialogs["export_dialog"] as FileDialog
 	_remove_confirmation = dialogs["remove_confirmation"] as ConfirmationDialog
+	_migration_confirmation = dialogs["migration_confirmation"] as ConfirmationDialog
 
 	_rename_dialog.confirmed.connect(_on_rename_confirmed)
 	add_child(_rename_dialog)
@@ -175,6 +179,9 @@ func _build_file_dialogs() -> void:
 	_remove_confirmation.confirmed.connect(_on_remove_confirmed)
 	add_child(_remove_confirmation)
 
+	_migration_confirmation.confirmed.connect(_on_migrate_confirmed)
+	add_child(_migration_confirmation)
+
 
 func _load_database() -> void:
 	var registry: GameplayTagRegistry = _get_registry()
@@ -183,7 +190,9 @@ func _load_database() -> void:
 		return
 
 	var path: String = GameplayTagUtils.get_database_path()
-	if ResourceLoader.exists(path):
+	# ResourceLoader.exists() alone would also accept a cache-only resource with no file
+	# behind it, so require the file like the autoload's database loader does.
+	if GameplayTagUtils.has_database_file(path):
 		var existing_resource: Resource = load(path)
 		if existing_resource is GameplayTagDatabase:
 			_database = existing_resource
@@ -193,7 +202,9 @@ func _load_database() -> void:
 		return
 
 	_database = GameplayTagDatabase.new()
-	_database.resource_path = path
+	# A cache-only copy of a deleted database still owns the path in the resource
+	# cache; take_over_path() hands cache ownership to the database _save_database() writes.
+	_database.take_over_path(path)
 	_save_database()
 
 
@@ -235,10 +246,7 @@ func _on_add_child_pressed() -> void:
 
 
 func _on_add_pressed() -> void:
-	if _database == null:
-		_load_database()
-	if _database == null:
-		_set_status("No gameplay tag database loaded.")
+	if not _ensure_database_loaded("No gameplay tag database loaded."):
 		return
 
 	var tag_text: String = _tag_input.text.strip_edges()
@@ -664,27 +672,37 @@ func _on_tools_menu_id_pressed(id: int) -> void:
 
 
 func _on_migrate_references_pressed() -> void:
-	if _database == null:
-		_load_database()
-	if _database == null:
-		_set_status("No gameplay tag database to migrate against.")
+	if not _ensure_database_loaded("No gameplay tag database to migrate against."):
 		return
 
-	var retired_tags: Array[StringName] = _database.get_redirected_tags()
-	if retired_tags.is_empty():
+	# Scanning happens before anything is written; the confirmed write reuses the same scan.
+	_pending_migration = GameplayTagReferenceIndex.prepare_migration(_database)
+	if _pending_migration.is_empty():
 		_set_status("No renamed tags to migrate.")
 		return
+	var blocked_status: String = TagDockUi.blocked_migration_status(_pending_migration)
+	if not blocked_status.is_empty():
+		_pending_migration = {}
+		_set_status(blocked_status)
+		return
+	TagDockUi.present_migration_confirmation(_migration_confirmation, _pending_migration)
 
-	var changes: Dictionary[String, int] = GameplayTagReferenceIndex.migrate_redirected_tags(
-		_database
+
+func _on_migrate_confirmed() -> void:
+	if _pending_migration.is_empty() or _database == null:
+		return
+	var preparation: Dictionary = _pending_migration
+	_pending_migration = {}
+
+	var retired_tags: Array[StringName] = preparation["retired_tags"]
+	var changes: Dictionary[String, int] = GameplayTagReferenceIndex.migrate_from_index(
+		_database, preparation["index"]
 	)
 	if changes.is_empty():
 		_set_status("Nothing still refers to the %d renamed tags." % retired_tags.size())
 		return
 
-	print_rich("[b]Migrated gameplay tag references[/b]")
-	for path in changes:
-		print("  %s (%d tags)" % [path, changes[path]])
+	GameplayTagReferenceIndex.print_migration_report(changes)
 	_set_status(
 		(
 			"Rewrote references in %d file(s). Reload affected scenes before editing them."
@@ -694,32 +712,12 @@ func _on_migrate_references_pressed() -> void:
 
 
 func _on_scan_references_pressed() -> void:
-	if _database == null:
-		_load_database()
-	if _database == null:
-		_set_status("No gameplay tag database to scan against.")
+	if not _ensure_database_loaded("No gameplay tag database to scan against."):
 		return
 
 	var index: Dictionary[StringName, PackedStringArray] = GameplayTagReferenceIndex.scan(_database)
 	var unused: Array[StringName] = GameplayTagReferenceIndex.find_unused_tags(index)
-	var total_references: int = 0
-	for tag in index:
-		total_references += index[tag].size()
-
-	# Printed as well as summarised: the dock status line has room for a count, but the
-	# actual locations are the point of the scan.
-	print_rich("[b]Gameplay tag references[/b]")
-	for tag in index:
-		if index[tag].is_empty():
-			continue
-		print("  %s (%d)" % [String(tag), index[tag].size()])
-		for location in index[tag]:
-			print("    %s" % location)
-	if not unused.is_empty():
-		var unused_names: PackedStringArray = PackedStringArray()
-		for tag in unused:
-			unused_names.append(String(tag))
-		print("  unused: %s" % ", ".join(unused_names))
+	var total_references: int = GameplayTagReferenceIndex.print_reference_report(index, unused)
 
 	_set_status(
 		(
@@ -749,10 +747,7 @@ func _on_paste_tags_pressed() -> void:
 
 
 func _on_paste_tags_confirmed() -> void:
-	if _database == null:
-		_load_database()
-	if _database == null:
-		_set_status("No gameplay tag database loaded.")
+	if not _ensure_database_loaded("No gameplay tag database loaded."):
 		return
 
 	var candidates: Array[StringName] = GameplayTagDatabase.tags_from_csv_text(_paste_input.text)
@@ -927,10 +922,7 @@ func _save_tag_ids_script() -> bool:
 
 
 func _import_tags_from_csv(path: String) -> int:
-	if _database == null:
-		_load_database()
-	if _database == null:
-		_set_status("No gameplay tag database loaded.")
+	if not _ensure_database_loaded("No gameplay tag database loaded."):
 		return -1
 
 	var file: FileAccess = FileAccess.open(path, FileAccess.READ)
@@ -975,6 +967,16 @@ func _export_tags_to_csv(path: String) -> Error:
 	if _database == null:
 		return ERR_DOES_NOT_EXIST
 	return TagDockIo.export_tags_to_csv_file(_database, path)
+
+
+# Tools that can run before a database is bound load it on first use and share one failure status.
+func _ensure_database_loaded(failure_message: String) -> bool:
+	if _database == null:
+		_load_database()
+	if _database == null:
+		_set_status(failure_message)
+		return false
+	return true
 
 
 func _get_registry() -> GameplayTagRegistry:

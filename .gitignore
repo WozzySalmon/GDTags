@@ -5,6 +5,10 @@
 # Generated package output
 dist/
 
+# Generated native build artifacts (rust port target output copied for editor testing)
+addons/gameplay_tags/bin/
+rust port/target/
+
 # Generated Godot class reference (tools/linux/dump_godot_api.sh)
 .godot-api/
 

@@ -24,6 +24,15 @@ static func save_tag_ids(
 	if ownership_error != OK:
 		return ownership_error
 
+	var generated_source: String = build_tag_ids_source(database)
+	if (
+		FileAccess.file_exists(clean_path)
+		and FileAccess.get_file_as_string(clean_path) == generated_source
+	):
+		# Byte-identical output needs no write, so saving without changes keeps the
+		# generated script's modification time stable for build systems and editors.
+		return OK
+
 	var directory_error: Error = GameplayTagUtils.ensure_parent_directory(clean_path)
 	if directory_error != OK:
 		return directory_error
@@ -32,7 +41,7 @@ static func save_tag_ids(
 	if file == null:
 		return FileAccess.get_open_error()
 
-	file.store_string(build_tag_ids_source(database))
+	file.store_string(generated_source)
 	file.close()
 	return OK
 

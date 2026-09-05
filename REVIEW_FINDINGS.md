@@ -76,12 +76,14 @@ fixture proves that real script errors still produce a nonzero result.
 
 ## Validation snapshot
 
-Godot 4.6.3 and 4.7 each pass all five suites with 450 assertions. The runtime-error fixture fails as
+Godot 4.6.3 and 4.7 each pass all five suites with 533 assertions. The runtime-error fixture fails as
 expected without printing PASS. Formatting, linting, Bash syntax, and `git diff --check` pass.
 
-The expanded benchmark covers 300,000 single-tag target checks, 300,000 bulk checks, and 300,000
-query matches, plus 10,000-tag database work. The final `2036540` run completed in 1836.354 ms on
-Godot 4.6.3 and 1685.042 ms on Godot 4.7, below the 5,000 ms ceiling.
+The benchmark covers 300,000 single-tag target checks, 300,000 bulk checks, and 300,000
+query matches, plus 10,000-tag database work and bounded singular-mutation, component-mutation,
+multi-component fallback, stack, and merge-resolution workloads. The run completed in 3363.081 ms
+on Godot 4.6.3 and 3077.311 ms on Godot 4.7, below the 5,000 ms ceiling.
 
-Package and clean-install checks passed before these refactor commits. They were not rerun afterward
-because the project reserves ZIP and clean-install validation for final release candidates.
+Package and clean-install checks passed with both supported versions, including a run of the
+shipped `examples/basic_usage.gd` example in the clean project and a package scan that rejects
+native binaries and `bin/` directories.

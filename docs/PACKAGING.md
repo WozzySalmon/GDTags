@@ -26,8 +26,10 @@ Linux is the canonical build environment. Create and validate the package with:
 tools/linux/package_addon.sh
 ```
 
-The script stages the addon, removes development leftovers, creates the archive, and verifies that
-`addons/gameplay_tags/plugin.cfg` exists and forbidden artifacts are absent.
+The script stages the addon, removes development leftovers (including native build
+artifacts such as `bin/` directories and `.so`, `.dll`, and `.dylib` files), creates the
+archive, and verifies that `addons/gameplay_tags/plugin.cfg` exists and forbidden
+artifacts are absent.
 
 ## Windows package script
 
@@ -36,7 +38,8 @@ tools\windows\package_addon.cmd
 ```
 
 Both scripts validate that `addons/gameplay_tags/plugin.cfg` is present, reject development
-artifacts, and write:
+artifacts and native binaries (`addons/*/bin/` directories, `*.so`, `*.dll`, `*.dylib`),
+and write:
 
 ```text
 dist/gameplay_tags-<version>.zip
@@ -51,8 +54,10 @@ tools/linux/test_package_install.sh
 ```
 
 Set `GODOT_BIN` to test a specific editor version. The script builds the release ZIP, extracts it
-outside the repository, enables the packaged plugin, verifies its generated database and IDs, and
-checks the `GameplayTags` autoload from a separate runtime process.
+outside the repository, enables the packaged plugin, verifies its generated database and IDs,
+checks the `GameplayTags` autoload from a separate runtime process, and runs the shipped
+`addons/gameplay_tags/examples/basic_usage.gd` example so a fresh install is proven to
+compile and execute it.
 
 For a manual install check:
 
@@ -74,5 +79,9 @@ addons/gameplay_tags/plugin.cfg
 dist/
 tests/
 benchmarks/
+addons/*/bin/
+*.so
+*.dll
+*.dylib
 *.tmp
 ```

@@ -35,6 +35,11 @@ find "$stage_addon" -type f \( \
   -name '.DS_Store' \
 \) -delete
 
+# Native libraries are build outputs of the rust port workspace, never addon content:
+# drop any staged native binary files and bin/ directories before archiving.
+find "$stage_addon" -type f \( -name '*.so' -o -name '*.dll' -o -name '*.dylib' \) -delete
+find "$stage_addon" -depth -type d -name bin -exec rm -rf {} +
+
 
 if [[ -f "$PROJECT_DIR/LICENSE" ]]; then
   cp "$PROJECT_DIR/LICENSE" "$stage_dir/LICENSE"
@@ -52,6 +57,11 @@ fi
 
 if unzip -Z1 "$zip_path" | grep -Eiq '(^|/)(tests|benchmarks|\.godot)(/|$)|(^|/)~|\.tmp$|\.DS_Store$'; then
   echo "Package validation failed: development artifacts were included." >&2
+  exit 1
+fi
+
+if unzip -Z1 "$zip_path" | grep -Eiq '(^|/)addons/[^/]+/bin(/|$)|\.(so|dll|dylib)$'; then
+  echo "Package validation failed: a native binary was included." >&2
   exit 1
 fi
 

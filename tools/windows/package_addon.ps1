@@ -48,6 +48,18 @@ Get-ChildItem $StageAddon -Recurse -File | Where-Object {
     -or $_.Extension -eq ".tmp"
 } | Remove-Item -Force
 
+# Native libraries are build outputs of the rust port workspace, never addon content:
+# drop any staged native binary files and bin/ directories before archiving. Both
+# listings are materialized first so deleting entries cannot disturb the enumeration.
+$NativeFiles = @(
+    Get-ChildItem $StageAddon -Recurse -File | Where-Object {
+        $_.Extension -in ".so", ".dll", ".dylib"
+    }
+)
+$NativeFiles | Remove-Item -Force
+$BinDirectories = @(Get-ChildItem $StageAddon -Recurse -Directory -Filter "bin")
+$BinDirectories | Remove-Item -Recurse -Force
+
 
 $LicensePath = Join-Path $Root "LICENSE"
 if (Test-Path $LicensePath) {
@@ -71,6 +83,13 @@ try {
     } | Select-Object -First 1
     if ($null -ne $ForbiddenEntry) {
         throw "Package validation failed: development artifact included: $ForbiddenEntry"
+    }
+    $NativeEntry = $EntryNames | Where-Object {
+        $_ -match '(^|/)addons/[^/]+/bin(/|$)' `
+        -or $_ -match '\.(so|dll|dylib)$'
+    } | Select-Object -First 1
+    if ($null -ne $NativeEntry) {
+        throw "Package validation failed: native binary included: $NativeEntry"
     }
 }
 finally {

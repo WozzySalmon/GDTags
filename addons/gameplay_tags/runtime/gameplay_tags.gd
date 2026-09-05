@@ -473,7 +473,11 @@ func _load_or_create_database(
 	cache_mode: ResourceLoader.CacheMode = ResourceLoader.CACHE_MODE_REUSE,
 ) -> GameplayTagDatabase:
 	var path: String = get_database_path()
-	if ResourceLoader.exists(path):
+	# ResourceLoader.exists() also reports cache-only resources that have no file behind
+	# them, for example after the database file is deleted while a copy is still loaded.
+	# Requiring the file itself keeps deletion honoured instead of resurrecting or
+	# misreporting the cached copy.
+	if GameplayTagUtils.has_database_file(path):
 		var existing_resource: Resource = ResourceLoader.load(path, "", cache_mode)
 		if existing_resource is GameplayTagDatabase:
 			return existing_resource
@@ -481,7 +485,10 @@ func _load_or_create_database(
 		return GameplayTagDatabase.new()
 
 	var database: GameplayTagDatabase = GameplayTagDatabase.new()
-	database.resource_path = path
+	# A cache-only copy of a deleted database still owns the path in the resource cache,
+	# so a plain resource_path assignment would fail; take_over_path() hands cache
+	# ownership to the recreated database, which the save then backs with a real file.
+	database.take_over_path(path)
 	if not _can_write_to_path(path):
 		_warn_read_only_target(path)
 		return database

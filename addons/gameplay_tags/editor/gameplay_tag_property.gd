@@ -206,7 +206,8 @@ func _get_database() -> GameplayTagDatabase:
 	if registry != null:
 		return registry.get_database()
 	var path: String = GameplayTagUtils.get_database_path()
-	if ResourceLoader.exists(path):
+	# A cache-only resource with no file behind it must not pass as a database.
+	if GameplayTagUtils.has_database_file(path):
 		return load(path) as GameplayTagDatabase
 	return null
 

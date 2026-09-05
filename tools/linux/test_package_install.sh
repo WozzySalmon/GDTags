@@ -78,6 +78,20 @@ func _run() -> void:
 	if not FileAccess.file_exists("res://gameplay_tag_ids.gd"):
 		_fail("Packaged plugin did not create gameplay_tag_ids.gd")
 		return
+
+	# The shipped example must compile and run in a freshly installed project, where
+	# it cannot lean on any pre-existing generated GameplayTagIds constants.
+	var example_script: Variant = load("res://addons/gameplay_tags/examples/basic_usage.gd")
+	if example_script == null:
+		_fail("The packaged example script did not compile in the clean project")
+		return
+	var example: Node = (example_script as Script).new()
+	root.add_child(example)
+	if not registry.get_database().has_tag(&"Team.Enemy"):
+		_fail("Running the packaged example did not register its tags")
+		return
+	example.queue_free()
+
 	print("GAMEPLAY_TAGS_PACKAGE_INSTALL_SMOKE passed")
 	quit(0)
 
@@ -102,12 +116,18 @@ scan_log() {
 }
 
 printf 'Loading packaged addon in a clean project with %s...\n' "$GODOT_BIN"
+# A bounded editor phase keeps a hung first import from stalling the whole check.
 set +e
-GODOT_SILENCE_ROOT_WARNING=1 "$GODOT_BIN" \
+GODOT_SILENCE_ROOT_WARNING=1 timeout 120s "$GODOT_BIN" \
   --headless --editor --path "$TEMP_PROJECT" --quit >"$EDITOR_LOG" 2>&1
 editor_exit=$?
 set -e
 scan_log "$EDITOR_LOG"
+if [[ $editor_exit -eq 124 ]]; then
+  cat "$EDITOR_LOG" >&2
+  echo "Packaged addon editor load timed out after 120s." >&2
+  exit 124
+fi
 if [[ $editor_exit -ne 0 ]]; then
   cat "$EDITOR_LOG" >&2
   exit "$editor_exit"
@@ -144,6 +164,11 @@ fi
 if ! grep -Fq 'GAMEPLAY_TAGS_PACKAGE_INSTALL_SMOKE passed' "$RUNTIME_LOG"; then
   cat "$RUNTIME_LOG" >&2
   echo "Packaged addon runtime smoke marker was not printed." >&2
+  exit 1
+fi
+if ! grep -Fq 'Gameplay Tags example finished.' "$RUNTIME_LOG"; then
+  cat "$RUNTIME_LOG" >&2
+  echo "The packaged example did not run to completion in the clean project." >&2
   exit 1
 fi
 

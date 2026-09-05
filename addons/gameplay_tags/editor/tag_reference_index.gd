@@ -171,8 +171,69 @@ static func migrate_redirected_tags(
 		return changes
 
 	var index: Dictionary[StringName, PackedStringArray] = scan_tags(retired_tags, root_path)
-	for retired_tag in retired_tags:
-		var locations: PackedStringArray = index.get(retired_tag, PackedStringArray())
+	return migrate_from_index(database, index)
+
+
+## Scans for references to the database's retired tags without rewriting anything, and
+## returns what a tool needs to confirm the write with the user first: the retired
+## tags, the reference index, the unique affected files, and the retired tags whose
+## redirect points at an unregistered tag (listed under "blocked_tags"; their
+## references are excluded from the index and files so a confirmation never offers a
+## rewrite that would corrupt data). Returns an empty dictionary when there are no
+## retired tags to migrate.
+static func prepare_migration(
+	database: GameplayTagDatabase, root_path: String = "res://"
+) -> Dictionary:
+	if database == null:
+		return {}
+	var retired_tags: Array[StringName] = database.get_redirected_tags()
+	if retired_tags.is_empty():
+		return {}
+
+	var index: Dictionary[StringName, PackedStringArray] = scan_tags(retired_tags, root_path)
+	var blocked_tags: Array[StringName] = []
+	var migratable_index: Dictionary[StringName, PackedStringArray] = {}
+	for retired_tag in index:
+		if not database.has_tag(database.resolve_tag(retired_tag)):
+			blocked_tags.append(retired_tag)
+			continue
+		migratable_index[retired_tag] = index[retired_tag]
+	return {
+		"retired_tags": retired_tags,
+		"index": migratable_index,
+		"file_paths": collect_affected_files(migratable_index),
+		"blocked_tags": blocked_tags,
+	}
+
+
+## Returns the unique files [param index] recorded, in first-seen order.
+static func collect_affected_files(
+	index: Dictionary[StringName, PackedStringArray]
+) -> PackedStringArray:
+	var file_paths: PackedStringArray = PackedStringArray()
+	for tag in index:
+		for location in index[tag]:
+			var file_path: String = location.substr(0, location.rfind(":"))
+			if not file_paths.has(file_path):
+				file_paths.append(file_path)
+	return file_paths
+
+
+## Same migration as [method migrate_redirected_tags], driven by an index the caller
+## scanned earlier so a tool can show the affected files before anything is rewritten.
+## Returns each rewritten file mapped to the actual number of references replaced in
+## it. A retired tag whose redirect resolves to an unregistered tag is never
+## rewritten: renaming live references onto a dead name would corrupt every file it
+## touches.
+static func migrate_from_index(
+	database: GameplayTagDatabase, index: Dictionary[StringName, PackedStringArray]
+) -> Dictionary[String, int]:
+	var changes: Dictionary[String, int] = {}
+	if database == null:
+		return changes
+
+	for retired_tag in index:
+		var locations: PackedStringArray = index[retired_tag]
 		if locations.is_empty():
 			continue
 
@@ -183,9 +244,58 @@ static func migrate_redirected_tags(
 				file_paths.append(file_path)
 
 		var destination: StringName = database.resolve_tag(retired_tag)
-		for path in migrate_tag(retired_tag, destination, file_paths):
-			changes[path] = changes.get(path, 0) + 1
+		if not database.has_tag(destination):
+			push_warning(
+				(
+					(
+						"Gameplay tag %s redirects to unregistered tag %s; its references were not migrated."
+						+ " Fix the redirect before migrating."
+					)
+					% [String(retired_tag), String(destination)]
+				)
+			)
+			continue
+
+		var replacements: Dictionary[String, int] = migrate_tag(
+			retired_tag, destination, file_paths
+		)
+		for path in replacements:
+			changes[path] = changes.get(path, 0) + replacements[path]
 	return changes
+
+
+## Prints the per-tag reference locations the dock reports and returns the total
+## reference count for the status line. The locations are printed as well as
+## summarised: the dock status line has room for a count, but the locations are the
+## point of the scan.
+static func print_reference_report(
+	index: Dictionary[StringName, PackedStringArray], unused: Array[StringName]
+) -> int:
+	var total_references: int = 0
+	for tag in index:
+		total_references += index[tag].size()
+
+	print_rich("[b]Gameplay tag references[/b]")
+	for tag in index:
+		if index[tag].is_empty():
+			continue
+		print("  %s (%d)" % [String(tag), index[tag].size()])
+		for location in index[tag]:
+			print("    %s" % location)
+	if not unused.is_empty():
+		var unused_names: PackedStringArray = PackedStringArray()
+		for tag in unused:
+			unused_names.append(String(tag))
+		print("  unused: %s" % ", ".join(unused_names))
+	return total_references
+
+
+## Prints the per-file migration report the dock shows after a confirmed migration.
+## Each count is the number of references replaced in that file.
+static func print_migration_report(changes: Dictionary[String, int]) -> void:
+	print_rich("[b]Migrated gameplay tag references[/b]")
+	for path in changes:
+		print("  %s (%d references)" % [path, changes[path]])
 
 
 static func _scan_file(

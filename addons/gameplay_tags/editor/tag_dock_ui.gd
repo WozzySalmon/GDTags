@@ -14,6 +14,44 @@ enum ToolsAction {
 }
 
 
+## Presents the scan-before-write migration confirmation for a preparation built by
+## [method GameplayTagReferenceIndex.prepare_migration]. Returns false when nothing
+## still refers to the retired tags, so the caller reports status instead of asking.
+static func present_migration_confirmation(
+	confirmation: ConfirmationDialog, preparation: Dictionary
+) -> bool:
+	var affected_files: PackedStringArray = preparation["file_paths"]
+	if affected_files.is_empty():
+		return false
+	confirmation.dialog_text = (
+		(
+			"Rewrite references to %d renamed tag(s) in %d file(s)?\n\n"
+			+ "Scripts, scenes, and resources are edited in place. Commit before running."
+		)
+		% [(preparation["retired_tags"] as Array[StringName]).size(), affected_files.size()]
+	)
+	confirmation.get_ok_button().text = "Rewrite %d File(s)" % affected_files.size()
+	confirmation.popup_centered(Vector2i(560, 200))
+	return true
+
+
+## Returns the status a dock should report when a prepared migration cannot be
+## confirmed yet: retired tags whose redirect points at an unregistered tag, or a
+## scan that found nothing still referring to the retired tags. Empty means the
+## confirmation can be presented.
+static func blocked_migration_status(preparation: Dictionary) -> String:
+	var blocked_tags: Array[StringName] = preparation["blocked_tags"]
+	if not blocked_tags.is_empty():
+		return (
+			"%d renamed tag(s) point at unregistered tags. Fix their redirects before migrating."
+			% blocked_tags.size()
+		)
+	if (preparation["file_paths"] as PackedStringArray).is_empty():
+		var retired_tags: Array[StringName] = preparation["retired_tags"]
+		return "Nothing still refers to the %d renamed tags." % retired_tags.size()
+	return ""
+
+
 static func build_title(theme_source: Control) -> Label:
 	var title: Label = Label.new()
 	title.text = "Gameplay Tags"
@@ -229,6 +267,9 @@ static func build_file_dialogs() -> Dictionary[String, Node]:
 	var remove_confirmation: ConfirmationDialog = ConfirmationDialog.new()
 	remove_confirmation.title = "Remove Gameplay Tags"
 
+	var migration_confirmation: ConfirmationDialog = ConfirmationDialog.new()
+	migration_confirmation.title = "Migrate Renamed Tags"
+
 	var controls: Dictionary[String, Node] = {
 		"rename_dialog": rename_dialog,
 		"rename_input": rename_input,
@@ -237,6 +278,7 @@ static func build_file_dialogs() -> Dictionary[String, Node]:
 		"import_dialog": import_dialog,
 		"export_dialog": export_dialog,
 		"remove_confirmation": remove_confirmation,
+		"migration_confirmation": migration_confirmation,
 	}
 	return controls
 

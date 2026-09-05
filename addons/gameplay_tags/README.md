@@ -26,6 +26,15 @@ Enabling the plugin creates the `GameplayTags` autoload, tag database, and gener
 script when they are missing. It leaves an existing `GameplayTagDatabase` at the configured path
 untouched and refuses to replace a different resource or autoload.
 
+## Runnable example
+
+A runnable script lives at `addons/gameplay_tags/examples/basic_usage.gd`. It registers the
+tags it needs from code, so it also runs in a freshly installed project before any tags or
+generated constants exist. Attach it to any node in your scene, run the project, and watch
+the Output panel: it prints a target check, a hierarchical match, and an ALL/ANY check.
+After you have created your own tags, run **Tools > Regenerate IDs** and switch gameplay
+code to the generated `GameplayTagIds` constants, as the example's closing comment shows.
+
 Use `GameplayTags` as the singleton name in gameplay code. Its script class is
 `GameplayTagRegistry`, which exists for typed references to that singleton.
 

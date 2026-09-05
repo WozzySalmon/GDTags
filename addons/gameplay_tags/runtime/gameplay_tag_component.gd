@@ -21,7 +21,7 @@ const GROUP_NAME: StringName = &"gameplay_tag_components"
 		_rebuild_cache()
 		_prune_stack_counts()
 		_refresh_owner_tag_index()
-		owned_tags_changed.emit(owned_tags)
+		_emit_owned_tags_changed()
 
 @export var validate_with_database: bool = true
 
@@ -81,9 +81,14 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 	var updated_tags: Array[StringName] = owned_tags.duplicate()
 	updated_tags.append_array(raw_tags)
 	owned_tags = updated_tags
+	# Set membership instead of an Array scan per owned tag: counting is O(n + m),
+	# not O(n * m), and reports the same result.
+	var previous_set: Dictionary[StringName, bool] = {}
+	for tag in previous_tags:
+		previous_set[tag] = true
 	var added: int = 0
 	for tag in owned_tags:
-		if not previous_tags.has(tag):
+		if not previous_set.has(tag):
 			added += 1
 	return added
 
@@ -130,7 +135,7 @@ func add_tag_stack(raw_tag: StringName) -> int:
 
 	var key: String = String(tag)
 	_stack_counts[key] = _stack_counts.get(key, 1) + 1
-	owned_tags_changed.emit(owned_tags)
+	_emit_owned_tags_changed()
 	return _stack_counts[key]
 
 
@@ -151,7 +156,7 @@ func remove_tag_stack(raw_tag: StringName) -> int:
 		_stack_counts.erase(key)
 	else:
 		_stack_counts[key] = remaining
-	owned_tags_changed.emit(owned_tags)
+	_emit_owned_tags_changed()
 	return remaining
 
 
@@ -186,7 +191,7 @@ func set_tag_count(raw_tag: StringName, count: int) -> bool:
 		_stack_counts.erase(key)
 	else:
 		_stack_counts[key] = count
-	owned_tags_changed.emit(owned_tags)
+	_emit_owned_tags_changed()
 	return true
 
 
@@ -219,6 +224,12 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 		if normalized_tag != &"" and not tag_set.has(normalized_tag):
 			return false
 	return true
+
+
+# The signal hands out a copy: a listener that appends to or clears its argument must
+# not be able to mutate this component's owned set, caches, or tag index.
+func _emit_owned_tags_changed() -> void:
+	owned_tags_changed.emit(owned_tags.duplicate())
 
 
 func _rebuild_cache() -> void:

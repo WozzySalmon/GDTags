@@ -1,6 +1,8 @@
 extends "res://tests/tag_test_case.gd"
 
 var _query_change_count: int = 0
+var _database_change_count: int = 0
+var _nested_database: GameplayTagDatabase
 
 
 func _suite_name() -> String:
@@ -10,6 +12,8 @@ func _suite_name() -> String:
 func _run_tests() -> void:
 	run_test("database_recursive_removal_and_csv_round_trip", _test_database_edges)
 	run_test("container_component_and_query_mutations", _test_runtime_mutations)
+	run_test("database_mutations_emit_one_change", _test_database_single_notification)
+	run_test("cache_only_database_is_not_loaded", _test_cache_only_database_is_not_loaded)
 	run_test("autoload_csv_and_node_helpers", _test_autoload_helpers)
 
 
@@ -189,3 +193,133 @@ func _test_autoload_helpers() -> void:
 
 func _on_query_changed() -> void:
 	_query_change_count += 1
+
+
+func _test_database_single_notification() -> void:
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	_database_change_count = 0
+	_nested_database = null
+
+	# Guard: a stray end call must not drive the depth negative and silence every
+	# future change notification.
+	database._end_change_suppression()
+	assert_eq(
+		int(database.get("_suppressed_change_depth")),
+		0,
+		"A stray suppression end call must be clamped, not underflowed",
+	)
+
+	database.tags_changed.connect(_on_database_tags_changed)
+
+	assert_true(database.add_tag(&"Notified.Tag", "One description"))
+	assert_eq(
+		_database_change_count,
+		1,
+		"add_tag with a description is one logical mutation and notifies once",
+	)
+	assert_eq(database.tag_descriptions.get("Notified.Tag", ""), "One description")
+
+	assert_false(database.add_tag(&"Notified.Tag", "Changed description"))
+	assert_eq(_database_change_count, 1, "A no-op add_tag must not notify")
+
+	_database_change_count = 0
+	assert_true(database.rename_tag(&"Notified.Tag", &"Renamed.Tag"))
+	assert_eq(
+		_database_change_count,
+		1,
+		"rename_tag touches tags, descriptions, and redirects but notifies once",
+	)
+	assert_eq(database.tag_descriptions.get("Renamed.Tag", ""), "One description")
+
+	_database_change_count = 0
+	assert_true(database.remove_tag(&"Renamed.Tag"))
+	assert_eq(
+		_database_change_count,
+		1,
+		"remove_tag retires the tag and its description but notifies once",
+	)
+	assert_false(database.tag_descriptions.has("Renamed.Tag"))
+
+	database.add_tags([&"Batch.One", &"Batch.Two"])
+	_database_change_count = 0
+	assert_eq(database.remove_tags([&"Batch.One", &"Batch.Two"]), 2)
+	assert_eq(_database_change_count, 1, "remove_tags is one logical mutation and notifies once")
+	assert_false(database.tag_descriptions.has("Batch.One"))
+
+	_database_change_count = 0
+	database.set_state([&"State.Tag"], {"State.Tag": "described"}, {})
+	assert_eq(_database_change_count, 1, "set_state replaces the whole state but notifies once")
+
+	# A change listener may mutate the database again. Suppression is a depth counter,
+	# so the nested mutation publishes its own single change and every path, including
+	# the no-op add_tag inside the handler, restores the depth to zero.
+	_nested_database = database
+	_database_change_count = 0
+	assert_true(database.add_tag(&"Outer.Tag"))
+	assert_eq(
+		_database_change_count,
+		2,
+		"The outer and the listener-triggered mutation should each notify exactly once",
+	)
+	assert_true(database.has_tag(&"Nested.FromListener"))
+	assert_eq(
+		int(database.get("_suppressed_change_depth")),
+		0,
+		"Suppression must be fully restored after nested mutations",
+	)
+	_nested_database = null
+	database.tags_changed.disconnect(_on_database_tags_changed)
+
+
+func _on_database_tags_changed() -> void:
+	_database_change_count += 1
+	if _nested_database != null:
+		_nested_database.add_tag(&"Nested.FromListener")
+
+
+func _test_cache_only_database_is_not_loaded() -> void:
+	# A database whose file was deleted while a copy is still loaded leaves a cache-only
+	# resource: ResourceLoader.exists() reports true although nothing is on disk. The
+	# loader must honour the deletion instead of resurrecting the cached copy.
+	var original_path: String = registry.get_database_path()
+	var original_database: GameplayTagDatabase = registry.get_database()
+	var path: String = "user://gameplay_tags_cache_only_load_test.tres"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+	var cache_only_database: GameplayTagDatabase = GameplayTagDatabase.new()
+	cache_only_database.add_tag(&"Cache.Only")
+	cache_only_database.resource_path = path
+	assert_true(
+		ResourceLoader.exists(path), "Test precondition: the cache entry should be registered"
+	)
+	assert_false(FileAccess.file_exists(path), "Test precondition: no file may exist on disk")
+
+	registry.set_database_path(path)
+	var loaded: GameplayTagDatabase = registry.get_database()
+	assert_false(
+		loaded.has_tag(&"Cache.Only"),
+		"A cache-only resource must not be loaded as the central database",
+	)
+	assert_true(
+		FileAccess.file_exists(path),
+		"Without a file the loader should create a fresh database instead",
+	)
+
+	# The recreated database must own the cache entry: the stale cache-only copy kept
+	# the path registered even though its file was gone, and REUSE loads would keep
+	# returning it after the fresh file was written.
+	var from_cache: GameplayTagDatabase = ResourceLoader.load(
+		path, "", ResourceLoader.CACHE_MODE_REUSE
+	)
+	assert_true(
+		from_cache == loaded,
+		"The recreated database must take over the cache entry from the stale copy",
+	)
+	assert_false(
+		from_cache.has_tag(&"Cache.Only"),
+		"A REUSE load must not resurrect the stale cache-only copy",
+	)
+
+	registry.set_database_path(original_path)
+	registry.set_database(original_database)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

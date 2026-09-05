@@ -40,7 +40,10 @@ const MAX_REDIRECT_DEPTH: int = 16
 		_notify_changed()
 
 var _tag_set: Dictionary[StringName, bool] = {}
-var _suppress_change_notifications: bool = false
+# Coalesced mutations suppress the per-assignment notifications and publish exactly one
+# change once the whole logical mutation is done. A depth counter keeps nested
+# suppression safe, for example when a change listener mutates the database again.
+var _suppressed_change_depth: int = 0
 
 
 ## Returns [param raw_tag] in canonical form: trimmed, slash-separated paths
@@ -206,9 +209,14 @@ func add_tag(raw_tag: StringName, description: String = "") -> bool:
 	if tag == &"" or not is_canonical_tag_name(tag) or has_tag(tag):
 		return false
 
+	# The tag and its description are one logical mutation: suppress the
+	# per-assignment notifications and publish one change with both applied.
+	_begin_change_suppression()
 	var added: bool = add_tags([tag]) == 1
 	if added and not description.strip_edges().is_empty():
 		tag_descriptions[String(tag)] = description.strip_edges()
+	_end_change_suppression()
+	if added:
 		_notify_changed()
 	return added
 
@@ -279,11 +287,16 @@ func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 		updated_descriptions[renamed_description_key] = description
 
 	_prune_empty_old_parents(updated_tags, updated_descriptions, get_parent_tags(tag))
+	# Tags, descriptions, and redirects are one logical mutation: suppress the
+	# per-assignment notifications and publish one change for the whole rename.
+	_begin_change_suppression()
 	tags = updated_tags
 	tag_descriptions = updated_descriptions
 	# Must follow the tag assignment: while the retired names are still registered, the
 	# "a live tag is never a redirect source" guard would drop each new entry on sight.
 	_record_rename_redirects(renamed_tags)
+	_end_change_suppression()
+	_notify_changed()
 	return true
 
 
@@ -390,20 +403,15 @@ func remove_tag(raw_tag: StringName, remove_children: bool = false) -> bool:
 	if kept.size() == before:
 		return false
 
-	tags = kept
-	var description_changed: bool = false
+	# Erase the retired descriptions before the tag assignment so the setter's single
+	# notification already reports the finished removal.
 	if remove_children:
 		for existing_key in tag_descriptions.keys():
 			if tag_matches(StringName(existing_key), tag, false):
 				tag_descriptions.erase(existing_key)
-				description_changed = true
 	else:
-		var tag_key: String = String(tag)
-		if tag_descriptions.has(tag_key):
-			tag_descriptions.erase(tag_key)
-			description_changed = true
-	if description_changed:
-		_notify_changed()
+		tag_descriptions.erase(String(tag))
+	tags = kept
 	return true
 
 
@@ -434,14 +442,11 @@ func remove_tags(raw_tags: Array[StringName]) -> int:
 		kept.append(existing)
 
 	if removed > 0:
-		tags = kept
-		var description_changed: bool = false
+		# Erase the retired descriptions before the tag assignment so the setter's single
+		# notification already reports the finished removal.
 		for removed_key in removed_keys.keys():
-			if tag_descriptions.has(removed_key):
-				tag_descriptions.erase(removed_key)
-				description_changed = true
-		if description_changed:
-			_notify_changed()
+			tag_descriptions.erase(removed_key)
+		tags = kept
 	return removed
 
 
@@ -487,7 +492,7 @@ func set_state(
 		with_parents.append(tag)
 		with_parents.append_array(get_canonical_parent_tags(tag))
 
-	_suppress_change_notifications = true
+	_begin_change_suppression()
 	tags = with_parents
 
 	var kept_descriptions: Dictionary[String, String] = {}
@@ -502,7 +507,7 @@ func set_state(
 	tag_descriptions = kept_descriptions
 	tag_redirects = redirects
 
-	_suppress_change_notifications = false
+	_end_change_suppression()
 	_notify_changed()
 
 
@@ -712,7 +717,23 @@ func _drop_redirects_for_live_tags() -> void:
 
 
 func _notify_changed() -> void:
-	if _suppress_change_notifications:
+	if _suppressed_change_depth > 0:
 		return
 	emit_changed()
 	tags_changed.emit()
+
+
+# Coalesced mutations bracket their assignments with these helpers so every logical
+# database mutation publishes at most one tags_changed notification.
+func _begin_change_suppression() -> void:
+	_suppressed_change_depth += 1
+
+
+func _end_change_suppression() -> void:
+	# A mismatched end call would drive the depth negative and silence every future
+	# change notification, so clamp it and report instead of underflowing.
+	if _suppressed_change_depth <= 0:
+		push_error("Unbalanced gameplay tag change suppression end call")
+		_suppressed_change_depth = 0
+		return
+	_suppressed_change_depth -= 1
