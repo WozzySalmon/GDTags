@@ -1,5 +1,32 @@
 extends "res://tests/tag_test_case.gd"
 
+
+# Counts push_warning traffic so tests can assert warning behavior without touching
+# the shared harness. Godot routes push_warning through _log_error with a warning type.
+class WarningCaptureLogger:
+	extends Logger
+
+	var warning_count: int = 0
+	var warning_texts: Array[String] = []
+	var last_warning_text: String = ""
+
+	func _log_error(
+		_function: String,
+		_file: String,
+		_line: int,
+		_code: String,
+		rationale: String,
+		_editor_notify: bool,
+		error_type: int,
+		_script_backtraces: Array[ScriptBacktrace],
+	) -> void:
+		if error_type != Logger.ERROR_TYPE_WARNING:
+			return
+		warning_count += 1
+		last_warning_text = rationale if not rationale.is_empty() else _code
+		warning_texts.append(last_warning_text)
+
+
 var _query_change_count: int = 0
 var _database_change_count: int = 0
 var _nested_database: GameplayTagDatabase
@@ -12,6 +39,8 @@ func _suite_name() -> String:
 func _run_tests() -> void:
 	run_test("database_recursive_removal_and_csv_round_trip", _test_database_edges)
 	run_test("container_component_and_query_mutations", _test_runtime_mutations)
+	run_test("fused_canonicalization_preserves_mutation_contract", _test_fused_canonicalization)
+	run_test("has_all_fallback_matches_cached_fast_path", _test_has_all_fallback)
 	run_test("database_mutations_emit_one_change", _test_database_single_notification)
 	run_test("cache_only_database_is_not_loaded", _test_cache_only_database_is_not_loaded)
 	run_test("autoload_csv_and_node_helpers", _test_autoload_helpers)
@@ -323,3 +352,142 @@ func _test_cache_only_database_is_not_loaded() -> void:
 	registry.set_database_path(original_path)
 	registry.set_database(original_database)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _test_fused_canonicalization() -> void:
+	# canonicalize_valid_tag_array() fuses normalization with character validation, so
+	# its contract must survive: canonical, duplicate, unsorted, whitespace, double-dot,
+	# invalid-character, and empty inputs.
+	var raw_tags: Array[StringName] = [
+		&"Team.Enemy",
+		&" State ",
+		&"State..Stunned",
+		&"State.Stunned",
+		&"State/Stunned",
+		&"Bad@Tag",
+		&"",
+		&"   ",
+	]
+	assert_eq(
+		GameplayTagDatabase.canonicalize_valid_tag_array(raw_tags),
+		[&"State", &"State.Stunned", &"Team.Enemy"],
+		"Fused canonicalization should normalize, dedupe, sort, and drop unusable tags",
+	)
+
+	var warning_logger: WarningCaptureLogger = WarningCaptureLogger.new()
+	OS.add_logger(warning_logger)
+	var filtered_tags: Array[StringName] = GameplayTagDatabase.canonicalize_valid_tag_array(
+		[&"Team.Enemy", &"Z@Bad", &"Bad@Tag", &" Bad@Tag ", &""]
+	)
+	OS.remove_logger(warning_logger)
+	assert_eq(filtered_tags, [&"Team.Enemy"], "Invalid tags should be dropped from the result")
+	assert_eq(
+		warning_logger.warning_count,
+		2,
+		"Each unique normalized invalid tag should emit exactly one warning",
+	)
+	assert_true(
+		warning_logger.warning_texts[0].contains("Bad@Tag"),
+		"Invalid-tag warnings should retain their sorted order",
+	)
+	assert_true(
+		warning_logger.last_warning_text.contains("Z@Bad"),
+		"Invalid-tag warnings should retain their sorted order",
+	)
+
+	# Add and mutation paths share the fused shortcut: usable names normalize in, and
+	# names no database could accept are rejected without entering the owner.
+	var database: GameplayTagDatabase = GameplayTagDatabase.new()
+	assert_true(
+		database.add_tag(&" State.Stunned "),
+		"Whitespace around a valid name should normalize before the add",
+	)
+	assert_true(database.has_tag(&"State.Stunned"))
+	assert_false(database.add_tag(&"Bad@Tag"), "Invalid characters should be rejected")
+	assert_false(database.has_tag(&"Bad@Tag"))
+	assert_eq(database.add_tags([&" Team ", &"Bad@Tag", &" Team "]), 1)
+	assert_true(database.has_tag(&"Team"))
+	assert_false(
+		database.rename_tag(&"Team", &"Bad@Tag"),
+		"Renames onto an unusable name should be rejected",
+	)
+	assert_false(
+		database.add_redirect(&"Bad@Tag", &"Team"),
+		"Redirects from an unusable name should be rejected",
+	)
+
+	var container: GameplayTagContainer = GameplayTagContainer.new()
+	assert_true(container.add_tag(&" State.Stunned "))
+	assert_false(container.add_tag(&"Bad@Tag"))
+	assert_eq(container.add_tags([&" Team ", &"Bad@Tag", &" Team "]), 1)
+	assert_true(container.has_tag(&"Team"))
+	assert_eq(container.add_tag_stack(&" Team "), 2, "Stacking should accept a normalized name")
+	assert_eq(container.add_tag_stack(&"Bad@Tag"), 0)
+	assert_true(container.set_tag_count(&" State.Stunned ", 3))
+	assert_eq(container.get_tag_count(&"State.Stunned"), 3)
+	assert_false(container.set_tag_count(&"Bad@Tag", 2))
+
+
+func _test_has_all_fallback() -> void:
+	var container: GameplayTagContainer = GameplayTagContainer.new(
+		[&"State.Stunned", &"Team.Enemy"]
+	)
+	assert_true(
+		container.has_all([&"State.Stunned", &"Team.Enemy"]),
+		"Canonical ALL requirements should hit the cached set",
+	)
+	assert_true(
+		container.has_all([&" State ", &" Team / Enemy "]),
+		"Non-canonical ALL requirements should normalize in the fallback",
+	)
+	assert_true(
+		container.has_all([&" State.Stunned "], true),
+		"exact=true should accept a normalized owned tag",
+	)
+	assert_false(
+		container.has_all([&"State"], true),
+		"exact=true should not let a required parent match",
+	)
+	assert_false(container.has_all([&"State.Stunned", &"Missing.Tag"]))
+	assert_false(container.has_all([&" State ", &"Bad@Tag"]))
+	assert_false(container.has_all([&"Bad@Tag"], true))
+
+	var component: GameplayTagComponent = GameplayTagComponent.new()
+	component.validate_with_database = false
+	component.owned_tags = [&"State.Stunned", &"Team.Enemy"]
+	root.add_child(component)
+	assert_true(component.has_all([&"State.Stunned", &"Team.Enemy"]))
+	assert_true(component.has_all([&" State ", &" Team / Enemy "]))
+	assert_true(component.has_all([&" State.Stunned "], true))
+	assert_false(component.has_all([&"State"], true))
+	assert_false(component.has_all([&"State.Stunned", &"Missing.Tag"]))
+	component.free()
+
+	# Split ownership: no single component satisfies the ALL clause, so the node
+	# check must combine both components' cached sets in its fallback.
+	var first_component: GameplayTagComponent = GameplayTagComponent.new()
+	first_component.validate_with_database = false
+	first_component.owned_tags = [&"State.Stunned"]
+	var second_component: GameplayTagComponent = GameplayTagComponent.new()
+	second_component.validate_with_database = false
+	second_component.owned_tags = [&"Team.Enemy"]
+	var owner_node: Node = Node.new()
+	owner_node.add_child(first_component)
+	owner_node.add_child(second_component)
+	root.add_child(owner_node)
+	assert_false(
+		first_component.has_all([&" State ", &"Team.Enemy"]),
+		"One split component must not satisfy the whole ALL clause",
+	)
+	var split_requirements: Array[StringName] = [&" State ", &" Team / Enemy "]
+	assert_true(
+		registry.target_has_all(owner_node, split_requirements),
+		"Split node ownership should satisfy a non-canonical ALL clause",
+	)
+	var canonical_requirements: Array[StringName] = [&"State", &"Team.Enemy"]
+	assert_true(registry.target_has_all(owner_node, canonical_requirements))
+	assert_false(
+		registry.target_has_all(owner_node, canonical_requirements, true),
+		"Exact ALL checks must not merge split components into one owner",
+	)
+	owner_node.free()

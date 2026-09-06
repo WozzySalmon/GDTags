@@ -62,8 +62,8 @@ func set_owned_gameplay_tags(raw_tags: Array[StringName]) -> void:
 ## Rejects duplicates, unusable names, and, unless [member validate_with_database] is off,
 ## tags missing from the central database.
 func add_tag(raw_tag: StringName) -> bool:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or owned_tags.has(tag):
+	var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
+	if tag == &"" or owned_tags.has(tag):
 		return false
 	if validate_with_database and not _is_registered_tag(tag):
 		push_warning("Gameplay tag is not in the central database: %s" % String(tag))
@@ -127,8 +127,8 @@ func remove_tags(raw_tags: Array[StringName]) -> int:
 ## Applies one more stack of [param raw_tag], adding the tag when it is not yet owned.
 ## Returns the resulting depth, or 0 when the tag could not be added.
 func add_tag_stack(raw_tag: StringName) -> int:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag):
+	var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
+	if tag == &"":
 		return 0
 	if not owned_tags.has(tag):
 		return 1 if add_tag(tag) else 0
@@ -172,8 +172,8 @@ func get_tag_count(raw_tag: StringName) -> int:
 ## Sets the absolute stack depth for [param raw_tag]. A count of 0 or less releases it.
 ## Returns whether anything changed.
 func set_tag_count(raw_tag: StringName, count: int) -> bool:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag):
+	var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
+	if tag == &"":
 		return false
 	if count <= 0:
 		return remove_tag(tag)
@@ -219,8 +219,12 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
 	if tag_set.has_all(required_tags):
 		return true
-	for tag in required_tags:
-		var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(tag)
+	for raw_tag in required_tags:
+		# Set keys are canonical, so a raw-key hit already proves ownership; only a
+		# miss can need the normalize pass.
+		if tag_set.has(raw_tag):
+			continue
+		var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
 		if normalized_tag != &"" and not tag_set.has(normalized_tag):
 			return false
 	return true

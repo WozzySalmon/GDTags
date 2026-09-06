@@ -39,8 +39,8 @@ func set_tags(raw_tags: Array[StringName]) -> void:
 
 ## Adds one tag at a stack depth of one. Returns false if already present or unusable.
 func add_tag(raw_tag: StringName) -> bool:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or tags.has(tag):
+	var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
+	if tag == &"" or tags.has(tag):
 		return false
 	var updated_tags: Array[StringName] = tags.duplicate()
 	updated_tags.append(tag)
@@ -57,9 +57,9 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 
 	var added: int = 0
 	for raw_tag in raw_tags:
-		var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
+		var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
 		var key: String = String(tag)
-		if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag) or existing.has(key):
+		if tag == &"" or existing.has(key):
 			continue
 		existing[key] = tag
 		added += 1
@@ -73,8 +73,8 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 ## tag is unusable. Use this when several independent effects can grant the same tag;
 ## the tag stays owned until every stack is removed.
 func add_tag_stack(raw_tag: StringName) -> int:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag):
+	var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
+	if tag == &"":
 		return 0
 
 	var key: String = String(tag)
@@ -121,8 +121,8 @@ func get_tag_count(raw_tag: StringName) -> int:
 ## Sets the absolute stack depth for [param raw_tag]. A count of 0 or less releases it.
 ## Returns whether anything changed.
 func set_tag_count(raw_tag: StringName, count: int) -> bool:
-	var tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
-	if tag == &"" or not GameplayTagDatabase.is_canonical_tag_name(tag):
+	var tag: StringName = GameplayTagDatabase.normalize_usable_tag(raw_tag)
+	if tag == &"":
 		return false
 
 	if count <= 0:
@@ -209,8 +209,12 @@ func has_all(required_tags: Array[StringName], exact: bool = false) -> bool:
 	var tag_set: Dictionary[StringName, bool] = _exact_tag_set if exact else _match_tag_set
 	if tag_set.has_all(required_tags):
 		return true
-	for tag in required_tags:
-		var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(tag)
+	for raw_tag in required_tags:
+		# Set keys are canonical, so a raw-key hit already proves ownership; only a
+		# miss can need the normalize pass.
+		if tag_set.has(raw_tag):
+			continue
+		var normalized_tag: StringName = GameplayTagDatabase.normalize_tag(raw_tag)
 		if normalized_tag != &"" and not tag_set.has(normalized_tag):
 			return false
 	return true

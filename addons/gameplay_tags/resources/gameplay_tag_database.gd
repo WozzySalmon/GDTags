@@ -94,14 +94,27 @@ static func _is_already_normalized(text: String) -> bool:
 
 ## Canonicalizes and drops tags whose characters no database could ever accept.
 ## Use this wherever tags are authored; plain canonicalization only normalizes shape.
+## Fusion note: the already-normalized acceptance inside normalization already proves
+## every character and segment shape, so valid canonical tags cost one character pass
+## instead of normalize-then-validate; only rewritten names are re-validated.
 static func canonicalize_valid_tag_array(raw_tags: Array[StringName]) -> Array[StringName]:
-	var valid_tags: Array[StringName] = []
-	for tag in canonicalize_tag_array(raw_tags):
-		if is_canonical_tag_name(tag):
-			valid_tags.append(tag)
+	var unique: Dictionary[String, StringName] = {}
+	var invalid_unique: Dictionary[String, StringName] = {}
+	for raw_tag in raw_tags:
+		var tag: StringName
+		if _is_already_normalized(String(raw_tag)):
+			tag = raw_tag
 		else:
-			push_warning("Ignoring gameplay tag with unsupported characters: %s" % String(tag))
-	return valid_tags
+			tag = normalize_tag(raw_tag)
+			if tag == &"":
+				continue
+			if not is_canonical_tag_name(tag):
+				invalid_unique[String(tag)] = tag
+				continue
+		unique[String(tag)] = tag
+	for invalid_tag in _sorted_unique_tags(invalid_unique):
+		push_warning("Ignoring gameplay tag with unsupported characters: %s" % String(invalid_tag))
+	return _sorted_unique_tags(unique)
 
 
 ## Returns [param raw_tags] normalized, de-duplicated, and alphabetically sorted.
@@ -112,7 +125,10 @@ static func canonicalize_tag_array(raw_tags: Array[StringName]) -> Array[StringN
 		if tag == &"":
 			continue
 		unique[String(tag)] = tag
+	return _sorted_unique_tags(unique)
 
+
+static func _sorted_unique_tags(unique: Dictionary[String, StringName]) -> Array[StringName]:
 	var sorted_keys: Array[String] = []
 	for key in unique:
 		sorted_keys.append(key)
@@ -182,6 +198,17 @@ static func _is_allowed_tag_character(code: int) -> bool:
 	return code == 95 or code == 45
 
 
+## Normalizes [param raw_tag] and returns the result, or &"" when the normalized name
+## is not a usable canonical tag name (including empty input). Add and mutation paths
+## use this so an already-canonical tag needs only the one character pass inside
+## normalization instead of a second [method is_canonical_tag_name] pass.
+static func normalize_usable_tag(raw_tag: StringName) -> StringName:
+	if _is_already_normalized(String(raw_tag)):
+		return raw_tag
+	var tag: StringName = normalize_tag(raw_tag)
+	return tag if is_canonical_tag_name(tag) else &""
+
+
 ## Returns every ancestor of [param raw_tag], from the root down to the immediate parent.
 static func get_parent_tags(raw_tag: StringName) -> Array[StringName]:
 	return get_canonical_parent_tags(normalize_tag(raw_tag))
@@ -205,8 +232,8 @@ static func get_canonical_parent_tags(tag_name: StringName) -> Array[StringName]
 
 ## Adds one tag plus any missing parents. Returns whether it was added.
 func add_tag(raw_tag: StringName, description: String = "") -> bool:
-	var tag: StringName = normalize_tag(raw_tag)
-	if tag == &"" or not is_canonical_tag_name(tag) or has_tag(tag):
+	var tag: StringName = normalize_usable_tag(raw_tag)
+	if tag == &"" or has_tag(tag):
 		return false
 
 	# The tag and its description are one logical mutation: suppress the
@@ -245,8 +272,8 @@ func set_tag_description(raw_tag: StringName, description: String) -> bool:
 ## Rejects collisions with existing tags and moves of a branch beneath itself.
 func rename_tag(raw_tag: StringName, raw_new_tag: StringName) -> bool:
 	var tag: StringName = normalize_tag(raw_tag)
-	var new_tag: StringName = normalize_tag(raw_new_tag)
-	if not has_tag(tag) or new_tag == &"" or not is_canonical_tag_name(new_tag) or tag == new_tag:
+	var new_tag: StringName = normalize_usable_tag(raw_new_tag)
+	if not has_tag(tag) or new_tag == &"" or tag == new_tag:
 		return false
 
 	var tag_text: String = String(tag)
@@ -346,9 +373,9 @@ func add_tags(raw_tags: Array[StringName]) -> int:
 	var added: int = 0
 	var changed: bool = false
 	for raw_tag in raw_tags:
-		var tag: StringName = normalize_tag(raw_tag)
+		var tag: StringName = normalize_usable_tag(raw_tag)
 		var key: String = String(tag)
-		if tag == &"" or not is_canonical_tag_name(tag) or existing.has(key):
+		if tag == &"" or existing.has(key):
 			continue
 
 		for parent in get_canonical_parent_tags(tag):
@@ -536,13 +563,11 @@ func resolve_tag(raw_tag: StringName) -> StringName:
 ## Records that [param raw_tag] has been replaced by [param raw_new_tag].
 ## Refuses self-redirects and any entry that would close a cycle.
 func add_redirect(raw_tag: StringName, raw_new_tag: StringName) -> bool:
-	var from_tag: StringName = normalize_tag(raw_tag)
-	var to_tag: StringName = normalize_tag(raw_new_tag)
+	var from_tag: StringName = normalize_usable_tag(raw_tag)
+	var to_tag: StringName = normalize_usable_tag(raw_new_tag)
 	if from_tag == &"" or to_tag == &"" or from_tag == to_tag:
 		return false
 	if has_tag(from_tag):
-		return false
-	if not is_canonical_tag_name(from_tag) or not is_canonical_tag_name(to_tag):
 		return false
 	if tag_redirects.get(from_tag, &"") == to_tag:
 		return false
